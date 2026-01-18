@@ -3,7 +3,6 @@ import numpy as np
 import math
 from typing import List, Optional, Tuple, Dict
 from dataclasses import dataclass
-from scipy import ndimage
 from collections import deque
 
 @dataclass
