@@ -40,14 +40,24 @@ export interface MultiDartDetectionResult {
 }
 
 const API_URL_KEY = 'dart-detection-api-url';
-const DEFAULT_API_URL = '';
+const DEFAULT_API_URL = import.meta.env.VITE_DART_DETECTION_API_URL || '';
 
 export function getApiUrl(): string {
-  return localStorage.getItem(API_URL_KEY) || DEFAULT_API_URL;
+  const envUrl = import.meta.env.VITE_DART_DETECTION_API_URL;
+  const storedUrl = localStorage.getItem(API_URL_KEY);
+
+  if (storedUrl) return storedUrl;
+  if (envUrl) return envUrl;
+
+  return DEFAULT_API_URL;
 }
 
 export function setApiUrl(url: string): void {
   localStorage.setItem(API_URL_KEY, url);
+}
+
+export function isApiConfigured(): boolean {
+  return getApiUrl().length > 0;
 }
 
 export async function checkApiHealth(): Promise<{ status: string; calibrated: boolean } | null> {
