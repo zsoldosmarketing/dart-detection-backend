@@ -19,8 +19,8 @@ export interface CameraEventCallbacks {
 
 const DEFAULT_SETTINGS: CameraSettings = {
   deviceId: '',
-  width: 1280,
-  height: 720,
+  width: 1920,
+  height: 1080,
   frameRate: 30,
   facingMode: 'environment',
 };

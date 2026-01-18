@@ -24,7 +24,8 @@ import {
   setReferenceImage,
   parseScoreToTarget,
   captureVideoFrame,
-  autoCalibrate,
+  captureHighQualityFrame,
+  autoCalibrateWithRetry,
   detectDartAdvanced,
   type AutoCalibrationResult,
 } from '../../lib/dartDetectionApi';
@@ -164,16 +165,18 @@ export function CameraDetectionInput({
 
     setIsCalibrating(true);
     setError(null);
-    setStatusMessage('Tabla automatikus felismerese...');
+    setStatusMessage('Tabla keresese... (tobbszoros modszer)');
 
     try {
-      const frameBlob = await captureVideoFrame(videoRef.current);
-      const result = await autoCalibrate(frameBlob);
+      const frameBlob = await captureHighQualityFrame(videoRef.current);
+      const result = await autoCalibrateWithRetry(frameBlob, 3);
 
       if (result && result.success) {
         calibrationRef.current = result;
         setIsCalibrated(true);
-        setStatusMessage(`Tabla OK! (${(result.confidence * 100).toFixed(0)}%)`);
+
+        const methodInfo = result.method ? ` [${result.method}]` : '';
+        setStatusMessage(`Tabla OK! (${(result.confidence * 100).toFixed(0)}%)${methodInfo}`);
 
         applyAutoZoom(result);
 
@@ -185,7 +188,14 @@ export function CameraDetectionInput({
           startDetectionLoop();
         }, 1500);
       } else {
-        setError(result?.message || 'Tabla nem talalhato. Iranyitsd a kamerat a darttablara.');
+        const tips = [
+          'Jobb megvilagitas szukseges',
+          'Menj kozelebb a tablahoz',
+          'A tabla legyen kozepen',
+          'Kerüld a tükrözodest',
+        ];
+        const randomTip = tips[Math.floor(Math.random() * tips.length)];
+        setError(`Tabla nem talalhato. Tipp: ${randomTip}`);
         setStatusMessage(null);
       }
     } catch (err) {
