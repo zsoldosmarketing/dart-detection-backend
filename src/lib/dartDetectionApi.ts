@@ -39,7 +39,7 @@ export interface MultiDartDetectionResult {
   message: string;
 }
 
-const DEFAULT_API_URL = import.meta.env.VITE_DART_DETECTION_API_URL || 'https://dart-detection-api.onrender.com';
+const DEFAULT_API_URL = import.meta.env.VITE_DART_DETECTION_API_URL || 'https://dart-detection-backend.onrender.com';
 
 export function getApiUrl(): string {
   return DEFAULT_API_URL;
