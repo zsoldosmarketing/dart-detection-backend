@@ -1,10 +1,8 @@
 import cv2
 import numpy as np
 import math
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Tuple
 from dataclasses import dataclass
-from scipy import ndimage
-from skimage.feature import peak_local_max
 
 @dataclass
 class EllipseData:
@@ -31,9 +29,7 @@ DARTBOARD_SEGMENTS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 1
 
 class AdvancedDartboardCalibration:
     def __init__(self):
-        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-        self.aruco_params = cv2.aruco.DetectorParameters()
-        self.aruco_detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
+        pass
 
     def preprocess_image(self, image: np.ndarray) -> np.ndarray:
         lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
@@ -44,415 +40,54 @@ class AdvancedDartboardCalibration:
         enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
         return enhanced
 
-    def detect_with_aruco(self, image: np.ndarray) -> Optional[CalibrationResult]:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        corners, ids, rejected = self.aruco_detector.detectMarkers(gray)
-
-        if ids is None or len(ids) < 4:
-            return None
-
-        marker_centers = []
-        for corner in corners:
-            center = corner[0].mean(axis=0)
-            marker_centers.append(center)
-
-        marker_centers = np.array(marker_centers)
-        center = marker_centers.mean(axis=0)
-
-        distances = np.sqrt(((marker_centers - center) ** 2).sum(axis=1))
-        radius = distances.mean() * 2.2
-
-        return CalibrationResult(
-            success=True,
-            center_x=int(center[0]),
-            center_y=int(center[1]),
-            radius=int(radius),
-            rotation_offset=self._detect_rotation_aruco(marker_centers, center),
-            confidence=0.98,
-            method="ArUco Markers",
-            message="ArUco markerek alapjan kalibralt"
-        )
-
-    def _detect_rotation_aruco(self, markers: np.ndarray, center: np.ndarray) -> float:
-        if len(markers) == 0:
-            return -9.0
-
-        angles = []
-        for marker in markers:
-            dx = marker[0] - center[0]
-            dy = center[1] - marker[1]
-            angle = math.degrees(math.atan2(dx, dy))
-            if angle < 0:
-                angle += 360
-            angles.append(angle)
-
-        angles = sorted(angles)
-        if len(angles) >= 2:
-            angle_diff = angles[1] - angles[0]
-            expected_20_pos = 0
-            offset = angles[0] - expected_20_pos
-            if offset > 180:
-                offset -= 360
-            elif offset < -180:
-                offset += 360
-            return offset
-
-        return -9.0
-
-    def detect_with_hough_advanced(self, image: np.ndarray) -> Optional[CalibrationResult]:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-        blurred = cv2.GaussianBlur(gray, (9, 9), 2)
-
-        edges = cv2.Canny(blurred, 50, 150, apertureSize=3)
-
-        kernel = np.ones((3, 3), np.uint8)
-        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
-
-        height, width = gray.shape
-        min_radius = int(min(width, height) * 0.12)
-        max_radius = int(min(width, height) * 0.50)
-
-        circles = cv2.HoughCircles(
-            blurred,
-            cv2.HOUGH_GRADIENT,
-            dp=1.0,
-            minDist=min_radius,
-            param1=70,
-            param2=30,
-            minRadius=min_radius,
-            maxRadius=max_radius
-        )
-
-        if circles is None:
-            circles = cv2.HoughCircles(
-                blurred,
-                cv2.HOUGH_GRADIENT,
-                dp=1.3,
-                minDist=min_radius // 2,
-                param1=50,
-                param2=25,
-                minRadius=min_radius // 2,
-                maxRadius=max_radius
-            )
-
-        if circles is None:
-            circles = cv2.HoughCircles(
-                blurred,
-                cv2.HOUGH_GRADIENT,
-                dp=1.5,
-                minDist=min_radius // 3,
-                param1=40,
-                param2=20,
-                minRadius=min_radius // 3,
-                maxRadius=max_radius
-            )
-
-        if circles is None:
-            return None
-
-        circles = np.uint16(np.around(circles))
-        center_x, center_y = width // 2, height // 2
-
-        best_circle = None
-        best_score = -1
-
-        for circle in circles[0]:
-            cx, cy, r = circle
-
-            dist_to_center = math.sqrt((cx - center_x)**2 + (cy - center_y)**2)
-            centrality_score = 1 - (dist_to_center / max(width, height))
-
-            size_score = r / max_radius
-
-            edge_support = self._calculate_edge_support(edges, cx, cy, r)
-
-            score = centrality_score * 0.3 + size_score * 0.3 + edge_support * 0.4
-
-            if score > best_score:
-                best_score = score
-                best_circle = (cx, cy, r)
-
-        if best_circle is None:
-            return None
-
-        cx, cy, r = best_circle
-
-        return CalibrationResult(
-            success=True,
-            center_x=int(cx),
-            center_y=int(cy),
-            radius=int(r),
-            rotation_offset=-9.0,
-            confidence=min(0.85, best_score),
-            method="Advanced Hough Transform",
-            message=f"Kor detektalas (pontossag: {best_score*100:.1f}%)"
-        )
-
-    def _calculate_edge_support(self, edges: np.ndarray, cx: int, cy: int, radius: int) -> float:
-        mask = np.zeros_like(edges)
-        cv2.circle(mask, (cx, cy), radius, 255, 2)
-
-        overlap = cv2.bitwise_and(edges, mask)
-        support = np.sum(overlap > 0) / (2 * math.pi * radius)
-
-        return min(1.0, support / 10)
-
-    def detect_with_color_advanced(self, image: np.ndarray) -> Optional[CalibrationResult]:
+    def find_bull_center(self, image: np.ndarray) -> Optional[Tuple[int, int, float]]:
         enhanced = self.preprocess_image(image)
         hsv = cv2.cvtColor(enhanced, cv2.COLOR_BGR2HSV)
 
-        lower_red1 = np.array([0, 40, 30])
-        upper_red1 = np.array([15, 255, 255])
-        lower_red2 = np.array([160, 40, 30])
+        lower_red1 = np.array([0, 100, 80])
+        upper_red1 = np.array([10, 255, 255])
+        lower_red2 = np.array([165, 100, 80])
         upper_red2 = np.array([180, 255, 255])
-
-        lower_green = np.array([30, 30, 30])
-        upper_green = np.array([90, 255, 255])
-
-        lower_black = np.array([0, 0, 0])
-        upper_black = np.array([180, 255, 80])
-
-        lower_cream = np.array([10, 10, 120])
-        upper_cream = np.array([40, 120, 255])
 
         mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
         mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
         mask_red = cv2.bitwise_or(mask_red1, mask_red2)
 
-        mask_green = cv2.inRange(hsv, lower_green, upper_green)
-        mask_black = cv2.inRange(hsv, lower_black, upper_black)
-        mask_cream = cv2.inRange(hsv, lower_cream, upper_cream)
+        kernel = np.ones((5, 5), np.uint8)
+        mask_red = cv2.morphologyEx(mask_red, cv2.MORPH_CLOSE, kernel)
+        mask_red = cv2.morphologyEx(mask_red, cv2.MORPH_OPEN, kernel)
 
-        mask_board = cv2.bitwise_or(mask_red, mask_green)
-        mask_board = cv2.bitwise_or(mask_board, mask_black)
-        mask_board = cv2.bitwise_or(mask_board, mask_cream)
+        contours, _ = cv2.findContours(mask_red, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        kernel = np.ones((9, 9), np.uint8)
-        mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_CLOSE, kernel)
-        mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_OPEN, kernel)
-
-        contours, _ = cv2.findContours(mask_board, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        if not contours:
-            return None
-
-        largest_contour = max(contours, key=cv2.contourArea)
-        area = cv2.contourArea(largest_contour)
-
-        if area < 800:
-            return None
-
-        (x, y), radius = cv2.minEnclosingCircle(largest_contour)
-
-        ellipse_data = None
-        is_angled = False
-
-        if len(largest_contour) >= 5:
-            ellipse = cv2.fitEllipse(largest_contour)
-            (ex, ey), (axis1, axis2), angle = ellipse
-            axis_major = max(axis1, axis2)
-            axis_minor = min(axis1, axis2)
-
-            aspect_ratio = axis_minor / axis_major if axis_major > 0 else 1
-
-            if aspect_ratio < 0.85:
-                is_angled = True
-                ellipse_data = EllipseData(
-                    center_x=int(ex),
-                    center_y=int(ey),
-                    axis_major=int(axis_major / 2),
-                    axis_minor=int(axis_minor / 2),
-                    angle=angle
-                )
-                radius = axis_major / 2
-
-        M = cv2.moments(largest_contour)
-        if M["m00"] > 0:
-            cx = int(M["m10"] / M["m00"])
-            cy = int(M["m01"] / M["m00"])
-        else:
-            cx, cy = int(x), int(y)
-
-        if ellipse_data:
-            cx = ellipse_data.center_x
-            cy = ellipse_data.center_y
-
-        circle_area = math.pi * radius * radius
-        circularity = area / circle_area if circle_area > 0 else 0
-
-        confidence = min(0.88, circularity * 0.5 + 0.35)
-
-        if is_angled:
-            confidence = min(0.92, confidence + 0.1)
-
-        angle_info = ""
-        if is_angled and ellipse_data:
-            angle_info = f" (szogben: {ellipse_data.angle:.0f}°)"
-
-        return CalibrationResult(
-            success=True,
-            center_x=cx,
-            center_y=cy,
-            radius=int(radius),
-            rotation_offset=-9.0,
-            confidence=confidence,
-            method="Advanced Color Detection",
-            message=f"Szin alapu detektalas{angle_info}",
-            ellipse=ellipse_data,
-            is_angled=is_angled
-        )
-
-    def detect_with_ellipse(self, image: np.ndarray) -> Optional[CalibrationResult]:
-        enhanced = self.preprocess_image(image)
-        gray = cv2.cvtColor(enhanced, cv2.COLOR_BGR2GRAY)
-
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        edges = cv2.Canny(blurred, 30, 100)
-
-        kernel = np.ones((3, 3), np.uint8)
-        edges = cv2.dilate(edges, kernel, iterations=2)
-        edges = cv2.erode(edges, kernel, iterations=1)
-
-        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        if not contours:
-            return None
-
-        height, width = gray.shape
-        min_area = (min(width, height) * 0.15) ** 2 * math.pi
-        max_area = (min(width, height) * 0.5) ** 2 * math.pi
-
-        best_ellipse = None
-        best_score = 0
-
-        for contour in contours:
-            if len(contour) < 5:
-                continue
-
-            area = cv2.contourArea(contour)
-            if area < min_area or area > max_area:
-                continue
-
-            try:
-                ellipse = cv2.fitEllipse(contour)
-                (ex, ey), (axis1, axis2), angle = ellipse
-
-                axis_major = max(axis1, axis2)
-                axis_minor = min(axis1, axis2)
-
-                if axis_major < 50 or axis_minor < 30:
-                    continue
-
-                aspect_ratio = axis_minor / axis_major
-                if aspect_ratio < 0.3 or aspect_ratio > 1.0:
-                    continue
-
-                ellipse_area = math.pi * (axis1 / 2) * (axis2 / 2)
-                fill_ratio = area / ellipse_area if ellipse_area > 0 else 0
-
-                dist_to_center = math.sqrt((ex - width/2)**2 + (ey - height/2)**2)
-                centrality = 1 - (dist_to_center / max(width, height))
-
-                score = fill_ratio * 0.4 + centrality * 0.3 + (axis_major / max(width, height)) * 0.3
-
-                if score > best_score:
-                    best_score = score
-                    best_ellipse = ellipse
-
-            except cv2.error:
-                continue
-
-        if best_ellipse is None:
-            return None
-
-        (ex, ey), (axis1, axis2), angle = best_ellipse
-        axis_major = max(axis1, axis2)
-        axis_minor = min(axis1, axis2)
-
-        ellipse_data = EllipseData(
-            center_x=int(ex),
-            center_y=int(ey),
-            axis_major=int(axis_major / 2),
-            axis_minor=int(axis_minor / 2),
-            angle=angle
-        )
-
-        aspect_ratio = axis_minor / axis_major
-        is_angled = aspect_ratio < 0.85
-
-        return CalibrationResult(
-            success=True,
-            center_x=int(ex),
-            center_y=int(ey),
-            radius=int(axis_major / 2),
-            rotation_offset=-9.0,
-            confidence=min(0.85, best_score),
-            method="Ellipse Detection",
-            message=f"Ellipszis detektalas (arany: {aspect_ratio:.2f})",
-            ellipse=ellipse_data,
-            is_angled=is_angled
-        )
-
-    def detect_bull_precise(self, image: np.ndarray, approx_center: Tuple[int, int],
-                           search_radius: int) -> Optional[Tuple[int, int, float]]:
-        x, y = approx_center
-        h, w = image.shape[:2]
-
-        x1 = max(0, x - search_radius)
-        y1 = max(0, y - search_radius)
-        x2 = min(w, x + search_radius)
-        y2 = min(h, y + search_radius)
-
-        roi = image[y1:y2, x1:x2]
-        if roi.size == 0:
-            return None
-
-        hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-
-        lower_red1 = np.array([0, 120, 100])
-        upper_red1 = np.array([10, 255, 255])
-        lower_red2 = np.array([170, 120, 100])
-        upper_red2 = np.array([180, 255, 255])
-
-        mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
-        mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
-        mask_bull = cv2.bitwise_or(mask_red1, mask_red2)
-
-        kernel = np.ones((3, 3), np.uint8)
-        mask_bull = cv2.morphologyEx(mask_bull, cv2.MORPH_CLOSE, kernel)
-        mask_bull = cv2.morphologyEx(mask_bull, cv2.MORPH_OPEN, kernel)
-
-        contours, _ = cv2.findContours(mask_bull, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        height, width = image.shape[:2]
+        center_x, center_y = width // 2, height // 2
 
         best_contour = None
         best_score = 0
 
         for contour in contours:
             area = cv2.contourArea(contour)
-            if area < 100:
+            if area < 200 or area > width * height * 0.05:
                 continue
 
-            M = cv2.moments(contour)
-            if M["m00"] == 0:
-                continue
+            (cx, cy), radius = cv2.minEnclosingCircle(contour)
 
-            cx = int(M["m10"] / M["m00"])
-            cy = int(M["m01"] / M["m00"])
-
-            (_, _), radius = cv2.minEnclosingCircle(contour)
-            if radius < 8:
+            if radius < 10 or radius > min(width, height) * 0.1:
                 continue
 
             circle_area = math.pi * radius * radius
             circularity = area / circle_area if circle_area > 0 else 0
 
-            dist_to_center = math.sqrt((cx - search_radius)**2 + (cy - search_radius)**2)
-            centrality = 1 - (dist_to_center / search_radius) if search_radius > 0 else 0
+            if circularity < 0.5:
+                continue
 
-            score = circularity * 0.5 + centrality * 0.5
+            dist_to_center = math.sqrt((cx - center_x)**2 + (cy - center_y)**2)
+            max_dist = math.sqrt(center_x**2 + center_y**2)
+            centrality = 1 - (dist_to_center / max_dist)
 
-            if score > best_score and circularity > 0.6:
+            score = circularity * 0.6 + centrality * 0.4
+
+            if score > best_score:
                 best_score = score
                 best_contour = contour
 
@@ -463,21 +98,204 @@ class AdvancedDartboardCalibration:
         if M["m00"] == 0:
             return None
 
-        cx = int(M["m10"] / M["m00"]) + x1
-        cy = int(M["m01"] / M["m00"]) + y1
+        cx = int(M["m10"] / M["m00"])
+        cy = int(M["m01"] / M["m00"])
 
-        return (cx, cy, min(0.95, best_score))
+        return (cx, cy, best_score)
 
-    def detect_rotation_advanced(self, image: np.ndarray, center: Tuple[int, int],
-                                radius: int) -> Tuple[float, float]:
+    def find_dartboard_boundary(self, image: np.ndarray, center: Tuple[int, int]) -> Optional[int]:
         cx, cy = center
+        enhanced = self.preprocess_image(image)
+        hsv = cv2.cvtColor(enhanced, cv2.COLOR_BGR2HSV)
+        gray = cv2.cvtColor(enhanced, cv2.COLOR_BGR2GRAY)
 
+        lower_red1 = np.array([0, 60, 50])
+        upper_red1 = np.array([12, 255, 255])
+        lower_red2 = np.array([165, 60, 50])
+        upper_red2 = np.array([180, 255, 255])
+
+        lower_green = np.array([35, 50, 40])
+        upper_green = np.array([85, 255, 255])
+
+        lower_black = np.array([0, 0, 0])
+        upper_black = np.array([180, 100, 60])
+
+        lower_cream = np.array([10, 20, 140])
+        upper_cream = np.array([35, 100, 255])
+
+        mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
+        mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
+        mask_red = cv2.bitwise_or(mask_red1, mask_red2)
+        mask_green = cv2.inRange(hsv, lower_green, upper_green)
+        mask_black = cv2.inRange(hsv, lower_black, upper_black)
+        mask_cream = cv2.inRange(hsv, lower_cream, upper_cream)
+
+        mask_board = cv2.bitwise_or(mask_red, mask_green)
+        mask_board = cv2.bitwise_or(mask_board, mask_black)
+        mask_board = cv2.bitwise_or(mask_board, mask_cream)
+
+        kernel = np.ones((7, 7), np.uint8)
+        mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_CLOSE, kernel)
+        mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_OPEN, kernel)
+
+        height, width = image.shape[:2]
+        max_possible_radius = int(min(width, height) * 0.48)
+        min_possible_radius = int(min(width, height) * 0.08)
+
+        radii_samples = []
+        num_angles = 72
+
+        for angle_deg in range(0, 360, 360 // num_angles):
+            angle_rad = math.radians(angle_deg)
+
+            found_boundary = False
+            for r in range(max_possible_radius, min_possible_radius, -3):
+                px = int(cx + r * math.cos(angle_rad))
+                py = int(cy + r * math.sin(angle_rad))
+
+                if not (0 <= px < width and 0 <= py < height):
+                    continue
+
+                if mask_board[py, px] > 0:
+                    for inner_r in range(r, min_possible_radius, -2):
+                        inner_px = int(cx + inner_r * math.cos(angle_rad))
+                        inner_py = int(cy + inner_r * math.sin(angle_rad))
+
+                        if not (0 <= inner_px < width and 0 <= inner_py < height):
+                            continue
+
+                        if mask_board[inner_py, inner_px] > 0:
+                            radii_samples.append(inner_r)
+                            found_boundary = True
+                            break
+
+                    if found_boundary:
+                        break
+
+        if len(radii_samples) < 20:
+            return self.find_radius_by_hough(image, center)
+
+        radii_samples = sorted(radii_samples)
+        q1_idx = len(radii_samples) // 4
+        q3_idx = 3 * len(radii_samples) // 4
+        filtered_radii = radii_samples[q1_idx:q3_idx]
+
+        if not filtered_radii:
+            filtered_radii = radii_samples
+
+        radius = int(np.median(filtered_radii))
+
+        return radius
+
+    def find_radius_by_hough(self, image: np.ndarray, center: Tuple[int, int]) -> Optional[int]:
+        cx, cy = center
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (9, 9), 2)
+
+        height, width = gray.shape
+        min_radius = int(min(width, height) * 0.1)
+        max_radius = int(min(width, height) * 0.45)
+
+        circles = cv2.HoughCircles(
+            blurred,
+            cv2.HOUGH_GRADIENT,
+            dp=1.2,
+            minDist=min_radius,
+            param1=80,
+            param2=40,
+            minRadius=min_radius,
+            maxRadius=max_radius
+        )
+
+        if circles is None:
+            circles = cv2.HoughCircles(
+                blurred,
+                cv2.HOUGH_GRADIENT,
+                dp=1.5,
+                minDist=min_radius // 2,
+                param1=60,
+                param2=30,
+                minRadius=min_radius // 2,
+                maxRadius=max_radius
+            )
+
+        if circles is None:
+            return None
+
+        circles = np.uint16(np.around(circles))
+
+        best_circle = None
+        best_dist = float('inf')
+
+        for circle in circles[0]:
+            circle_cx, circle_cy, r = circle
+            dist = math.sqrt((circle_cx - cx)**2 + (circle_cy - cy)**2)
+
+            if dist < best_dist and dist < r * 0.3:
+                best_dist = dist
+                best_circle = r
+
+        return int(best_circle) if best_circle else None
+
+    def find_outer_double_ring(self, image: np.ndarray, center: Tuple[int, int], estimated_radius: int) -> Optional[int]:
+        cx, cy = center
         enhanced = self.preprocess_image(image)
         hsv = cv2.cvtColor(enhanced, cv2.COLOR_BGR2HSV)
 
-        lower_red1 = np.array([0, 80, 50])
+        lower_red1 = np.array([0, 80, 60])
         upper_red1 = np.array([10, 255, 255])
-        lower_red2 = np.array([170, 80, 50])
+        lower_red2 = np.array([165, 80, 60])
+        upper_red2 = np.array([180, 255, 255])
+
+        lower_green = np.array([35, 60, 50])
+        upper_green = np.array([85, 255, 255])
+
+        mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
+        mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
+        mask_red = cv2.bitwise_or(mask_red1, mask_red2)
+        mask_green = cv2.inRange(hsv, lower_green, upper_green)
+
+        mask_double = cv2.bitwise_or(mask_red, mask_green)
+
+        height, width = image.shape[:2]
+
+        search_start = int(estimated_radius * 0.85)
+        search_end = int(estimated_radius * 1.15)
+
+        best_radius = estimated_radius
+        best_count = 0
+
+        for test_radius in range(search_start, search_end, 2):
+            count = 0
+            samples = 0
+
+            for angle_deg in range(0, 360, 5):
+                angle_rad = math.radians(angle_deg)
+                px = int(cx + test_radius * math.cos(angle_rad))
+                py = int(cy + test_radius * math.sin(angle_rad))
+
+                if 0 <= px < width and 0 <= py < height:
+                    samples += 1
+                    if mask_double[py, px] > 0:
+                        count += 1
+
+            if count > best_count:
+                best_count = count
+                best_radius = test_radius
+
+        if best_count > 20:
+            return best_radius
+
+        return estimated_radius
+
+    def detect_rotation_offset(self, image: np.ndarray, center: Tuple[int, int], radius: int) -> float:
+        cx, cy = center
+        enhanced = self.preprocess_image(image)
+        hsv = cv2.cvtColor(enhanced, cv2.COLOR_BGR2HSV)
+
+        lower_red1 = np.array([0, 70, 50])
+        upper_red1 = np.array([12, 255, 255])
+        lower_red2 = np.array([165, 70, 50])
         upper_red2 = np.array([180, 255, 255])
 
         mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
@@ -485,149 +303,208 @@ class AdvancedDartboardCalibration:
         mask_red = cv2.bitwise_or(mask_red1, mask_red2)
 
         sample_radius = int(radius * 0.75)
+        height, width = image.shape[:2]
 
-        red_intensity = []
-        for angle_deg in range(0, 360):
+        red_sectors = []
+        in_red = False
+        start_angle = 0
+
+        for angle_deg in range(0, 361):
             angle_rad = math.radians(angle_deg)
             px = int(cx + sample_radius * math.sin(angle_rad))
             py = int(cy - sample_radius * math.cos(angle_rad))
 
-            if 0 <= px < mask_red.shape[1] and 0 <= py < mask_red.shape[0]:
-                intensity = mask_red[py, px]
-                red_intensity.append(intensity)
-            else:
-                red_intensity.append(0)
+            is_red = False
+            if 0 <= px < width and 0 <= py < height:
+                is_red = mask_red[py, px] > 0
 
-        red_intensity = np.array(red_intensity)
-        smoothed = ndimage.gaussian_filter1d(red_intensity, sigma=3, mode='wrap')
+            if is_red and not in_red:
+                in_red = True
+                start_angle = angle_deg
+            elif not is_red and in_red:
+                in_red = False
+                end_angle = angle_deg
+                sector_center = (start_angle + end_angle) / 2
+                sector_width = end_angle - start_angle
+                if 10 < sector_width < 30:
+                    red_sectors.append(sector_center)
 
-        peaks = []
-        threshold = smoothed.max() * 0.5
-        in_peak = False
-        peak_start = 0
+        if len(red_sectors) < 5:
+            return -9.0
 
-        for i in range(len(smoothed)):
-            if smoothed[i] > threshold and not in_peak:
-                in_peak = True
-                peak_start = i
-            elif smoothed[i] <= threshold and in_peak:
-                peak_center = (peak_start + i - 1) / 2
-                peaks.append(peak_center)
-                in_peak = False
+        expected_20_position = 0
 
-        if in_peak:
-            peak_center = (peak_start + len(smoothed) - 1) / 2
-            peaks.append(peak_center)
+        best_offset = -9.0
+        min_error = float('inf')
 
-        if len(peaks) < 10:
-            return -9.0, 0.3
+        for test_offset in range(-30, 30):
+            error = 0
+            for sector in red_sectors:
+                adjusted = (sector - test_offset) % 360
+                segment_idx = int(adjusted / 18) % 20
+                segment = DARTBOARD_SEGMENTS[segment_idx]
 
-        if len(peaks) >= 2:
-            expected_20_position = 0
-            closest_peak = min(peaks, key=lambda p: min(
-                abs(p - expected_20_position),
-                abs(p - expected_20_position - 360),
-                abs(p - expected_20_position + 360)
-            ))
+                if segment in [20, 18, 13, 10, 2, 3, 7, 8, 14, 12]:
+                    error += 1
 
-            offset = closest_peak - expected_20_position
-            if offset > 180:
-                offset -= 360
-            elif offset < -180:
-                offset += 360
+            if error < min_error:
+                min_error = error
+                best_offset = test_offset
 
-            confidence = min(0.9, len(peaks) / 20 * 0.8 + 0.1)
-            return offset, confidence
+        return float(best_offset)
 
-        return -9.0, 0.3
+    def detect_ellipse(self, image: np.ndarray, center: Tuple[int, int], radius: int) -> Optional[EllipseData]:
+        enhanced = self.preprocess_image(image)
+        hsv = cv2.cvtColor(enhanced, cv2.COLOR_BGR2HSV)
+
+        lower_red1 = np.array([0, 50, 40])
+        upper_red1 = np.array([15, 255, 255])
+        lower_red2 = np.array([160, 50, 40])
+        upper_red2 = np.array([180, 255, 255])
+        lower_green = np.array([30, 40, 30])
+        upper_green = np.array([90, 255, 255])
+
+        mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
+        mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
+        mask_red = cv2.bitwise_or(mask_red1, mask_red2)
+        mask_green = cv2.inRange(hsv, lower_green, upper_green)
+        mask_board = cv2.bitwise_or(mask_red, mask_green)
+
+        kernel = np.ones((9, 9), np.uint8)
+        mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_CLOSE, kernel)
+
+        contours, _ = cv2.findContours(mask_board, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if not contours:
+            return None
+
+        cx, cy = center
+        best_contour = None
+        best_dist = float('inf')
+
+        for contour in contours:
+            M = cv2.moments(contour)
+            if M["m00"] == 0:
+                continue
+
+            cont_cx = int(M["m10"] / M["m00"])
+            cont_cy = int(M["m01"] / M["m00"])
+            dist = math.sqrt((cont_cx - cx)**2 + (cont_cy - cy)**2)
+
+            area = cv2.contourArea(contour)
+            if area > 5000 and dist < best_dist:
+                best_dist = dist
+                best_contour = contour
+
+        if best_contour is None or len(best_contour) < 5:
+            return None
+
+        try:
+            ellipse = cv2.fitEllipse(best_contour)
+            (ex, ey), (axis1, axis2), angle = ellipse
+
+            axis_major = max(axis1, axis2) / 2
+            axis_minor = min(axis1, axis2) / 2
+
+            aspect_ratio = axis_minor / axis_major if axis_major > 0 else 1
+
+            if aspect_ratio < 0.85:
+                return EllipseData(
+                    center_x=int(ex),
+                    center_y=int(ey),
+                    axis_major=int(axis_major),
+                    axis_minor=int(axis_minor),
+                    angle=angle
+                )
+        except cv2.error:
+            pass
+
+        return None
 
     def calibrate_multi_method(self, image: np.ndarray) -> CalibrationResult:
-        results = []
+        height, width = image.shape[:2]
 
-        aruco_result = self.detect_with_aruco(image)
-        if aruco_result and aruco_result.success:
-            results.append(aruco_result)
+        bull_result = self.find_bull_center(image)
 
-        hough_result = self.detect_with_hough_advanced(image)
-        if hough_result and hough_result.success:
-            results.append(hough_result)
+        if bull_result is None:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            blurred = cv2.GaussianBlur(gray, (9, 9), 2)
 
-        color_result = self.detect_with_color_advanced(image)
-        if color_result and color_result.success:
-            results.append(color_result)
-
-        ellipse_result = self.detect_with_ellipse(image)
-        if ellipse_result and ellipse_result.success:
-            results.append(ellipse_result)
-
-        if not results:
-            return CalibrationResult(
-                success=False,
-                confidence=0.0,
-                method="Failed",
-                message="Nem talaltam darttablat. Probald mas szogbol vagy jobb megvilagitassal."
+            circles = cv2.HoughCircles(
+                blurred,
+                cv2.HOUGH_GRADIENT,
+                dp=1.2,
+                minDist=int(min(width, height) * 0.3),
+                param1=80,
+                param2=40,
+                minRadius=int(min(width, height) * 0.15),
+                maxRadius=int(min(width, height) * 0.45)
             )
 
-        angled_results = [r for r in results if r.is_angled and r.ellipse]
-        has_angled = len(angled_results) > 0
+            if circles is not None:
+                circles = np.uint16(np.around(circles))
+                center_x, center_y = width // 2, height // 2
 
-        if has_angled:
-            best_angled = max(angled_results, key=lambda r: r.confidence)
-            result = best_angled
-            result.confidence = min(0.95, result.confidence + 0.05)
-            result.message = f"Szogbol kalibralt ({result.method})"
-        elif len(results) == 1:
-            result = results[0]
+                best_circle = min(
+                    circles[0],
+                    key=lambda c: math.sqrt((c[0] - center_x)**2 + (c[1] - center_y)**2)
+                )
+
+                cx, cy = int(best_circle[0]), int(best_circle[1])
+                estimated_radius = int(best_circle[2])
+            else:
+                return CalibrationResult(
+                    success=False,
+                    confidence=0.0,
+                    method="Failed",
+                    message="Nem talaltam darttablat. Probald jobb megvilagitassal."
+                )
         else:
-            weighted_cx = sum(r.center_x * r.confidence for r in results)
-            weighted_cy = sum(r.center_y * r.confidence for r in results)
-            weighted_radius = sum(r.radius * r.confidence for r in results)
-            total_confidence = sum(r.confidence for r in results)
-
-            final_cx = int(weighted_cx / total_confidence)
-            final_cy = int(weighted_cy / total_confidence)
-            final_radius = int(weighted_radius / total_confidence)
-
-            methods = ", ".join(set(r.method for r in results))
-
-            best_ellipse = None
-            for r in results:
-                if r.ellipse:
-                    best_ellipse = r.ellipse
-                    break
-
-            result = CalibrationResult(
-                success=True,
-                center_x=final_cx,
-                center_y=final_cy,
-                radius=final_radius,
-                rotation_offset=-9.0,
-                confidence=min(0.95, total_confidence / len(results)),
-                method=f"Multi-method ({methods})",
-                message=f"Tobbszoros modszerrel kalibralt ({len(results)} modszer)",
-                ellipse=best_ellipse,
-                is_angled=any(r.is_angled for r in results)
-            )
-
-        bull_result = self.detect_bull_precise(
-            image,
-            (result.center_x, result.center_y),
-            result.radius // 3
-        )
-
-        if bull_result:
             cx, cy, bull_confidence = bull_result
-            result.center_x = cx
-            result.center_y = cy
-            result.confidence = min(0.98, result.confidence + bull_confidence * 0.1)
-            result.message += " + pontos bull kozeppont"
+            estimated_radius = None
 
-        rotation, rot_confidence = self.detect_rotation_advanced(
-            image,
-            (result.center_x, result.center_y),
-            result.radius
+        if estimated_radius is None:
+            estimated_radius = self.find_dartboard_boundary(image, (cx, cy))
+
+        if estimated_radius is None:
+            estimated_radius = int(min(width, height) * 0.25)
+            confidence = 0.4
+        else:
+            confidence = 0.75
+
+        final_radius = self.find_outer_double_ring(image, (cx, cy), estimated_radius)
+        if final_radius:
+            confidence = min(0.9, confidence + 0.1)
+        else:
+            final_radius = estimated_radius
+
+        ellipse = self.detect_ellipse(image, (cx, cy), final_radius)
+        is_angled = ellipse is not None
+
+        if is_angled and ellipse:
+            cx = ellipse.center_x
+            cy = ellipse.center_y
+            final_radius = ellipse.axis_major
+            confidence = min(0.92, confidence + 0.05)
+
+        rotation_offset = self.detect_rotation_offset(image, (cx, cy), final_radius)
+
+        if rotation_offset != -9.0:
+            confidence = min(0.95, confidence + 0.05)
+
+        angle_info = ""
+        if is_angled and ellipse:
+            angle_info = f" (szogben: {ellipse.angle:.0f}deg)"
+
+        return CalibrationResult(
+            success=True,
+            center_x=cx,
+            center_y=cy,
+            radius=final_radius,
+            rotation_offset=rotation_offset,
+            confidence=confidence,
+            method="Multi-method Detection",
+            message=f"Tabla OK! ({confidence*100:.0f}%){angle_info}",
+            ellipse=ellipse,
+            is_angled=is_angled
         )
-        result.rotation_offset = rotation
-        result.confidence = min(0.99, result.confidence * 0.8 + rot_confidence * 0.2)
-
-        return result
