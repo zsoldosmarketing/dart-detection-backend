@@ -65,6 +65,13 @@ class MultiDartResult(BaseModel):
     method: str
     message: str
 
+class EllipseDataModel(BaseModel):
+    center_x: int
+    center_y: int
+    axis_major: int
+    axis_minor: int
+    angle: float
+
 class AutoCalibrationResult(BaseModel):
     success: bool
     center_x: Optional[int] = None
@@ -74,6 +81,8 @@ class AutoCalibrationResult(BaseModel):
     confidence: float = 0.0
     method: str = ""
     message: str = ""
+    ellipse: Optional[EllipseDataModel] = None
+    is_angled: bool = False
 
 
 def detect_dartboard_circles(image: np.ndarray) -> List[Tuple[int, int, int]]:
@@ -506,6 +515,16 @@ async def auto_calibrate(
 
             detector = AdvancedDartDetection(calibration)
 
+        ellipse_model = None
+        if result.ellipse:
+            ellipse_model = EllipseDataModel(
+                center_x=result.ellipse.center_x,
+                center_y=result.ellipse.center_y,
+                axis_major=result.ellipse.axis_major,
+                axis_minor=result.ellipse.axis_minor,
+                angle=result.ellipse.angle
+            )
+
         return AutoCalibrationResult(
             success=result.success,
             center_x=result.center_x,
@@ -514,7 +533,9 @@ async def auto_calibrate(
             rotation_offset=result.rotation_offset,
             confidence=result.confidence,
             method=result.method,
-            message=result.message
+            message=result.message,
+            ellipse=ellipse_model,
+            is_angled=result.is_angled
         )
     else:
         result = auto_calibrate_dartboard(image)

@@ -13,6 +13,14 @@ export interface ApiDetectionResult {
   position: { x: number; y: number } | null;
 }
 
+export interface EllipseData {
+  center_x: number;
+  center_y: number;
+  axis_major: number;
+  axis_minor: number;
+  angle: number;
+}
+
 export interface AutoCalibrationResult {
   success: boolean;
   center_x: number | null;
@@ -22,6 +30,8 @@ export interface AutoCalibrationResult {
   confidence: number;
   method?: string;
   message: string;
+  ellipse?: EllipseData | null;
+  is_angled?: boolean;
 }
 
 export interface DartDetectionAdvanced {

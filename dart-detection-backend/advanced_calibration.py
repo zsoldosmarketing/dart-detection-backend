@@ -7,6 +7,14 @@ from scipy import ndimage
 from skimage.feature import peak_local_max
 
 @dataclass
+class EllipseData:
+    center_x: int
+    center_y: int
+    axis_major: int
+    axis_minor: int
+    angle: float
+
+@dataclass
 class CalibrationResult:
     success: bool
     center_x: Optional[int] = None
@@ -16,6 +24,8 @@ class CalibrationResult:
     confidence: float = 0.0
     method: str = ""
     message: str = ""
+    ellipse: Optional[EllipseData] = None
+    is_angled: bool = False
 
 DARTBOARD_SEGMENTS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5]
 
@@ -180,16 +190,19 @@ class AdvancedDartboardCalibration:
         enhanced = self.preprocess_image(image)
         hsv = cv2.cvtColor(enhanced, cv2.COLOR_BGR2HSV)
 
-        lower_red1 = np.array([0, 80, 60])
-        upper_red1 = np.array([10, 255, 255])
-        lower_red2 = np.array([170, 80, 60])
+        lower_red1 = np.array([0, 60, 40])
+        upper_red1 = np.array([12, 255, 255])
+        lower_red2 = np.array([168, 60, 40])
         upper_red2 = np.array([180, 255, 255])
 
-        lower_green = np.array([40, 70, 60])
-        upper_green = np.array([80, 255, 255])
+        lower_green = np.array([35, 50, 40])
+        upper_green = np.array([85, 255, 255])
 
         lower_black = np.array([0, 0, 0])
-        upper_black = np.array([180, 255, 50])
+        upper_black = np.array([180, 255, 60])
+
+        lower_cream = np.array([15, 20, 150])
+        upper_cream = np.array([35, 100, 255])
 
         mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
         mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
@@ -197,11 +210,13 @@ class AdvancedDartboardCalibration:
 
         mask_green = cv2.inRange(hsv, lower_green, upper_green)
         mask_black = cv2.inRange(hsv, lower_black, upper_black)
+        mask_cream = cv2.inRange(hsv, lower_cream, upper_cream)
 
         mask_board = cv2.bitwise_or(mask_red, mask_green)
         mask_board = cv2.bitwise_or(mask_board, mask_black)
+        mask_board = cv2.bitwise_or(mask_board, mask_cream)
 
-        kernel = np.ones((7, 7), np.uint8)
+        kernel = np.ones((9, 9), np.uint8)
         mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_CLOSE, kernel)
         mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_OPEN, kernel)
 
@@ -213,12 +228,32 @@ class AdvancedDartboardCalibration:
         largest_contour = max(contours, key=cv2.contourArea)
         area = cv2.contourArea(largest_contour)
 
-        if area < 2000:
+        if area < 1500:
             return None
 
         (x, y), radius = cv2.minEnclosingCircle(largest_contour)
 
-        ellipse = cv2.fitEllipse(largest_contour) if len(largest_contour) >= 5 else None
+        ellipse_data = None
+        is_angled = False
+
+        if len(largest_contour) >= 5:
+            ellipse = cv2.fitEllipse(largest_contour)
+            (ex, ey), (axis1, axis2), angle = ellipse
+            axis_major = max(axis1, axis2)
+            axis_minor = min(axis1, axis2)
+
+            aspect_ratio = axis_minor / axis_major if axis_major > 0 else 1
+
+            if aspect_ratio < 0.85:
+                is_angled = True
+                ellipse_data = EllipseData(
+                    center_x=int(ex),
+                    center_y=int(ey),
+                    axis_major=int(axis_major / 2),
+                    axis_minor=int(axis_minor / 2),
+                    angle=angle
+                )
+                radius = axis_major / 2
 
         M = cv2.moments(largest_contour)
         if M["m00"] > 0:
@@ -227,10 +262,21 @@ class AdvancedDartboardCalibration:
         else:
             cx, cy = int(x), int(y)
 
+        if ellipse_data:
+            cx = ellipse_data.center_x
+            cy = ellipse_data.center_y
+
         circle_area = math.pi * radius * radius
         circularity = area / circle_area if circle_area > 0 else 0
 
-        confidence = min(0.85, circularity * 0.7 + 0.2)
+        confidence = min(0.88, circularity * 0.5 + 0.35)
+
+        if is_angled:
+            confidence = min(0.92, confidence + 0.1)
+
+        angle_info = ""
+        if is_angled and ellipse_data:
+            angle_info = f" (szogben: {ellipse_data.angle:.0f}°)"
 
         return CalibrationResult(
             success=True,
@@ -240,7 +286,100 @@ class AdvancedDartboardCalibration:
             rotation_offset=-9.0,
             confidence=confidence,
             method="Advanced Color Detection",
-            message=f"Szin alapu detektalas (korosseg: {circularity*100:.1f}%)"
+            message=f"Szin alapu detektalas{angle_info}",
+            ellipse=ellipse_data,
+            is_angled=is_angled
+        )
+
+    def detect_with_ellipse(self, image: np.ndarray) -> Optional[CalibrationResult]:
+        enhanced = self.preprocess_image(image)
+        gray = cv2.cvtColor(enhanced, cv2.COLOR_BGR2GRAY)
+
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        edges = cv2.Canny(blurred, 30, 100)
+
+        kernel = np.ones((3, 3), np.uint8)
+        edges = cv2.dilate(edges, kernel, iterations=2)
+        edges = cv2.erode(edges, kernel, iterations=1)
+
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if not contours:
+            return None
+
+        height, width = gray.shape
+        min_area = (min(width, height) * 0.15) ** 2 * math.pi
+        max_area = (min(width, height) * 0.5) ** 2 * math.pi
+
+        best_ellipse = None
+        best_score = 0
+
+        for contour in contours:
+            if len(contour) < 5:
+                continue
+
+            area = cv2.contourArea(contour)
+            if area < min_area or area > max_area:
+                continue
+
+            try:
+                ellipse = cv2.fitEllipse(contour)
+                (ex, ey), (axis1, axis2), angle = ellipse
+
+                axis_major = max(axis1, axis2)
+                axis_minor = min(axis1, axis2)
+
+                if axis_major < 50 or axis_minor < 30:
+                    continue
+
+                aspect_ratio = axis_minor / axis_major
+                if aspect_ratio < 0.3 or aspect_ratio > 1.0:
+                    continue
+
+                ellipse_area = math.pi * (axis1 / 2) * (axis2 / 2)
+                fill_ratio = area / ellipse_area if ellipse_area > 0 else 0
+
+                dist_to_center = math.sqrt((ex - width/2)**2 + (ey - height/2)**2)
+                centrality = 1 - (dist_to_center / max(width, height))
+
+                score = fill_ratio * 0.4 + centrality * 0.3 + (axis_major / max(width, height)) * 0.3
+
+                if score > best_score:
+                    best_score = score
+                    best_ellipse = ellipse
+
+            except cv2.error:
+                continue
+
+        if best_ellipse is None:
+            return None
+
+        (ex, ey), (axis1, axis2), angle = best_ellipse
+        axis_major = max(axis1, axis2)
+        axis_minor = min(axis1, axis2)
+
+        ellipse_data = EllipseData(
+            center_x=int(ex),
+            center_y=int(ey),
+            axis_major=int(axis_major / 2),
+            axis_minor=int(axis_minor / 2),
+            angle=angle
+        )
+
+        aspect_ratio = axis_minor / axis_major
+        is_angled = aspect_ratio < 0.85
+
+        return CalibrationResult(
+            success=True,
+            center_x=int(ex),
+            center_y=int(ey),
+            radius=int(axis_major / 2),
+            rotation_offset=-9.0,
+            confidence=min(0.85, best_score),
+            method="Ellipse Detection",
+            message=f"Ellipszis detektalas (arany: {aspect_ratio:.2f})",
+            ellipse=ellipse_data,
+            is_angled=is_angled
         )
 
     def detect_bull_precise(self, image: np.ndarray, approx_center: Tuple[int, int],
@@ -405,15 +544,27 @@ class AdvancedDartboardCalibration:
         if color_result and color_result.success:
             results.append(color_result)
 
+        ellipse_result = self.detect_with_ellipse(image)
+        if ellipse_result and ellipse_result.success:
+            results.append(ellipse_result)
+
         if not results:
             return CalibrationResult(
                 success=False,
                 confidence=0.0,
                 method="Failed",
-                message="Nem talaltam darttablat. Javitsd a megvilagitast es probald ujra."
+                message="Nem talaltam darttablat. Probald mas szogbol vagy jobb megvilagitassal."
             )
 
-        if len(results) == 1:
+        angled_results = [r for r in results if r.is_angled and r.ellipse]
+        has_angled = len(angled_results) > 0
+
+        if has_angled:
+            best_angled = max(angled_results, key=lambda r: r.confidence)
+            result = best_angled
+            result.confidence = min(0.95, result.confidence + 0.05)
+            result.message = f"Szogbol kalibralt ({result.method})"
+        elif len(results) == 1:
             result = results[0]
         else:
             weighted_cx = sum(r.center_x * r.confidence for r in results)
@@ -427,6 +578,12 @@ class AdvancedDartboardCalibration:
 
             methods = ", ".join(set(r.method for r in results))
 
+            best_ellipse = None
+            for r in results:
+                if r.ellipse:
+                    best_ellipse = r.ellipse
+                    break
+
             result = CalibrationResult(
                 success=True,
                 center_x=final_cx,
@@ -435,7 +592,9 @@ class AdvancedDartboardCalibration:
                 rotation_offset=-9.0,
                 confidence=min(0.95, total_confidence / len(results)),
                 method=f"Multi-method ({methods})",
-                message=f"Tobbszoros modszerrel kalibralt ({len(results)} modszer)"
+                message=f"Tobbszoros modszerrel kalibralt ({len(results)} modszer)",
+                ellipse=best_ellipse,
+                is_angled=any(r.is_angled for r in results)
             )
 
         bull_result = self.detect_bull_precise(
