@@ -66,7 +66,7 @@ export async function checkApiHealth(): Promise<{ status: string; calibrated: bo
   try {
     const response = await fetch(`${apiUrl}/health`, {
       method: 'GET',
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(90000),
     });
     if (!response.ok) return null;
     return await response.json();

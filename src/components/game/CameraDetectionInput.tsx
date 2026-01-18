@@ -112,7 +112,7 @@ export function CameraDetectionInput({
 
     setError(null);
     setIsConnecting(true);
-    setStatusMessage('Kamera inditasa...');
+    setStatusMessage('Szerver elenorzese... (hideg start akár 60mp is lehet)');
 
     const connected = await checkConnection();
     if (!connected) {
@@ -121,6 +121,8 @@ export function CameraDetectionInput({
       setStatusMessage(null);
       return;
     }
+
+    setStatusMessage('Kamera inditasa...');
 
     const camera = new CameraManager();
     cameraRef.current = camera;
