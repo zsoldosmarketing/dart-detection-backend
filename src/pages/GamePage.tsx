@@ -300,7 +300,10 @@ export function GamePage() {
   };
 
   const handleStartGame = async () => {
-    if (!user) return;
+    if (!user) {
+      alert('Nem vagy bejelentkezve! Kérlek jelentkezz be először.');
+      return;
+    }
 
     setIsStarting(true);
 
@@ -328,9 +331,13 @@ export function GamePage() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Room creation error:', error);
+        alert(`Hiba a játék létrehozásakor: ${error.message}`);
+        throw error;
+      }
 
-      await supabase.from('game_players').insert({
+      const { error: playerError } = await supabase.from('game_players').insert({
         room_id: room.id,
         user_id: user.id,
         is_bot: false,
@@ -338,8 +345,14 @@ export function GamePage() {
         current_score: startingScore,
       });
 
+      if (playerError) {
+        console.error('Player insert error:', playerError);
+        alert(`Hiba a játékos hozzáadásakor: ${playerError.message}`);
+        throw playerError;
+      }
+
       if (mode === 'bot') {
-        await supabase.from('game_players').insert({
+        const { error: botError } = await supabase.from('game_players').insert({
           room_id: room.id,
           user_id: null,
           is_bot: true,
@@ -347,10 +360,16 @@ export function GamePage() {
           current_score: startingScore,
           display_name: botName,
         });
+
+        if (botError) {
+          console.error('Bot insert error:', botError);
+          alert(`Hiba a bot hozzáadásakor: ${botError.message}`);
+          throw botError;
+        }
       } else if (mode === 'local') {
         for (let i = 0; i < localPlayers.length; i++) {
           const player = localPlayers[i];
-          await supabase.from('game_players').insert({
+          const { error: localPlayerError } = await supabase.from('game_players').insert({
             room_id: room.id,
             user_id: player.isRegistered ? player.id : null,
             is_bot: player.isBot,
@@ -360,6 +379,12 @@ export function GamePage() {
             current_score: startingScore,
             display_name: player.name,
           });
+
+          if (localPlayerError) {
+            console.error('Local player insert error:', localPlayerError);
+            alert(`Hiba a ${player.name} játékos hozzáadásakor: ${localPlayerError.message}`);
+            throw localPlayerError;
+          }
         }
       }
 
@@ -373,12 +398,18 @@ export function GamePage() {
         startingPlayerOrder = parseInt(firstPlayer.split('_')[1]);
       }
 
-      await supabase.from('game_state').insert({
+      const { error: stateError } = await supabase.from('game_state').insert({
         room_id: room.id,
         current_player_order: startingPlayerOrder,
         current_leg: 1,
         current_set: 1,
       });
+
+      if (stateError) {
+        console.error('Game state insert error:', stateError);
+        alert(`Hiba a játék állapot létrehozásakor: ${stateError.message}`);
+        throw stateError;
+      }
 
       navigate(`/game/${room.id}`);
     } catch (error) {
