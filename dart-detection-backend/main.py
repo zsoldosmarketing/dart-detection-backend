@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import cv2
@@ -6,10 +6,17 @@ import numpy as np
 from PIL import Image
 import io
 import math
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 from pydantic import BaseModel
+from advanced_calibration import AdvancedDartboardCalibration, CalibrationResult as AdvCalibResult
+from advanced_detection import AdvancedDartDetection, DartDetection, DetectionResult as AdvDetResult
+from image_preprocessing import ImagePreprocessor
 
-app = FastAPI(title="Dart Detection API")
+app = FastAPI(
+    title="Advanced Dart Detection API",
+    description="High-precision dart detection with automatic calibration",
+    version="2.0.0"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,16 +45,25 @@ calibration = {
     "auto_calibrated": False,
 }
 
+calibrator = AdvancedDartboardCalibration()
+detector = None
+
 class CalibrationData(BaseModel):
     center_x: int
     center_y: int
     radius: int
     rotation_offset: Optional[float] = -9
 
-class DetectionResult(BaseModel):
+class SingleDartResult(BaseModel):
     score: str
     confidence: float
     position: Optional[dict] = None
+
+class MultiDartResult(BaseModel):
+    darts: List[dict]
+    total_confidence: float
+    method: str
+    message: str
 
 class AutoCalibrationResult(BaseModel):
     success: bool
@@ -56,6 +72,7 @@ class AutoCalibrationResult(BaseModel):
     radius: Optional[int] = None
     rotation_offset: Optional[float] = None
     confidence: float = 0.0
+    method: str = ""
     message: str = ""
 
 
@@ -465,7 +482,11 @@ async def calibrate(data: CalibrationData):
 
 
 @app.post("/auto-calibrate", response_model=AutoCalibrationResult)
-async def auto_calibrate(file: UploadFile = File(...)):
+async def auto_calibrate(
+    file: UploadFile = File(...),
+    use_advanced: bool = Query(True, description="Use advanced multi-method calibration")
+):
+    global detector
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -473,16 +494,41 @@ async def auto_calibrate(file: UploadFile = File(...)):
     if image is None:
         raise HTTPException(status_code=400, detail="Invalid image")
 
-    result = auto_calibrate_dartboard(image)
+    if use_advanced:
+        result = calibrator.calibrate_multi_method(image)
 
-    if result.success:
-        calibration["center_x"] = result.center_x
-        calibration["center_y"] = result.center_y
-        calibration["radius"] = result.radius
-        calibration["rotation_offset"] = result.rotation_offset
-        calibration["auto_calibrated"] = True
+        if result.success:
+            calibration["center_x"] = result.center_x
+            calibration["center_y"] = result.center_y
+            calibration["radius"] = result.radius
+            calibration["rotation_offset"] = result.rotation_offset
+            calibration["auto_calibrated"] = True
 
-    return result
+            detector = AdvancedDartDetection(calibration)
+
+        return AutoCalibrationResult(
+            success=result.success,
+            center_x=result.center_x,
+            center_y=result.center_y,
+            radius=result.radius,
+            rotation_offset=result.rotation_offset,
+            confidence=result.confidence,
+            method=result.method,
+            message=result.message
+        )
+    else:
+        result = auto_calibrate_dartboard(image)
+
+        if result.success:
+            calibration["center_x"] = result.center_x
+            calibration["center_y"] = result.center_y
+            calibration["radius"] = result.radius
+            calibration["rotation_offset"] = result.rotation_offset
+            calibration["auto_calibrated"] = True
+
+            detector = AdvancedDartDetection(calibration)
+
+        return result
 
 
 @app.post("/set-reference")
@@ -499,7 +545,7 @@ async def set_reference(file: UploadFile = File(...)):
     return {"status": "reference_set", "shape": reference_image.shape[:2]}
 
 
-@app.post("/detect", response_model=DetectionResult)
+@app.post("/detect", response_model=SingleDartResult)
 async def detect_dart(file: UploadFile = File(...)):
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
@@ -511,7 +557,7 @@ async def detect_dart(file: UploadFile = File(...)):
     result = detect_dart_tip(image, reference_image)
 
     if result is None:
-        return DetectionResult(
+        return SingleDartResult(
             score="MISS",
             confidence=0.3,
             position=None
@@ -520,7 +566,7 @@ async def detect_dart(file: UploadFile = File(...)):
     x, y, detection_confidence = result
     score, score_confidence = get_score_from_position(x, y)
 
-    return DetectionResult(
+    return SingleDartResult(
         score=score,
         confidence=detection_confidence * score_confidence,
         position={"x": x, "y": y}
@@ -549,7 +595,7 @@ async def detect_multiple_darts(
     result = detect_dart_tip(current_image, ref)
 
     if result is None:
-        return DetectionResult(
+        return SingleDartResult(
             score="MISS",
             confidence=0.3,
             position=None
@@ -558,10 +604,102 @@ async def detect_multiple_darts(
     x, y, detection_confidence = result
     score, score_confidence = get_score_from_position(x, y)
 
-    return DetectionResult(
+    return SingleDartResult(
         score=score,
         confidence=detection_confidence * score_confidence,
         position={"x": x, "y": y}
+    )
+
+
+@app.post("/detect-advanced", response_model=MultiDartResult)
+async def detect_advanced(
+    current: UploadFile = File(...),
+    reference: Optional[UploadFile] = File(None),
+    preprocess: bool = Query(True, description="Apply image preprocessing")
+):
+    global detector
+
+    if detector is None:
+        if calibration["center_x"] is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Elobb kalibrald a tablat az /auto-calibrate endpoint-tal"
+            )
+        detector = AdvancedDartDetection(calibration)
+
+    current_contents = await current.read()
+    current_arr = np.frombuffer(current_contents, np.uint8)
+    current_image = cv2.imdecode(current_arr, cv2.IMREAD_COLOR)
+
+    if current_image is None:
+        raise HTTPException(status_code=400, detail="Invalid current image")
+
+    if preprocess:
+        current_image = ImagePreprocessor.adaptive_preprocessing(current_image)
+
+    ref_image = None
+    if reference:
+        ref_contents = await reference.read()
+        ref_arr = np.frombuffer(ref_contents, np.uint8)
+        ref_image = cv2.imdecode(ref_arr, cv2.IMREAD_COLOR)
+
+        if ref_image is not None and preprocess:
+            ref_image = ImagePreprocessor.adaptive_preprocessing(ref_image)
+    elif reference_image is not None:
+        ref_image = reference_image
+
+    result = detector.detect_multiple_darts(current_image, ref_image)
+
+    darts_dict = [
+        {
+            "x": dart.x,
+            "y": dart.y,
+            "score": dart.score,
+            "confidence": dart.confidence,
+            "dart_id": dart.dart_id
+        }
+        for dart in result.darts
+    ]
+
+    return MultiDartResult(
+        darts=darts_dict,
+        total_confidence=result.total_confidence,
+        method=result.method,
+        message=result.message
+    )
+
+
+@app.post("/preprocess-image")
+async def preprocess_image(
+    file: UploadFile = File(...),
+    method: str = Query("adaptive", description="Preprocessing method: adaptive, full, enhance, denoise")
+):
+    contents = await file.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    if image is None:
+        raise HTTPException(status_code=400, detail="Invalid image")
+
+    if method == "adaptive":
+        processed = ImagePreprocessor.adaptive_preprocessing(image)
+    elif method == "full":
+        processed = ImagePreprocessor.full_preprocessing_pipeline(image)
+    elif method == "enhance":
+        processed = ImagePreprocessor.enhance_lighting(image)
+    elif method == "denoise":
+        processed = ImagePreprocessor.reduce_noise(image)
+    else:
+        raise HTTPException(status_code=400, detail="Invalid preprocessing method")
+
+    _, buffer = cv2.imencode('.jpg', processed, [cv2.IMWRITE_JPEG_QUALITY, 95])
+
+    return JSONResponse(
+        content={
+            "status": "processed",
+            "method": method,
+            "image_base64": buffer.tobytes().hex()
+        }
     )
 
 

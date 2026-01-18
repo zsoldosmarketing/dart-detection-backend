@@ -20,6 +20,22 @@ export interface AutoCalibrationResult {
   radius: number | null;
   rotation_offset: number | null;
   confidence: number;
+  method?: string;
+  message: string;
+}
+
+export interface DartDetectionAdvanced {
+  x: number;
+  y: number;
+  score: string;
+  confidence: number;
+  dart_id: number | null;
+}
+
+export interface MultiDartDetectionResult {
+  darts: DartDetectionAdvanced[];
+  total_confidence: number;
+  method: string;
   message: string;
 }
 
@@ -66,7 +82,10 @@ export async function calibrateApi(data: ApiCalibrationData): Promise<boolean> {
   }
 }
 
-export async function autoCalibrate(imageBlob: Blob): Promise<AutoCalibrationResult | null> {
+export async function autoCalibrate(
+  imageBlob: Blob,
+  useAdvanced: boolean = true
+): Promise<AutoCalibrationResult | null> {
   const apiUrl = getApiUrl();
   if (!apiUrl) return null;
 
@@ -74,7 +93,9 @@ export async function autoCalibrate(imageBlob: Blob): Promise<AutoCalibrationRes
     const formData = new FormData();
     formData.append('file', imageBlob, 'calibration.jpg');
 
-    const response = await fetch(`${apiUrl}/auto-calibrate`, {
+    const url = `${apiUrl}/auto-calibrate?use_advanced=${useAdvanced}`;
+
+    const response = await fetch(url, {
       method: 'POST',
       body: formData,
       signal: AbortSignal.timeout(15000),
@@ -184,6 +205,62 @@ export function parseScoreToTarget(score: string): DartTarget {
   }
 
   return 'MISS';
+}
+
+export async function detectDartAdvanced(
+  currentBlob: Blob,
+  referenceBlob?: Blob,
+  preprocess: boolean = true
+): Promise<MultiDartDetectionResult | null> {
+  const apiUrl = getApiUrl();
+  if (!apiUrl) return null;
+
+  try {
+    const formData = new FormData();
+    formData.append('current', currentBlob, 'current.jpg');
+    if (referenceBlob) {
+      formData.append('reference', referenceBlob, 'reference.jpg');
+    }
+
+    const url = `${apiUrl}/detect-advanced?preprocess=${preprocess}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function preprocessImage(
+  imageBlob: Blob,
+  method: 'adaptive' | 'full' | 'enhance' | 'denoise' = 'adaptive'
+): Promise<{ status: string; method: string; image_base64: string } | null> {
+  const apiUrl = getApiUrl();
+  if (!apiUrl) return null;
+
+  try {
+    const formData = new FormData();
+    formData.append('file', imageBlob, 'image.jpg');
+
+    const url = `${apiUrl}/preprocess-image?method=${method}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
 }
 
 export function captureVideoFrame(video: HTMLVideoElement): Promise<Blob> {
