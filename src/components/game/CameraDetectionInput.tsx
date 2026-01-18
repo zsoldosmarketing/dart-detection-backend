@@ -174,9 +174,11 @@ export function CameraDetectionInput({
       if (result && result.success) {
         calibrationRef.current = result;
         setIsCalibrated(true);
+        setError(null);
 
         const methodInfo = result.method ? ` [${result.method}]` : '';
-        setStatusMessage(`Tabla OK! (${(result.confidence * 100).toFixed(0)}%)${methodInfo}`);
+        const angleInfo = result.is_angled ? ' (szogbol)' : '';
+        setStatusMessage(`Tabla OK! (${(result.confidence * 100).toFixed(0)}%)${methodInfo}${angleInfo}`);
 
         applyAutoZoom(result);
 
@@ -324,34 +326,31 @@ export function CameraDetectionInput({
           ctx.restore();
 
           if (calibrationRef.current && calibrationRef.current.success) {
-            const { center_x, center_y, radius } = calibrationRef.current;
+            const { center_x, center_y, radius, ellipse, is_angled } = calibrationRef.current;
             if (center_x && center_y && radius) {
               ctx.save();
               ctx.translate(canvas.width / 2, canvas.height / 2);
               ctx.scale(zoomLevel, zoomLevel);
               ctx.translate(-canvas.width / 2 + panOffset.x, -canvas.height / 2 + panOffset.y);
 
-              const gradient = ctx.createRadialGradient(
-                center_x, center_y, radius * 0.95,
-                center_x, center_y, radius * 1.05
-              );
-              gradient.addColorStop(0, 'rgba(34, 197, 94, 0)');
-              gradient.addColorStop(0.5, 'rgba(34, 197, 94, 0.4)');
-              gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
-
               ctx.strokeStyle = 'rgba(34, 197, 94, 0.8)';
               ctx.lineWidth = 3;
               ctx.setLineDash([12, 6]);
               ctx.beginPath();
-              ctx.arc(center_x, center_y, radius, 0, Math.PI * 2);
-              ctx.stroke();
-              ctx.setLineDash([]);
 
-              ctx.fillStyle = gradient;
-              ctx.beginPath();
-              ctx.arc(center_x, center_y, radius * 1.05, 0, Math.PI * 2);
-              ctx.arc(center_x, center_y, radius * 0.95, 0, Math.PI * 2);
-              ctx.fill('evenodd');
+              if (is_angled && ellipse) {
+                ctx.save();
+                ctx.translate(ellipse.center_x, ellipse.center_y);
+                ctx.rotate((ellipse.angle * Math.PI) / 180);
+                ctx.beginPath();
+                ctx.ellipse(0, 0, ellipse.axis_major, ellipse.axis_minor, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+              } else {
+                ctx.arc(center_x, center_y, radius, 0, Math.PI * 2);
+                ctx.stroke();
+              }
+              ctx.setLineDash([]);
 
               ctx.strokeStyle = 'rgba(34, 197, 94, 0.5)';
               ctx.lineWidth = 1;
