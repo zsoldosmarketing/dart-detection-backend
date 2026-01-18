@@ -107,7 +107,7 @@ export async function autoCalibrate(
     const response = await fetch(url, {
       method: 'POST',
       body: formData,
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!response.ok) return null;
@@ -119,18 +119,13 @@ export async function autoCalibrate(
 
 export async function autoCalibrateWithRetry(
   imageBlob: Blob,
-  maxRetries: number = 3
+  maxRetries: number = 2
 ): Promise<AutoCalibrationResult | null> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const useAdvanced = attempt < 2;
-    const result = await autoCalibrate(imageBlob, useAdvanced);
+    const result = await autoCalibrate(imageBlob, true);
 
-    if (result && result.success && result.confidence >= 0.5) {
+    if (result && result.success && result.confidence >= 0.4) {
       return result;
-    }
-
-    if (attempt < maxRetries - 1) {
-      await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
 
@@ -265,7 +260,7 @@ export async function detectDartAdvanced(
     const response = await fetch(url, {
       method: 'POST',
       body: formData,
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!response.ok) return null;
@@ -301,7 +296,7 @@ export async function preprocessImage(
   }
 }
 
-export function captureVideoFrame(video: HTMLVideoElement, quality: number = 0.95): Promise<Blob> {
+export function captureVideoFrame(video: HTMLVideoElement, quality: number = 0.80): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
@@ -327,5 +322,5 @@ export function captureVideoFrame(video: HTMLVideoElement, quality: number = 0.9
 }
 
 export function captureHighQualityFrame(video: HTMLVideoElement): Promise<Blob> {
-  return captureVideoFrame(video, 0.98);
+  return captureVideoFrame(video, 0.85);
 }

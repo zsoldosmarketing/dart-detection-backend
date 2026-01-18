@@ -169,7 +169,7 @@ export function CameraDetectionInput({
 
     try {
       const frameBlob = await captureHighQualityFrame(videoRef.current);
-      const result = await autoCalibrateWithRetry(frameBlob, 3);
+      const result = await autoCalibrateWithRetry(frameBlob, 2);
 
       if (result && result.success) {
         calibrationRef.current = result;
