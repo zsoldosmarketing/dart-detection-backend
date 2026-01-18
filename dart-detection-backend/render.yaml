@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: dart-detection-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars: []

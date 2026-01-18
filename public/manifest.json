@@ -1,0 +1,23 @@
+{
+  "name": "DartsTraining",
+  "short_name": "DartsTraining",
+  "description": "A legkomolyabb darts oktato es training platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait",
+  "scope": "/",
+  "lang": "hu",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["sports", "games", "education"],
+  "screenshots": []
+}
