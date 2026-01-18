@@ -9,6 +9,12 @@ import {
   Crosshair,
   Wifi,
   WifiOff,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Minimize2,
+  Target,
+  Settings2,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { CameraManager } from '../../lib/cameraManager';
@@ -29,7 +35,6 @@ interface CameraDetectionInputProps {
   remainingDarts?: number;
 }
 
-const API_URL = import.meta.env.VITE_DART_DETECTION_API_URL || 'https://dart-detection-api.onrender.com';
 const DETECTION_INTERVAL_MS = 800;
 const AUTO_SUBMIT_CONFIDENCE = 0.75;
 
@@ -48,9 +53,15 @@ export function CameraDetectionInput({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [pendingScore, setPendingScore] = useState<{ score: string; target: DartTarget; confidence: number } | null>(null);
   const [lastDetectedDarts, setLastDetectedDarts] = useState<number>(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [showSettings, setShowSettings] = useState(false);
+  const [autoZoom, setAutoZoom] = useState(true);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<CameraManager | null>(null);
   const detectionIntervalRef = useRef<number | null>(null);
   const referenceFrameRef = useRef<Blob | null>(null);
@@ -75,6 +86,25 @@ export function CameraDetectionInput({
     const interval = setInterval(checkConnection, 30000);
     return () => clearInterval(interval);
   }, [checkConnection]);
+
+  const applyAutoZoom = useCallback((calibration: AutoCalibrationResult) => {
+    if (!autoZoom || !calibration.center_x || !calibration.center_y || !calibration.radius) return;
+    if (!videoRef.current) return;
+
+    const videoWidth = videoRef.current.videoWidth;
+    const videoHeight = videoRef.current.videoHeight;
+
+    const padding = 1.3;
+    const boardDiameter = calibration.radius * 2 * padding;
+    const maxDimension = Math.max(videoWidth, videoHeight);
+    const newZoom = Math.min(maxDimension / boardDiameter, 2.5);
+
+    const normalizedX = (calibration.center_x / videoWidth - 0.5) * 100;
+    const normalizedY = (calibration.center_y / videoHeight - 0.5) * 100;
+
+    setZoomLevel(newZoom);
+    setPanOffset({ x: -normalizedX * (newZoom - 1), y: -normalizedY * (newZoom - 1) });
+  }, [autoZoom]);
 
   const startCamera = useCallback(async () => {
     if (!videoRef.current) return;
@@ -123,6 +153,8 @@ export function CameraDetectionInput({
     setIsDetecting(false);
     setIsCalibrated(false);
     setPendingScore(null);
+    setZoomLevel(1);
+    setPanOffset({ x: 0, y: 0 });
     referenceFrameRef.current = null;
     calibrationRef.current = null;
   }, []);
@@ -132,7 +164,7 @@ export function CameraDetectionInput({
 
     setIsCalibrating(true);
     setError(null);
-    setStatusMessage('Tabla felismerese...');
+    setStatusMessage('Tabla automatikus felismerese...');
 
     try {
       const frameBlob = await captureVideoFrame(videoRef.current);
@@ -141,7 +173,9 @@ export function CameraDetectionInput({
       if (result && result.success) {
         calibrationRef.current = result;
         setIsCalibrated(true);
-        setStatusMessage(`Tabla felismerve! (${(result.confidence * 100).toFixed(0)}% biztossag)`);
+        setStatusMessage(`Tabla OK! (${(result.confidence * 100).toFixed(0)}%)`);
+
+        applyAutoZoom(result);
 
         await setReferenceImage(frameBlob);
         referenceFrameRef.current = frameBlob;
@@ -151,7 +185,7 @@ export function CameraDetectionInput({
           startDetectionLoop();
         }, 1500);
       } else {
-        setError(result?.message || 'Nem talaltam darttablat. Mozditsd a kamerat, hogy latszodjon a tabla.');
+        setError(result?.message || 'Tabla nem talalhato. Iranyitsd a kamerat a darttablara.');
         setStatusMessage(null);
       }
     } catch (err) {
@@ -161,7 +195,7 @@ export function CameraDetectionInput({
     } finally {
       setIsCalibrating(false);
     }
-  }, []);
+  }, [applyAutoZoom]);
 
   const startDetectionLoop = useCallback(() => {
     if (detectionIntervalRef.current) {
@@ -228,17 +262,34 @@ export function CameraDetectionInput({
   const resetReference = useCallback(async () => {
     if (!videoRef.current) return;
 
-    setStatusMessage('Referencia kep frissitese...');
+    setStatusMessage('Referencia frissitese...');
     try {
       const frameBlob = await captureVideoFrame(videoRef.current);
       await setReferenceImage(frameBlob);
       referenceFrameRef.current = frameBlob;
       setLastDetectedDarts(0);
-      setStatusMessage('Referencia frissitve!');
+      setStatusMessage('Referencia OK!');
       setTimeout(() => setStatusMessage(null), 1500);
     } catch {
-      setError('Nem sikerult frissiteni a referenciat');
+      setError('Referencia frissites sikertelen');
     }
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(prev + 0.3, 3));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel(prev => Math.max(prev - 0.3, 1));
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    setZoomLevel(1);
+    setPanOffset({ x: 0, y: 0 });
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen(prev => !prev);
   }, []);
 
   useEffect(() => {
@@ -254,29 +305,73 @@ export function CameraDetectionInput({
         if (video.readyState >= 2) {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
+
+          ctx.save();
+          ctx.translate(canvas.width / 2, canvas.height / 2);
+          ctx.scale(zoomLevel, zoomLevel);
+          ctx.translate(-canvas.width / 2 + panOffset.x, -canvas.height / 2 + panOffset.y);
           ctx.drawImage(video, 0, 0);
+          ctx.restore();
 
           if (calibrationRef.current && calibrationRef.current.success) {
             const { center_x, center_y, radius } = calibrationRef.current;
             if (center_x && center_y && radius) {
-              ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
-              ctx.lineWidth = 2;
-              ctx.setLineDash([8, 4]);
+              ctx.save();
+              ctx.translate(canvas.width / 2, canvas.height / 2);
+              ctx.scale(zoomLevel, zoomLevel);
+              ctx.translate(-canvas.width / 2 + panOffset.x, -canvas.height / 2 + panOffset.y);
+
+              const gradient = ctx.createRadialGradient(
+                center_x, center_y, radius * 0.95,
+                center_x, center_y, radius * 1.05
+              );
+              gradient.addColorStop(0, 'rgba(34, 197, 94, 0)');
+              gradient.addColorStop(0.5, 'rgba(34, 197, 94, 0.4)');
+              gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
+
+              ctx.strokeStyle = 'rgba(34, 197, 94, 0.8)';
+              ctx.lineWidth = 3;
+              ctx.setLineDash([12, 6]);
               ctx.beginPath();
               ctx.arc(center_x, center_y, radius, 0, Math.PI * 2);
               ctx.stroke();
               ctx.setLineDash([]);
 
-              ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
+              ctx.fillStyle = gradient;
               ctx.beginPath();
-              ctx.arc(center_x, center_y, 6, 0, Math.PI * 2);
+              ctx.arc(center_x, center_y, radius * 1.05, 0, Math.PI * 2);
+              ctx.arc(center_x, center_y, radius * 0.95, 0, Math.PI * 2);
+              ctx.fill('evenodd');
+
+              ctx.strokeStyle = 'rgba(34, 197, 94, 0.5)';
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(center_x - 20, center_y);
+              ctx.lineTo(center_x + 20, center_y);
+              ctx.moveTo(center_x, center_y - 20);
+              ctx.lineTo(center_x, center_y + 20);
+              ctx.stroke();
+
+              ctx.fillStyle = 'rgba(34, 197, 94, 1)';
+              ctx.shadowColor = 'rgba(34, 197, 94, 0.8)';
+              ctx.shadowBlur = 10;
+              ctx.beginPath();
+              ctx.arc(center_x, center_y, 5, 0, Math.PI * 2);
               ctx.fill();
+              ctx.shadowBlur = 0;
+
+              ctx.restore();
             }
           }
 
           if (isDetecting) {
-            ctx.fillStyle = 'rgba(59, 130, 246, 0.3)';
-            ctx.fillRect(0, 0, canvas.width, 4);
+            const scanY = (Date.now() % 2000) / 2000 * canvas.height;
+            const scanGradient = ctx.createLinearGradient(0, scanY - 30, 0, scanY + 30);
+            scanGradient.addColorStop(0, 'rgba(59, 130, 246, 0)');
+            scanGradient.addColorStop(0.5, 'rgba(59, 130, 246, 0.3)');
+            scanGradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
+            ctx.fillStyle = scanGradient;
+            ctx.fillRect(0, scanY - 30, canvas.width, 60);
           }
         }
         animationId = requestAnimationFrame(draw);
@@ -285,7 +380,7 @@ export function CameraDetectionInput({
       draw();
       return () => cancelAnimationFrame(animationId);
     }
-  }, [isActive, isDetecting]);
+  }, [isActive, isDetecting, zoomLevel, panOffset]);
 
   useEffect(() => {
     return () => {
@@ -293,8 +388,12 @@ export function CameraDetectionInput({
     };
   }, [stopCamera]);
 
+  const containerClasses = isFullscreen
+    ? 'fixed inset-0 z-50 bg-dark-900 flex flex-col'
+    : 'space-y-3';
+
   return (
-    <div className="space-y-3">
+    <div className={containerClasses} ref={containerRef}>
       <video
         ref={videoRef}
         autoPlay
@@ -303,157 +402,308 @@ export function CameraDetectionInput({
         className="absolute opacity-0 pointer-events-none w-0 h-0"
       />
 
-      <div className="relative bg-dark-800 rounded-xl overflow-hidden border border-dark-700">
+      <div className={`relative bg-dark-900 rounded-xl overflow-hidden border border-dark-700 ${
+        isFullscreen ? 'flex-1' : ''
+      }`}>
         {!isActive ? (
-          <div className="aspect-video flex flex-col items-center justify-center p-6 text-center">
-            <div className="mb-4">
+          <div className={`flex flex-col items-center justify-center p-8 text-center ${
+            isFullscreen ? 'h-full' : 'min-h-[320px]'
+          }`}>
+            <div className="mb-6">
               {apiConnected ? (
-                <div className="flex items-center gap-2 text-green-400 text-sm">
-                  <Wifi className="w-4 h-4" />
-                  <span>Szerver kapcsolat OK</span>
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/30">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  <Wifi className="w-4 h-4 text-green-400" />
+                  <span className="text-green-400 text-sm font-medium">Szerver kapcsolat aktiv</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-amber-400 text-sm">
-                  <WifiOff className="w-4 h-4" />
-                  <span>Szerver ellenorzese...</span>
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/30">
+                  <RefreshCw className="w-4 h-4 text-amber-400 animate-spin" />
+                  <WifiOff className="w-4 h-4 text-amber-400" />
+                  <span className="text-amber-400 text-sm font-medium">Szerver ellenorzese...</span>
                 </div>
               )}
             </div>
-            <Camera className="w-16 h-16 text-dark-500 mb-4" />
-            <p className="text-dark-400 mb-4">
-              Inditsd el a kamerat az automatikus dobas felismereshez
+
+            <div className="relative mb-6">
+              <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-xl animate-pulse" />
+              <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-dark-700 to-dark-800 border-2 border-dark-600 flex items-center justify-center">
+                <Camera className="w-10 h-10 text-dark-400" />
+              </div>
+            </div>
+
+            <h3 className="text-lg font-semibold text-white mb-2">Automatikus Felismeres</h3>
+            <p className="text-dark-400 mb-6 max-w-sm">
+              Iranyitsd a kamerat a darttablara. A rendszer automatikusan felismeri a dobasokat.
             </p>
+
             <Button
               onClick={startCamera}
-              disabled={isConnecting}
+              disabled={isConnecting || !apiConnected}
               size="lg"
+              className="px-8 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-500/25"
               leftIcon={isConnecting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
             >
               {isConnecting ? 'Csatlakozas...' : 'Kamera Inditas'}
             </Button>
           </div>
         ) : (
-          <>
-            <canvas ref={canvasRef} className="w-full" style={{ maxHeight: '280px', objectFit: 'contain' }} />
+          <div className={`relative ${isFullscreen ? 'h-full flex items-center justify-center bg-black' : ''}`}>
+            <canvas
+              ref={canvasRef}
+              className={`${isFullscreen ? 'max-h-full max-w-full object-contain' : 'w-full'}`}
+              style={!isFullscreen ? { aspectRatio: '16/9', objectFit: 'contain' } : undefined}
+            />
 
-            <div className="absolute top-2 left-2 flex items-center gap-2">
-              <div className={`px-2 py-1 rounded text-xs font-medium ${
-                isCalibrated ? 'bg-green-500/20 text-green-400' : 'bg-amber-500/20 text-amber-400'
+            <div className="absolute top-3 left-3 flex items-center gap-2">
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full backdrop-blur-sm ${
+                isCalibrated
+                  ? 'bg-green-500/20 border border-green-500/40'
+                  : 'bg-amber-500/20 border border-amber-500/40'
               }`}>
-                {isCalibrated ? 'Tabla OK' : 'Kalibralas...'}
+                {isCalibrated ? (
+                  <>
+                    <Target className="w-4 h-4 text-green-400" />
+                    <span className="text-green-400 text-xs font-medium">Tabla OK</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4 text-amber-400 animate-spin" />
+                    <span className="text-amber-400 text-xs font-medium">Kalibralas...</span>
+                  </>
+                )}
               </div>
+
               {isDetecting && (
-                <div className="px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-400 flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                  Figyeles
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/20 border border-blue-500/40 backdrop-blur-sm">
+                  <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                  <span className="text-blue-400 text-xs font-medium">Figyeles</span>
                 </div>
               )}
             </div>
 
-            <div className="absolute top-2 right-2 flex gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={runAutoCalibration}
-                disabled={isCalibrating}
-                className="bg-black/50 hover:bg-black/70"
-                title="Tabla ujrafelismerese"
+            <div className="absolute top-3 right-3 flex gap-1.5">
+              {showSettings && (
+                <div className="absolute top-12 right-0 bg-dark-800 border border-dark-600 rounded-lg p-3 shadow-xl min-w-[200px] z-10">
+                  <label className="flex items-center gap-2 text-sm text-dark-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoZoom}
+                      onChange={(e) => setAutoZoom(e.target.checked)}
+                      className="w-4 h-4 rounded bg-dark-700 border-dark-600"
+                    />
+                    Auto-zoom tablara
+                  </label>
+                </div>
+              )}
+
+              <button
+                onClick={() => setShowSettings(!showSettings)}
+                className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
+                title="Beallitasok"
               >
-                <Crosshair className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={resetReference}
-                className="bg-black/50 hover:bg-black/70"
-                title="Referencia frissites"
+                <Settings2 className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={handleZoomOut}
+                disabled={zoomLevel <= 1}
+                className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-40"
+                title="Kicsinyites"
               >
-                <RefreshCw className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
+                <ZoomOut className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={handleZoomIn}
+                disabled={zoomLevel >= 3}
+                className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-40"
+                title="Nagyitas"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </button>
+
+              {zoomLevel > 1 && (
+                <button
+                  onClick={handleResetZoom}
+                  className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
+                  title="Zoom visszaallitas"
+                >
+                  <span className="text-xs font-medium">1x</span>
+                </button>
+              )}
+
+              <button
+                onClick={toggleFullscreen}
+                className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
+                title={isFullscreen ? 'Kicsinyites' : 'Teljes kepernyo'}
+              >
+                {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <div className="absolute bottom-3 left-3 right-3 flex justify-between items-end">
+              <div className="flex gap-1.5">
+                <button
+                  onClick={runAutoCalibration}
+                  disabled={isCalibrating}
+                  className="p-2.5 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-40"
+                  title="Tabla ujrafelismerese"
+                >
+                  <Crosshair className="w-5 h-5" />
+                </button>
+
+                <button
+                  onClick={resetReference}
+                  className="p-2.5 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
+                  title="Referencia frissites"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                </button>
+              </div>
+
+              <button
                 onClick={stopCamera}
-                className="bg-black/50 hover:bg-black/70"
+                className="p-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 backdrop-blur-sm border border-red-500/40 text-red-400 hover:text-red-300 transition-colors"
                 title="Kamera leallitas"
               >
-                <CameraOff className="w-4 h-4" />
-              </Button>
+                <CameraOff className="w-5 h-5" />
+              </button>
             </div>
 
             {isCalibrating && (
-              <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center">
-                <RefreshCw className="w-10 h-10 text-blue-400 animate-spin mb-3" />
-                <p className="text-blue-300 font-medium">Tabla felismerese...</p>
+              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-blue-500/30 rounded-full blur-xl animate-pulse" />
+                  <div className="relative w-20 h-20 rounded-full border-4 border-blue-500/30 border-t-blue-500 animate-spin" />
+                </div>
+                <p className="text-blue-300 font-medium mt-4">Tabla automatikus felismerese...</p>
+                <p className="text-dark-400 text-sm mt-1">Varj, amig a rendszer megtalaja a tablat</p>
               </div>
             )}
-          </>
+
+            {zoomLevel > 1 && (
+              <div className="absolute bottom-16 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/60 backdrop-blur-sm border border-white/10">
+                <span className="text-white/70 text-xs font-medium">{zoomLevel.toFixed(1)}x zoom</span>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-start gap-2">
-          <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-red-300 text-sm">{error}</p>
-            {isActive && !isCalibrated && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={runAutoCalibration}
-                className="mt-2"
-              >
-                Ujra probalom
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {statusMessage && !error && (
-        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 flex items-center gap-2">
-          <Check className="w-5 h-5 text-blue-400 flex-shrink-0" />
-          <p className="text-blue-300 text-sm">{statusMessage}</p>
-        </div>
-      )}
-
-      {pendingScore && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="text-lg font-bold text-amber-300">{pendingScore.score}</p>
-              <p className="text-amber-400/70 text-sm">
-                Biztossag: {(pendingScore.confidence * 100).toFixed(0)}%
-              </p>
+      {!isFullscreen && (
+        <>
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-5 h-5 text-red-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-red-300 font-medium">{error}</p>
+                {isActive && !isCalibrated && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={runAutoCalibration}
+                    className="mt-3 border-red-500/30 text-red-300 hover:bg-red-500/10"
+                  >
+                    Ujra probalom
+                  </Button>
+                )}
+              </div>
             </div>
+          )}
+
+          {statusMessage && !error && (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                <Check className="w-5 h-5 text-blue-400" />
+              </div>
+              <p className="text-blue-300 font-medium">{statusMessage}</p>
+            </div>
+          )}
+
+          {pendingScore && (
+            <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-2xl font-bold text-amber-300">{pendingScore.score}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="h-1.5 w-24 bg-dark-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full"
+                        style={{ width: `${pendingScore.confidence * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-amber-400/70 text-sm">
+                      {(pendingScore.confidence * 100).toFixed(0)}% biztossag
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  onClick={confirmPendingScore}
+                  className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 shadow-lg shadow-green-500/20"
+                  leftIcon={<Check className="w-4 h-4" />}
+                >
+                  Elfogadom
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={rejectPendingScore}
+                  className="flex-1 border-dark-600 hover:bg-dark-700"
+                  leftIcon={<X className="w-4 h-4" />}
+                >
+                  Elutasitom
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {isActive && isCalibrated && !pendingScore && (
+            <div className="flex items-center justify-between px-4 py-3 bg-dark-800/50 rounded-xl border border-dark-700">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <div className="w-3 h-3 rounded-full bg-green-500" />
+                  <div className="absolute inset-0 w-3 h-3 rounded-full bg-green-500 animate-ping opacity-50" />
+                </div>
+                <span className="text-dark-300 text-sm font-medium">
+                  Automatikus felismeres aktiv
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-dark-500 text-sm">{remainingDarts} nyil hatra</span>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {isFullscreen && pendingScore && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-dark-800 border border-dark-600 rounded-xl p-4 shadow-2xl w-80">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xl font-bold text-amber-300">{pendingScore.score}</p>
+            <span className="text-amber-400/70 text-sm">{(pendingScore.confidence * 100).toFixed(0)}%</span>
           </div>
           <div className="flex gap-2">
             <Button
               onClick={confirmPendingScore}
-              className="flex-1 bg-green-600 hover:bg-green-700"
+              size="sm"
+              className="flex-1 bg-green-600 hover:bg-green-500"
               leftIcon={<Check className="w-4 h-4" />}
             >
-              Elfogadom
+              OK
             </Button>
             <Button
               variant="outline"
               onClick={rejectPendingScore}
+              size="sm"
               className="flex-1"
               leftIcon={<X className="w-4 h-4" />}
             >
-              Melledobas
+              Nem
             </Button>
-          </div>
-        </div>
-      )}
-
-      {isActive && isCalibrated && !pendingScore && (
-        <div className="flex items-center justify-between px-2 py-1">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-dark-400 text-sm">
-              Automatikus felismeres aktiv ({remainingDarts} nyil hatra)
-            </span>
           </div>
         </div>
       )}
