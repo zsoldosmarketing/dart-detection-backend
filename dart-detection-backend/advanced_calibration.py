@@ -110,16 +110,16 @@ class AdvancedDartboardCalibration:
         edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
 
         height, width = gray.shape
-        min_radius = int(min(width, height) * 0.20)
-        max_radius = int(min(width, height) * 0.48)
+        min_radius = int(min(width, height) * 0.12)
+        max_radius = int(min(width, height) * 0.50)
 
         circles = cv2.HoughCircles(
             blurred,
             cv2.HOUGH_GRADIENT,
             dp=1.0,
             minDist=min_radius,
-            param1=80,
-            param2=35,
+            param1=70,
+            param2=30,
             minRadius=min_radius,
             maxRadius=max_radius
         )
@@ -128,11 +128,23 @@ class AdvancedDartboardCalibration:
             circles = cv2.HoughCircles(
                 blurred,
                 cv2.HOUGH_GRADIENT,
-                dp=1.2,
+                dp=1.3,
                 minDist=min_radius // 2,
-                param1=60,
-                param2=30,
+                param1=50,
+                param2=25,
                 minRadius=min_radius // 2,
+                maxRadius=max_radius
+            )
+
+        if circles is None:
+            circles = cv2.HoughCircles(
+                blurred,
+                cv2.HOUGH_GRADIENT,
+                dp=1.5,
+                minDist=min_radius // 3,
+                param1=40,
+                param2=20,
+                minRadius=min_radius // 3,
                 maxRadius=max_radius
             )
 
@@ -190,19 +202,19 @@ class AdvancedDartboardCalibration:
         enhanced = self.preprocess_image(image)
         hsv = cv2.cvtColor(enhanced, cv2.COLOR_BGR2HSV)
 
-        lower_red1 = np.array([0, 60, 40])
-        upper_red1 = np.array([12, 255, 255])
-        lower_red2 = np.array([168, 60, 40])
+        lower_red1 = np.array([0, 40, 30])
+        upper_red1 = np.array([15, 255, 255])
+        lower_red2 = np.array([160, 40, 30])
         upper_red2 = np.array([180, 255, 255])
 
-        lower_green = np.array([35, 50, 40])
-        upper_green = np.array([85, 255, 255])
+        lower_green = np.array([30, 30, 30])
+        upper_green = np.array([90, 255, 255])
 
         lower_black = np.array([0, 0, 0])
-        upper_black = np.array([180, 255, 60])
+        upper_black = np.array([180, 255, 80])
 
-        lower_cream = np.array([15, 20, 150])
-        upper_cream = np.array([35, 100, 255])
+        lower_cream = np.array([10, 10, 120])
+        upper_cream = np.array([40, 120, 255])
 
         mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
         mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
@@ -228,7 +240,7 @@ class AdvancedDartboardCalibration:
         largest_contour = max(contours, key=cv2.contourArea)
         area = cv2.contourArea(largest_contour)
 
-        if area < 1500:
+        if area < 800:
             return None
 
         (x, y), radius = cv2.minEnclosingCircle(largest_contour)

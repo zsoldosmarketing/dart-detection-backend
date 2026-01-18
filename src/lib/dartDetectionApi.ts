@@ -107,7 +107,7 @@ export async function autoCalibrate(
     const response = await fetch(url, {
       method: 'POST',
       body: formData,
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) return null;

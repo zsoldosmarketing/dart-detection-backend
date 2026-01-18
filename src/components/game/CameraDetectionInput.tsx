@@ -95,16 +95,21 @@ export function CameraDetectionInput({
     const videoWidth = videoRef.current.videoWidth;
     const videoHeight = videoRef.current.videoHeight;
 
-    const padding = 1.3;
-    const boardDiameter = calibration.radius * 2 * padding;
-    const maxDimension = Math.max(videoWidth, videoHeight);
-    const newZoom = Math.min(maxDimension / boardDiameter, 2.5);
+    if (videoWidth === 0 || videoHeight === 0) return;
 
-    const normalizedX = (calibration.center_x / videoWidth - 0.5) * 100;
-    const normalizedY = (calibration.center_y / videoHeight - 0.5) * 100;
+    const padding = 1.25;
+    const boardDiameter = calibration.radius * 2 * padding;
+    const minDimension = Math.min(videoWidth, videoHeight);
+    const newZoom = Math.min(Math.max(minDimension / boardDiameter, 1), 2.2);
+
+    const centerOffsetX = calibration.center_x - videoWidth / 2;
+    const centerOffsetY = calibration.center_y - videoHeight / 2;
+
+    const panX = -centerOffsetX * (newZoom - 1) / newZoom;
+    const panY = -centerOffsetY * (newZoom - 1) / newZoom;
 
     setZoomLevel(newZoom);
-    setPanOffset({ x: -normalizedX * (newZoom - 1), y: -normalizedY * (newZoom - 1) });
+    setPanOffset({ x: panX, y: panY });
   }, [autoZoom]);
 
   const startCamera = useCallback(async () => {
@@ -325,15 +330,10 @@ export function CameraDetectionInput({
           ctx.scale(zoomLevel, zoomLevel);
           ctx.translate(-canvas.width / 2 + panOffset.x, -canvas.height / 2 + panOffset.y);
           ctx.drawImage(video, 0, 0);
-          ctx.restore();
 
           if (calibrationRef.current && calibrationRef.current.success) {
             const { center_x, center_y, radius, ellipse, is_angled } = calibrationRef.current;
             if (center_x && center_y && radius) {
-              ctx.save();
-              ctx.translate(canvas.width / 2, canvas.height / 2);
-              ctx.scale(zoomLevel, zoomLevel);
-              ctx.translate(-canvas.width / 2 + panOffset.x, -canvas.height / 2 + panOffset.y);
 
               ctx.strokeStyle = 'rgba(34, 197, 94, 0.8)';
               ctx.lineWidth = 3;
@@ -370,10 +370,10 @@ export function CameraDetectionInput({
               ctx.arc(center_x, center_y, 5, 0, Math.PI * 2);
               ctx.fill();
               ctx.shadowBlur = 0;
-
-              ctx.restore();
             }
           }
+
+          ctx.restore();
 
           if (isDetecting) {
             const scanY = (Date.now() % 2000) / 2000 * canvas.height;
