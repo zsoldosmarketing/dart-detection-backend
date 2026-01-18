@@ -2,6 +2,7 @@ services:
   - type: web
     name: dart-detection-api
     runtime: docker
+    dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /health
-    envVars: []
+    autoDeploy: true
