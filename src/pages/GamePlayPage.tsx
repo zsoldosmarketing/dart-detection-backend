@@ -9,6 +9,7 @@ import {
   Mic,
   Target,
   Settings,
+  Server,
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -17,6 +18,7 @@ import { DartScoreInput } from '../components/game/DartScoreInput';
 import { t } from '../lib/i18n';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
+import { useConfigStore } from '../stores/configStore';
 import { voiceCaller } from '../lib/voiceCaller';
 import { voiceRecognition } from '../lib/voiceRecognition';
 import { soundEffects } from '../lib/soundEffects';
@@ -80,7 +82,8 @@ interface GameState {
 export function GamePlayPage() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, isAdmin } = useAuthStore();
+  const { getBackendUrlOverride, setBackendUrlOverride } = useConfigStore();
 
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -956,16 +959,43 @@ export function GamePlayPage() {
   const isCheckoutReached = currentPlayer && lastDartInTurn && isCheckout(currentPlayer.current_score, thrownScore + queuedScore, lastDartInTurn);
   const canSubmit = totalDartsInTurn === 3 || isCheckoutReached;
 
+  const isLocalBackend = getBackendUrlOverride() === 'http://localhost:8000';
+
+  const toggleBackend = () => {
+    if (isLocalBackend) {
+      setBackendUrlOverride('https://dart-detection-backend-latest.onrender.com');
+    } else {
+      setBackendUrlOverride('http://localhost:8000');
+    }
+    window.location.reload();
+  };
+
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
-        <Button
-          variant="ghost"
-          leftIcon={<ChevronLeft className="w-4 h-4" />}
-          onClick={() => navigate('/game')}
-        >
-          Vissza
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            leftIcon={<ChevronLeft className="w-4 h-4" />}
+            onClick={() => navigate('/game')}
+          >
+            Vissza
+          </Button>
+          {isAdmin && (
+            <button
+              onClick={toggleBackend}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                isLocalBackend
+                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                  : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+              }`}
+              title={isLocalBackend ? 'Local Backend' : 'Online Backend'}
+            >
+              <Server className="w-3.5 h-3.5" />
+              {isLocalBackend ? 'LOCAL' : 'ONLINE'}
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {room.mode === 'pvp' && (
             <>
