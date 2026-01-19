@@ -66,7 +66,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     if (override) {
       return override;
     }
-    return import.meta.env.VITE_DART_DETECTION_API_URL || 'http://localhost:8000';
+    // Fallback: ha nincs backend, használjuk a mock mode-ot vagy hibát dobunk
+    return import.meta.env.VITE_DART_DETECTION_API_URL || '';
   },
 
   setBackendUrlOverride: (url: string | null) => {
