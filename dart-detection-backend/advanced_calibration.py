@@ -42,12 +42,14 @@ class AdvancedDartboardCalibration:
         all_circles = []
 
         param_sets = [
-            (1.0, 40, 20),
-            (1.2, 50, 25),
-            (1.5, 40, 22),
-            (1.0, 60, 30),
-            (2.0, 30, 18),
-            (0.8, 50, 20),
+            (1.0, 35, 18),
+            (1.2, 40, 20),
+            (1.5, 35, 20),
+            (1.0, 50, 25),
+            (2.0, 25, 15),
+            (0.8, 40, 18),
+            (0.8, 30, 15),
+            (1.5, 30, 18),
         ]
 
         for dp, p1, p2 in param_sets:
@@ -112,7 +114,7 @@ class AdvancedDartboardCalibration:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         height, width = gray.shape
 
-        edges = cv2.Canny(gray, 30, 120)
+        edges = cv2.Canny(gray, 20, 100)
 
         kernel = np.ones((3, 3), np.uint8)
         edges = cv2.dilate(edges, kernel, iterations=1)
@@ -216,7 +218,7 @@ class AdvancedDartboardCalibration:
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(vote_map)
         cx, cy = max_loc
 
-        edges = cv2.Canny(gray, 30, 120)
+        edges = cv2.Canny(gray, 20, 100)
         max_radius = 0
 
         for radius in range(min(width, height) // 2, 30, -5):
@@ -286,7 +288,7 @@ class AdvancedDartboardCalibration:
         height, width = gray.shape
         cx, cy = center
 
-        edges = cv2.Canny(gray, 25, 90)
+        edges = cv2.Canny(gray, 20, 80)
 
         radii_scores = []
         min_r = int(initial_radius * 0.6)
@@ -332,7 +334,7 @@ class AdvancedDartboardCalibration:
         height, width = gray.shape
         cx, cy = center
 
-        edges = cv2.Canny(gray, 30, 120)
+        edges = cv2.Canny(gray, 20, 100)
 
         best_offset = -9.0
         best_score = 0
@@ -364,7 +366,7 @@ class AdvancedDartboardCalibration:
         height, width = gray.shape
         cx, cy = center
 
-        edges = cv2.Canny(gray, 30, 120)
+        edges = cv2.Canny(gray, 20, 100)
 
         ring_scores = []
         ring_ratios = [0.03, 0.08, 0.58, 0.63, 0.95, 1.0]
@@ -408,10 +410,10 @@ class AdvancedDartboardCalibration:
         ring_confidence = np.mean(ring_scores) if ring_scores else 0
         radial_confidence = radial_score / 20
 
-        total_confidence = ring_confidence * 0.6 + radial_confidence * 0.4
-        is_valid = total_confidence > 0.05 or (ring_confidence > 0.02 or radial_confidence > 0.15)
+        total_confidence = ring_confidence * 0.5 + radial_confidence * 0.5
+        is_valid = total_confidence > 0.01 or (ring_confidence > 0.01 or radial_confidence > 0.05)
 
-        return is_valid, min(0.98, total_confidence * 3.5)
+        return is_valid, min(0.98, total_confidence * 5.0)
 
     def calibrate_multi_method(self, image: np.ndarray) -> CalibrationResult:
         height, width = image.shape[:2]
@@ -471,7 +473,7 @@ class AdvancedDartboardCalibration:
 
         is_valid, final_conf = self.validate_dartboard(image, (cx, cy), radius)
 
-        if final_conf < 0.15:
+        if final_conf < 0.05:
             return CalibrationResult(
                 success=False,
                 center_x=cx,
@@ -488,9 +490,9 @@ class AdvancedDartboardCalibration:
             center_y=cy,
             radius=radius,
             rotation_offset=rotation_offset,
-            confidence=max(0.5, final_conf),
+            confidence=max(0.6, final_conf),
             method=best_method,
-            message=f"Tabla kalibrálva! ({max(0.5, final_conf)*100:.0f}%) - Mehet a dobas!",
+            message=f"Tabla kalibrálva! ({max(0.6, final_conf)*100:.0f}%) - Mehet a dobas!",
             ellipse=None,
             is_angled=False
         )

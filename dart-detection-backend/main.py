@@ -503,8 +503,10 @@ async def auto_calibrate(
     if image is None:
         raise HTTPException(status_code=400, detail="Invalid image")
 
+    preprocessed = ImagePreprocessor.adaptive_preprocessing(image)
+
     if use_advanced:
-        result = calibrator.calibrate_multi_method(image)
+        result = calibrator.calibrate_multi_method(preprocessed)
 
         if result.success:
             calibration["center_x"] = result.center_x
