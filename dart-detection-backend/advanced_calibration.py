@@ -19,9 +19,12 @@ class CalibrationResult:
 
 DARTBOARD_SEGMENTS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5]
 
-class AdvancedCalibration:
+class AdvancedDartboardCalibration:
     def __init__(self):
         self.circle_cache = {}
+
+    def calibrate_multi_method(self, image: np.ndarray) -> CalibrationResult:
+        return self.calibrate_dartboard(image, use_advanced=True)
 
     def detect_ellipse_contour(self, image: np.ndarray) -> Optional[Tuple[int, int, int, dict, float]]:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
