@@ -40,12 +40,12 @@ class AdvancedDartDetection:
     def preprocess_for_detection(self, image: np.ndarray) -> np.ndarray:
         lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
         l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
         l = clahe.apply(l)
         enhanced = cv2.merge([l, a, b])
         enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
 
-        denoised = cv2.fastNlMeansDenoisingColored(enhanced, None, 10, 10, 7, 21)
+        denoised = cv2.fastNlMeansDenoisingColored(enhanced, None, 6, 6, 7, 21)
         return denoised
 
     def get_score_from_position(self, x: int, y: int) -> Tuple[str, float]:
@@ -100,7 +100,7 @@ class AdvancedDartDetection:
 
         gray_diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
 
-        _, thresh = cv2.threshold(gray_diff, 25, 255, cv2.THRESH_BINARY)
+        _, thresh = cv2.threshold(gray_diff, 18, 255, cv2.THRESH_BINARY)
 
         kernel = np.ones((3, 3), np.uint8)
         thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=2)
@@ -116,7 +116,7 @@ class AdvancedDartDetection:
         for contour in contours:
             area = cv2.contourArea(contour)
 
-            if area < 80 or area > 8000:
+            if area < 50 or area > 12000:
                 continue
 
             x, y, w, h = cv2.boundingRect(contour)
@@ -174,15 +174,15 @@ class AdvancedDartDetection:
         hsv = cv2.cvtColor(proc, cv2.COLOR_BGR2HSV)
         gray = cv2.cvtColor(proc, cv2.COLOR_BGR2GRAY)
 
-        lower_metal1 = np.array([0, 0, 160])
-        upper_metal1 = np.array([180, 40, 255])
+        lower_metal1 = np.array([0, 0, 120])
+        upper_metal1 = np.array([180, 50, 255])
         metal_mask = cv2.inRange(hsv, lower_metal1, upper_metal1)
 
-        lower_metal2 = np.array([0, 0, 100])
-        upper_metal2 = np.array([180, 30, 180])
+        lower_metal2 = np.array([0, 0, 80])
+        upper_metal2 = np.array([180, 40, 200])
         metal_mask2 = cv2.inRange(hsv, lower_metal2, upper_metal2)
 
-        edges = cv2.Canny(gray, 50, 150)
+        edges = cv2.Canny(gray, 40, 120)
 
         metal_mask = cv2.bitwise_or(metal_mask, metal_mask2)
         metal_with_edges = cv2.bitwise_and(metal_mask, edges)
@@ -197,13 +197,13 @@ class AdvancedDartDetection:
         for contour in contours:
             area = cv2.contourArea(contour)
 
-            if area < 40 or area > 3000:
+            if area < 30 or area > 5000:
                 continue
 
             x, y, w, h = cv2.boundingRect(contour)
             aspect_ratio = max(w, h) / (min(w, h) + 1)
 
-            if aspect_ratio < 1.3:
+            if aspect_ratio < 1.2:
                 continue
 
             M = cv2.moments(contour)
