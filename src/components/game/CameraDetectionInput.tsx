@@ -75,19 +75,24 @@ export function CameraDetectionInput({
     }
     try {
       console.log('[Camera] Checking backend connection...');
-      const health = await checkApiHealth(5);
+      const health = await checkApiHealth(3);
       console.log('[Camera] Health response:', health);
       if (health) {
         setApiConnected(true);
-        if (showStatus) setStatusMessage('Szerver kapcsolat aktiv!');
-        setTimeout(() => setStatusMessage(null), 2000);
+        if (showStatus) {
+          setStatusMessage('Szerver kapcsolat aktiv!');
+          setTimeout(() => setStatusMessage(null), 2000);
+        }
         return true;
       }
     } catch (err) {
       console.error('[Camera] Connection error:', err);
     }
     setApiConnected(false);
-    if (showStatus) setStatusMessage(null);
+    if (showStatus) {
+      setStatusMessage('Szerver nem elerheto! (Render free tier alszik vagy lefagyott - varj 1-2 percet)');
+      setTimeout(() => setStatusMessage(null), 6000);
+    }
     return false;
   }, []);
 
@@ -437,13 +442,22 @@ export function CameraDetectionInput({
                   <span className="text-green-400 text-sm font-medium">Szerver kapcsolat aktiv</span>
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-2">
+                <div className="flex flex-col items-center gap-3">
                   <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/30">
                     <RefreshCw className="w-4 h-4 text-amber-400 animate-spin" />
                     <WifiOff className="w-4 h-4 text-amber-400" />
                     <span className="text-amber-400 text-sm font-medium">Csatlakozas...</span>
                   </div>
                   <span className="text-dark-500 text-xs">{getApiUrl()}</span>
+                  <Button
+                    onClick={() => checkConnection(true)}
+                    variant="ghost"
+                    size="sm"
+                    className="text-blue-400 hover:text-blue-300"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Ujraprobalkozas
+                  </Button>
                 </div>
               )}
             </div>

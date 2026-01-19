@@ -81,14 +81,15 @@ export async function checkApiHealth(retries = 3): Promise<{ status: string; cal
     try {
       const response = await fetch(`${apiUrl}/health`, {
         method: 'GET',
-        signal: AbortSignal.timeout(90000),
+        signal: AbortSignal.timeout(8000),
       });
       if (response.ok) {
         return await response.json();
       }
-    } catch {
+    } catch (err) {
+      console.log(`[API] Health check ${attempt + 1}/${retries} failed:`, err instanceof Error ? err.message : 'timeout');
       if (attempt < retries - 1) {
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 1500));
       }
     }
   }
@@ -124,15 +125,22 @@ export async function autoCalibrate(
 
     const url = `${apiUrl}/auto-calibrate?use_advanced=${useAdvanced}`;
 
+    console.log('[API] Starting calibration, timeout: 30s');
     const response = await fetch(url, {
       method: 'POST',
       body: formData,
-      signal: AbortSignal.timeout(120000),
+      signal: AbortSignal.timeout(30000),
     });
 
-    if (!response.ok) return null;
-    return await response.json();
-  } catch {
+    if (!response.ok) {
+      console.error('[API] Calibration failed:', response.status);
+      return null;
+    }
+    const result = await response.json();
+    console.log('[API] Calibration result:', result);
+    return result;
+  } catch (err) {
+    console.error('[API] Calibration error:', err instanceof Error ? err.message : 'timeout');
     return null;
   }
 }
@@ -172,9 +180,11 @@ export async function setReferenceImage(imageBlob: Blob): Promise<boolean> {
     const response = await fetch(`${apiUrl}/set-reference`, {
       method: 'POST',
       body: formData,
+      signal: AbortSignal.timeout(15000),
     });
     return response.ok;
-  } catch {
+  } catch (err) {
+    console.error('[API] Set reference error:', err);
     return false;
   }
 }
@@ -277,15 +287,22 @@ export async function detectDartAdvanced(
 
     const url = `${apiUrl}/detect-advanced?preprocess=${preprocess}`;
 
+    console.log('[API] Starting detection, timeout: 30s');
     const response = await fetch(url, {
       method: 'POST',
       body: formData,
       signal: AbortSignal.timeout(30000),
     });
 
-    if (!response.ok) return null;
-    return await response.json();
-  } catch {
+    if (!response.ok) {
+      console.error('[API] Detection failed:', response.status);
+      return null;
+    }
+    const result = await response.json();
+    console.log('[API] Detection result:', result);
+    return result;
+  } catch (err) {
+    console.error('[API] Detection error:', err instanceof Error ? err.message : 'timeout');
     return null;
   }
 }
