@@ -7,6 +7,9 @@ interface ConfigState {
   fetchConfig: () => Promise<void>;
   getConfig: <T>(key: string, defaultValue: T) => T;
   updateConfig: (key: string, value: unknown) => Promise<{ error: Error | null }>;
+  getBackendUrl: () => string;
+  setBackendUrlOverride: (url: string | null) => void;
+  getBackendUrlOverride: () => string | null;
 }
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
@@ -56,5 +59,25 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }
 
     return { error };
+  },
+
+  getBackendUrl: () => {
+    const override = localStorage.getItem('dart_backend_url_override');
+    if (override) {
+      return override;
+    }
+    return import.meta.env.VITE_DART_DETECTION_API_URL || 'http://localhost:8000';
+  },
+
+  setBackendUrlOverride: (url: string | null) => {
+    if (url === null) {
+      localStorage.removeItem('dart_backend_url_override');
+    } else {
+      localStorage.setItem('dart_backend_url_override', url);
+    }
+  },
+
+  getBackendUrlOverride: () => {
+    return localStorage.getItem('dart_backend_url_override');
   },
 }));
