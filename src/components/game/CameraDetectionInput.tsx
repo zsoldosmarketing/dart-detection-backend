@@ -359,7 +359,7 @@ export function CameraDetectionInput({
                 ctx.translate(ellipse.center_x, ellipse.center_y);
                 ctx.rotate((ellipse.angle * Math.PI) / 180);
                 ctx.beginPath();
-                ctx.ellipse(0, 0, ellipse.axis_major, ellipse.axis_minor, 0, 0, Math.PI * 2);
+                ctx.ellipse(0, 0, ellipse.axis_major / 2, ellipse.axis_minor / 2, 0, 0, Math.PI * 2);
                 ctx.stroke();
                 ctx.restore();
               } else {
@@ -368,20 +368,23 @@ export function CameraDetectionInput({
               }
               ctx.setLineDash([]);
 
+              const bullCenterX = is_angled && ellipse ? ellipse.center_x : center_x;
+              const bullCenterY = is_angled && ellipse ? ellipse.center_y : center_y;
+
               ctx.strokeStyle = 'rgba(34, 197, 94, 0.5)';
               ctx.lineWidth = 1;
               ctx.beginPath();
-              ctx.moveTo(center_x - 20, center_y);
-              ctx.lineTo(center_x + 20, center_y);
-              ctx.moveTo(center_x, center_y - 20);
-              ctx.lineTo(center_x, center_y + 20);
+              ctx.moveTo(bullCenterX - 20, bullCenterY);
+              ctx.lineTo(bullCenterX + 20, bullCenterY);
+              ctx.moveTo(bullCenterX, bullCenterY - 20);
+              ctx.lineTo(bullCenterX, bullCenterY + 20);
               ctx.stroke();
 
               ctx.fillStyle = 'rgba(34, 197, 94, 1)';
               ctx.shadowColor = 'rgba(34, 197, 94, 0.8)';
               ctx.shadowBlur = 10;
               ctx.beginPath();
-              ctx.arc(center_x, center_y, 5, 0, Math.PI * 2);
+              ctx.arc(bullCenterX, bullCenterY, 5, 0, Math.PI * 2);
               ctx.fill();
               ctx.shadowBlur = 0;
             }
