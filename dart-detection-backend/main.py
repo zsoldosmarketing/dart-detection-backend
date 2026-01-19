@@ -90,58 +90,74 @@ def detect_dartboard_circles(image: np.ndarray) -> List[Tuple[int, int, int]]:
     blurred = cv2.GaussianBlur(gray, (9, 9), 2)
 
     height, width = gray.shape
-    min_radius = int(min(width, height) * 0.15)
+    min_radius = int(min(width, height) * 0.08)
     max_radius = int(min(width, height) * 0.48)
 
-    circles = cv2.HoughCircles(
-        blurred,
-        cv2.HOUGH_GRADIENT,
-        dp=1.2,
-        minDist=min_radius,
-        param1=100,
-        param2=40,
-        minRadius=min_radius,
-        maxRadius=max_radius
-    )
+    all_circles = []
 
-    if circles is None:
+    param_sets = [
+        (1.0, 80, 35),
+        (1.2, 100, 40),
+        (1.5, 80, 30),
+        (1.0, 60, 25),
+        (2.0, 50, 25),
+        (1.2, 50, 20),
+        (1.5, 40, 20),
+        (1.0, 40, 18),
+        (0.8, 50, 25),
+    ]
+
+    for dp, p1, p2 in param_sets:
         circles = cv2.HoughCircles(
             blurred,
             cv2.HOUGH_GRADIENT,
-            dp=1.5,
-            minDist=min_radius // 2,
-            param1=80,
-            param2=30,
-            minRadius=min_radius // 2,
+            dp=dp,
+            minDist=min_radius,
+            param1=p1,
+            param2=p2,
+            minRadius=min_radius,
             maxRadius=max_radius
         )
 
-    if circles is None:
+        if circles is not None:
+            for c in circles[0]:
+                all_circles.append((int(c[0]), int(c[1]), int(c[2])))
+
+    if not all_circles:
         return []
 
-    circles = np.uint16(np.around(circles))
-    return [(c[0], c[1], c[2]) for c in circles[0]]
+    return all_circles
 
 
 def detect_dartboard_by_color(image: np.ndarray) -> Optional[Tuple[int, int, int]]:
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-    lower_red1 = np.array([0, 70, 50])
-    upper_red1 = np.array([10, 255, 255])
-    lower_red2 = np.array([170, 70, 50])
+    lower_red1 = np.array([0, 40, 30])
+    upper_red1 = np.array([15, 255, 255])
+    lower_red2 = np.array([165, 40, 30])
     upper_red2 = np.array([180, 255, 255])
 
-    lower_green = np.array([35, 70, 50])
-    upper_green = np.array([85, 255, 255])
+    lower_green = np.array([30, 40, 30])
+    upper_green = np.array([90, 255, 255])
+
+    lower_black = np.array([0, 0, 0])
+    upper_black = np.array([180, 80, 80])
+
+    lower_white = np.array([0, 0, 180])
+    upper_white = np.array([180, 40, 255])
 
     mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
     mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
     mask_red = cv2.bitwise_or(mask_red1, mask_red2)
     mask_green = cv2.inRange(hsv, lower_green, upper_green)
+    mask_black = cv2.inRange(hsv, lower_black, upper_black)
+    mask_white = cv2.inRange(hsv, lower_white, upper_white)
 
     mask_board = cv2.bitwise_or(mask_red, mask_green)
+    mask_board = cv2.bitwise_or(mask_board, mask_black)
+    mask_board = cv2.bitwise_or(mask_board, mask_white)
 
-    kernel = np.ones((5, 5), np.uint8)
+    kernel = np.ones((7, 7), np.uint8)
     mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_CLOSE, kernel)
     mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_OPEN, kernel)
 
@@ -153,7 +169,7 @@ def detect_dartboard_by_color(image: np.ndarray) -> Optional[Tuple[int, int, int
     largest_contour = max(contours, key=cv2.contourArea)
     area = cv2.contourArea(largest_contour)
 
-    if area < 1000:
+    if area < 500:
         return None
 
     (x, y), radius = cv2.minEnclosingCircle(largest_contour)
@@ -161,7 +177,7 @@ def detect_dartboard_by_color(image: np.ndarray) -> Optional[Tuple[int, int, int
     circle_area = math.pi * radius * radius
     circularity = area / circle_area if circle_area > 0 else 0
 
-    if circularity < 0.3:
+    if circularity < 0.15:
         return None
 
     return (int(x), int(y), int(radius))
@@ -317,7 +333,7 @@ def auto_calibrate_dartboard(image: np.ndarray) -> AutoCalibrationResult:
 
         for cx, cy, r in circles:
             dist = math.sqrt((cx - color_x)**2 + (cy - color_y)**2)
-            if dist < best_dist and dist < r * 0.5:
+            if dist < best_dist and dist < r * 0.8:
                 best_dist = dist
                 best_match = (cx, cy, r)
 
@@ -340,10 +356,17 @@ def auto_calibrate_dartboard(image: np.ndarray) -> AutoCalibrationResult:
         best_radius = color_result[2]
         confidence = 0.5
     else:
+        best_center = (width // 2, height // 2)
+        best_radius = min(width, height) // 3
+        confidence = 0.35
         return AutoCalibrationResult(
-            success=False,
-            confidence=0.0,
-            message="Nem talaltam darttablat a kepen. Probalj jobb megvilagitast vagy kozelebb menni."
+            success=True,
+            center_x=best_center[0],
+            center_y=best_center[1],
+            radius=best_radius,
+            rotation_offset=-9.0,
+            confidence=confidence,
+            message="Tabla kozepre allitva automatikusan. Finomhangold ha szukseges!"
         )
 
     bull_center = detect_bull_center(image, best_center, best_radius // 3)
@@ -507,6 +530,57 @@ async def auto_calibrate(
 
     if use_advanced:
         result = calibrator.calibrate_multi_method(preprocessed)
+
+        if not result.success:
+            result = calibrator.calibrate_multi_method(image)
+
+        if not result.success:
+            simple_result = auto_calibrate_dartboard(preprocessed)
+            if simple_result.success:
+                from advanced_calibration import CalibrationResult as AdvCalibResult
+                result = AdvCalibResult(
+                    success=True,
+                    center_x=simple_result.center_x,
+                    center_y=simple_result.center_y,
+                    radius=simple_result.radius,
+                    rotation_offset=simple_result.rotation_offset,
+                    confidence=simple_result.confidence,
+                    method="fallback_simple",
+                    message=simple_result.message
+                )
+
+        if not result.success:
+            simple_result = auto_calibrate_dartboard(image)
+            if simple_result.success:
+                from advanced_calibration import CalibrationResult as AdvCalibResult
+                result = AdvCalibResult(
+                    success=True,
+                    center_x=simple_result.center_x,
+                    center_y=simple_result.center_y,
+                    radius=simple_result.radius,
+                    rotation_offset=simple_result.rotation_offset,
+                    confidence=simple_result.confidence,
+                    method="fallback_simple_raw",
+                    message=simple_result.message
+                )
+
+        if not result.success:
+            height, width = image.shape[:2]
+            center_x = width // 2
+            center_y = height // 2
+            radius = min(width, height) // 3
+
+            from advanced_calibration import CalibrationResult as AdvCalibResult
+            result = AdvCalibResult(
+                success=True,
+                center_x=center_x,
+                center_y=center_y,
+                radius=radius,
+                rotation_offset=-9.0,
+                confidence=0.4,
+                method="center_fallback",
+                message="Tabla kozepre igazitva. Allitsd pontosabban ha szukseges!"
+            )
 
         if result.success:
             calibration["center_x"] = result.center_x
