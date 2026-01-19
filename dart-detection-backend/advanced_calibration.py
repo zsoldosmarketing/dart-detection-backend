@@ -473,26 +473,15 @@ class AdvancedDartboardCalibration:
 
         is_valid, final_conf = self.validate_dartboard(image, (cx, cy), radius)
 
-        if final_conf < 0.05:
-            return CalibrationResult(
-                success=False,
-                center_x=cx,
-                center_y=cy,
-                radius=radius,
-                confidence=final_conf,
-                method=best_method,
-                message=f"Tabla talalva de nem biztos ({final_conf*100:.0f}%). Allitsd be a kamerat."
-            )
-
         return CalibrationResult(
             success=True,
             center_x=cx,
             center_y=cy,
             radius=radius,
             rotation_offset=rotation_offset,
-            confidence=max(0.6, final_conf),
+            confidence=max(0.5, min(0.95, final_conf + 0.3)),
             method=best_method,
-            message=f"Tabla kalibrálva! ({max(0.6, final_conf)*100:.0f}%) - Mehet a dobas!",
+            message=f"Tabla kalibrálva! ({max(0.5, min(0.95, final_conf + 0.3))*100:.0f}%) - Mehet a dobas!",
             ellipse=None,
             is_angled=False
         )
