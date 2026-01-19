@@ -260,7 +260,7 @@ export async function detectDartAdvanced(
     const response = await fetch(url, {
       method: 'POST',
       body: formData,
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(30000),
     });
 
     if (!response.ok) return null;
