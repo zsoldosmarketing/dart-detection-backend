@@ -463,19 +463,24 @@ class AdvancedDartboardCalibration:
 
         rotation = self.detect_rotation_offset(image, (cx, cy), avg_radius)
 
-        visibility = self.calculate_visibility(image, cx, cy, rx, ry)
+        BOARD_SCALE = 1.18
+        full_rx = int(rx * BOARD_SCALE)
+        full_ry = int(ry * BOARD_SCALE)
+        full_avg_radius = int(avg_radius * BOARD_SCALE)
 
-        is_angled = (min(rx, ry) / max(rx, ry)) < 0.9 if max(rx, ry) > 0 else False
+        visibility = self.calculate_visibility(image, cx, cy, full_rx, full_ry)
+
+        is_angled = (min(full_rx, full_ry) / max(full_rx, full_ry)) < 0.9 if max(full_rx, full_ry) > 0 else False
 
         ellipse_data = EllipseData(
             center_x=cx, center_y=cy,
-            axis_major=float(rx * 2), axis_minor=float(ry * 2),
+            axis_major=float(full_rx * 2), axis_minor=float(full_ry * 2),
             angle=float(angle)
         )
 
         zoom = 1.0
         if visibility >= 90:
-            board_size = max(rx, ry) * 2
+            board_size = max(full_rx, full_ry) * 2
             zoom = min(2.0, min(width, height) / (board_size * 1.2))
             zoom = max(1.0, zoom)
 
@@ -486,9 +491,9 @@ class AdvancedDartboardCalibration:
             success=True,
             center_x=cx,
             center_y=cy,
-            radius=avg_radius,
-            radius_x=rx,
-            radius_y=ry,
+            radius=full_avg_radius,
+            radius_x=full_rx,
+            radius_y=full_ry,
             rotation_offset=rotation,
             confidence=confidence,
             method=method,
