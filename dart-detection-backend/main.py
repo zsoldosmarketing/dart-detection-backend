@@ -68,8 +68,8 @@ class MultiDartResult(BaseModel):
 class EllipseDataModel(BaseModel):
     center_x: int
     center_y: int
-    axis_major: int
-    axis_minor: int
+    axis_major: float
+    axis_minor: float
     angle: float
 
 class AutoCalibrationResult(BaseModel):
@@ -77,12 +77,16 @@ class AutoCalibrationResult(BaseModel):
     center_x: Optional[int] = None
     center_y: Optional[int] = None
     radius: Optional[int] = None
+    radius_x: Optional[int] = None
+    radius_y: Optional[int] = None
     rotation_offset: Optional[float] = None
     confidence: float = 0.0
     method: str = ""
     message: str = ""
     ellipse: Optional[EllipseDataModel] = None
     is_angled: bool = False
+    suggested_zoom: float = 1.0
+    board_visible_percent: float = 100.0
 
 
 def detect_dartboard_circles(image: np.ndarray) -> List[Tuple[int, int, int]]:
@@ -601,17 +605,26 @@ async def auto_calibrate(
                 angle=result.ellipse.angle
             )
 
+        radius_x = getattr(result, 'radius_x', result.radius)
+        radius_y = getattr(result, 'radius_y', result.radius)
+        suggested_zoom = getattr(result, 'suggested_zoom', 1.0)
+        board_visible = getattr(result, 'board_visible_percent', 100.0)
+
         return AutoCalibrationResult(
             success=result.success,
             center_x=result.center_x,
             center_y=result.center_y,
             radius=result.radius,
+            radius_x=radius_x,
+            radius_y=radius_y,
             rotation_offset=result.rotation_offset,
             confidence=result.confidence,
             method=result.method,
             message=result.message,
             ellipse=ellipse_model,
-            is_angled=result.is_angled
+            is_angled=result.is_angled,
+            suggested_zoom=suggested_zoom,
+            board_visible_percent=board_visible
         )
     else:
         result = auto_calibrate_dartboard(image)

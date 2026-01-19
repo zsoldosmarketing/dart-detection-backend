@@ -26,12 +26,16 @@ export interface AutoCalibrationResult {
   center_x: number | null;
   center_y: number | null;
   radius: number | null;
+  radius_x?: number | null;
+  radius_y?: number | null;
   rotation_offset: number | null;
   confidence: number;
   method?: string;
   message: string;
   ellipse?: EllipseData | null;
   is_angled?: boolean;
+  suggested_zoom?: number;
+  board_visible_percent?: number;
 }
 
 export interface DartDetectionAdvanced {

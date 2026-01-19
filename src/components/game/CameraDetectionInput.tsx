@@ -111,10 +111,38 @@ export function CameraDetectionInput({
 
     if (videoWidth === 0 || videoHeight === 0) return;
 
-    const padding = 1.25;
-    const boardDiameter = calibration.radius * 2 * padding;
-    const minDimension = Math.min(videoWidth, videoHeight);
-    const newZoom = Math.min(Math.max(minDimension / boardDiameter, 1), 2.2);
+    const suggestedZoom = calibration.suggested_zoom || 1.0;
+    const boardVisible = calibration.board_visible_percent || 100;
+
+    let newZoom = 1.0;
+
+    if (boardVisible >= 95) {
+      newZoom = Math.min(suggestedZoom, 1.8);
+    } else if (boardVisible >= 80) {
+      newZoom = Math.min(suggestedZoom * 0.9, 1.5);
+    } else {
+      newZoom = 1.0;
+    }
+
+    newZoom = Math.max(1.0, Math.min(newZoom, 2.0));
+
+    const radiusX = calibration.radius_x || calibration.radius;
+    const radiusY = calibration.radius_y || calibration.radius;
+
+    const boardLeft = calibration.center_x - radiusX;
+    const boardRight = calibration.center_x + radiusX;
+    const boardTop = calibration.center_y - radiusY;
+    const boardBottom = calibration.center_y + radiusY;
+
+    const margin = Math.max(radiusX, radiusY) * 0.1;
+    const wouldCropLeft = (boardLeft - margin) * newZoom < 0;
+    const wouldCropRight = (boardRight + margin) * newZoom > videoWidth * newZoom;
+    const wouldCropTop = (boardTop - margin) * newZoom < 0;
+    const wouldCropBottom = (boardBottom + margin) * newZoom > videoHeight * newZoom;
+
+    if (wouldCropLeft || wouldCropRight || wouldCropTop || wouldCropBottom) {
+      newZoom = Math.max(1.0, newZoom * 0.85);
+    }
 
     const centerOffsetX = calibration.center_x - videoWidth / 2;
     const centerOffsetY = calibration.center_y - videoHeight / 2;
@@ -346,47 +374,74 @@ export function CameraDetectionInput({
           ctx.drawImage(video, 0, 0);
 
           if (calibrationRef.current && calibrationRef.current.success) {
-            const { center_x, center_y, radius, ellipse, is_angled } = calibrationRef.current;
+            const cal = calibrationRef.current;
+            const { center_x, center_y, radius, ellipse, is_angled } = cal;
+            const radiusX = cal.radius_x || radius;
+            const radiusY = cal.radius_y || radius;
+
             if (center_x && center_y && radius) {
+              const bullX = ellipse ? ellipse.center_x : center_x;
+              const bullY = ellipse ? ellipse.center_y : center_y;
+              const drawRadiusX = ellipse ? ellipse.axis_major / 2 : radiusX;
+              const drawRadiusY = ellipse ? ellipse.axis_minor / 2 : radiusY;
+              const angle = ellipse ? ellipse.angle : 0;
 
-              ctx.strokeStyle = 'rgba(34, 197, 94, 0.8)';
+              ctx.save();
+              ctx.translate(bullX, bullY);
+              ctx.rotate((angle * Math.PI) / 180);
+
+              ctx.strokeStyle = 'rgba(34, 197, 94, 0.9)';
               ctx.lineWidth = 3;
-              ctx.setLineDash([12, 6]);
+              ctx.setLineDash([10, 5]);
               ctx.beginPath();
+              ctx.ellipse(0, 0, drawRadiusX, drawRadiusY, 0, 0, Math.PI * 2);
+              ctx.stroke();
 
-              if (is_angled && ellipse) {
-                ctx.save();
-                ctx.translate(ellipse.center_x, ellipse.center_y);
-                ctx.rotate((ellipse.angle * Math.PI) / 180);
-                ctx.beginPath();
-                ctx.ellipse(0, 0, ellipse.axis_major / 2, ellipse.axis_minor / 2, 0, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.restore();
-              } else {
-                ctx.arc(center_x, center_y, radius, 0, Math.PI * 2);
-                ctx.stroke();
-              }
+              ctx.strokeStyle = 'rgba(34, 197, 94, 0.4)';
+              ctx.lineWidth = 1;
+              ctx.setLineDash([5, 5]);
+              ctx.beginPath();
+              ctx.ellipse(0, 0, drawRadiusX * 0.63, drawRadiusY * 0.63, 0, 0, Math.PI * 2);
+              ctx.stroke();
+
+              ctx.beginPath();
+              ctx.ellipse(0, 0, drawRadiusX * 0.08, drawRadiusY * 0.08, 0, 0, Math.PI * 2);
+              ctx.stroke();
+
               ctx.setLineDash([]);
 
-              const bullCenterX = is_angled && ellipse ? ellipse.center_x : center_x;
-              const bullCenterY = is_angled && ellipse ? ellipse.center_y : center_y;
-
-              ctx.strokeStyle = 'rgba(34, 197, 94, 0.5)';
+              ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
               ctx.lineWidth = 1;
               ctx.beginPath();
-              ctx.moveTo(bullCenterX - 20, bullCenterY);
-              ctx.lineTo(bullCenterX + 20, bullCenterY);
-              ctx.moveTo(bullCenterX, bullCenterY - 20);
-              ctx.lineTo(bullCenterX, bullCenterY + 20);
+              ctx.moveTo(-25, 0);
+              ctx.lineTo(25, 0);
+              ctx.moveTo(0, -25);
+              ctx.lineTo(0, 25);
               ctx.stroke();
+
+              ctx.restore();
 
               ctx.fillStyle = 'rgba(34, 197, 94, 1)';
               ctx.shadowColor = 'rgba(34, 197, 94, 0.8)';
-              ctx.shadowBlur = 10;
+              ctx.shadowBlur = 12;
               ctx.beginPath();
-              ctx.arc(bullCenterX, bullCenterY, 5, 0, Math.PI * 2);
+              ctx.arc(bullX, bullY, 6, 0, Math.PI * 2);
               ctx.fill();
               ctx.shadowBlur = 0;
+
+              ctx.fillStyle = '#fff';
+              ctx.beginPath();
+              ctx.arc(bullX, bullY, 2, 0, Math.PI * 2);
+              ctx.fill();
+
+              if (is_angled) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.textAlign = 'left';
+                ctx.fillText('Szogbol', bullX + drawRadiusX + 10, bullY);
+                ctx.restore();
+              }
             }
           }
 
