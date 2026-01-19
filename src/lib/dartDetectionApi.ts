@@ -49,7 +49,7 @@ export interface MultiDartDetectionResult {
   message: string;
 }
 
-const DEFAULT_API_URL = import.meta.env.VITE_DART_DETECTION_API_URL || 'https://dart-detection-backend-latest.onrender.com';
+const DEFAULT_API_URL = import.meta.env.VITE_DART_DETECTION_API_URL || 'https://dart-detection-backend.onrender.com';
 
 export function getApiUrl(): string {
   const override = localStorage.getItem('dart_backend_url_override');
@@ -63,20 +63,26 @@ export function isApiConfigured(): boolean {
   return DEFAULT_API_URL.length > 0;
 }
 
-export async function checkApiHealth(): Promise<{ status: string; calibrated: boolean } | null> {
+export async function checkApiHealth(retries = 3): Promise<{ status: string; calibrated: boolean } | null> {
   const apiUrl = getApiUrl();
   if (!apiUrl) return null;
 
-  try {
-    const response = await fetch(`${apiUrl}/health`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(120000),
-    });
-    if (!response.ok) return null;
-    return await response.json();
-  } catch {
-    return null;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetch(`${apiUrl}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(90000),
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch {
+      if (attempt < retries - 1) {
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
   }
+  return null;
 }
 
 export async function calibrateApi(data: ApiCalibrationData): Promise<boolean> {

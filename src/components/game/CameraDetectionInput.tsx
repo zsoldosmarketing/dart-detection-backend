@@ -68,23 +68,28 @@ export function CameraDetectionInput({
   const referenceFrameRef = useRef<Blob | null>(null);
   const calibrationRef = useRef<AutoCalibrationResult | null>(null);
 
-  const checkConnection = useCallback(async () => {
+  const checkConnection = useCallback(async (showStatus = false) => {
+    if (showStatus) {
+      setStatusMessage('Szerver ebresztese... (akár 60mp - Render free tier)');
+    }
     try {
-      const health = await checkApiHealth();
+      const health = await checkApiHealth(3);
       if (health) {
         setApiConnected(true);
+        if (showStatus) setStatusMessage(null);
         return true;
       }
     } catch {
       // ignore
     }
     setApiConnected(false);
+    if (showStatus) setStatusMessage(null);
     return false;
   }, []);
 
   useEffect(() => {
-    checkConnection();
-    const interval = setInterval(checkConnection, 30000);
+    checkConnection(true);
+    const interval = setInterval(() => checkConnection(false), 30000);
     return () => clearInterval(interval);
   }, [checkConnection]);
 
@@ -117,11 +122,11 @@ export function CameraDetectionInput({
 
     setError(null);
     setIsConnecting(true);
-    setStatusMessage('Szerver elenorzese... (hideg start akár 60mp is lehet)');
+    setStatusMessage('Szerver ebresztese... (Render free tier - akár 60mp)');
 
-    const connected = await checkConnection();
+    const connected = await checkConnection(false);
     if (!connected) {
-      setError('Nem sikerult csatlakozni a felismero szerverhez. Ellenorizd, hogy a backend fut-e.');
+      setError('Nem sikerult csatlakozni. A Render szerver esetleg alszik - varj 60mp-et es probald ujra.');
       setIsConnecting(false);
       setStatusMessage(null);
       return;
