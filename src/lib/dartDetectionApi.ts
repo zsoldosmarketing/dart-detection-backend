@@ -51,11 +51,21 @@ export interface MultiDartDetectionResult {
 
 const DEFAULT_API_URL = import.meta.env.VITE_DART_DETECTION_API_URL || 'https://dart-detection-backend.onrender.com';
 
+(function cleanupBadOverrides() {
+  const override = localStorage.getItem('dart_backend_url_override');
+  if (override && (override.includes('-latest') || !override.includes('dart-detection-backend.onrender.com'))) {
+    localStorage.removeItem('dart_backend_url_override');
+    console.log('[DartAPI] Removed invalid backend override:', override);
+  }
+})();
+
 export function getApiUrl(): string {
   const override = localStorage.getItem('dart_backend_url_override');
-  if (override) {
+  if (override && override.includes('dart-detection-backend.onrender.com')) {
     return override;
   }
+  localStorage.removeItem('dart_backend_url_override');
+  console.log('[DartAPI] Using URL:', DEFAULT_API_URL);
   return DEFAULT_API_URL;
 }
 
