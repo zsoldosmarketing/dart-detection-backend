@@ -75,28 +75,20 @@ class AdvancedDartboardCalibration:
     def find_dartboard_by_color(self, image: np.ndarray) -> Optional[np.ndarray]:
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-        lower_red1 = np.array([0, 50, 50])
+        lower_red1 = np.array([0, 70, 50])
         upper_red1 = np.array([10, 255, 255])
-        lower_red2 = np.array([160, 50, 50])
+        lower_red2 = np.array([160, 70, 50])
         upper_red2 = np.array([180, 255, 255])
         mask_red = cv2.inRange(hsv, lower_red1, upper_red1) | cv2.inRange(hsv, lower_red2, upper_red2)
 
-        lower_green = np.array([35, 50, 50])
+        lower_green = np.array([35, 70, 50])
         upper_green = np.array([85, 255, 255])
         mask_green = cv2.inRange(hsv, lower_green, upper_green)
 
-        lower_black = np.array([0, 0, 0])
-        upper_black = np.array([180, 100, 80])
-        mask_black = cv2.inRange(hsv, lower_black, upper_black)
+        combined = mask_red | mask_green
 
-        lower_white = np.array([0, 0, 180])
-        upper_white = np.array([180, 50, 255])
-        mask_white = cv2.inRange(hsv, lower_white, upper_white)
-
-        combined = mask_red | mask_green | mask_black | mask_white
-
-        kernel = np.ones((7, 7), np.uint8)
-        combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel, iterations=3)
+        kernel = np.ones((5, 5), np.uint8)
+        combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel, iterations=4)
         combined = cv2.morphologyEx(combined, cv2.MORPH_OPEN, kernel, iterations=2)
 
         contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -108,6 +100,82 @@ class AdvancedDartboardCalibration:
         if len(largest) >= 5:
             return largest
         return None
+
+    def find_playing_area(self, image: np.ndarray) -> Optional[Tuple[int, int, int, int, float]]:
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        lower_red1 = np.array([0, 80, 60])
+        upper_red1 = np.array([10, 255, 255])
+        lower_red2 = np.array([165, 80, 60])
+        upper_red2 = np.array([180, 255, 255])
+        mask_red = cv2.inRange(hsv, lower_red1, upper_red1) | cv2.inRange(hsv, lower_red2, upper_red2)
+
+        lower_green = np.array([40, 80, 60])
+        upper_green = np.array([80, 255, 255])
+        mask_green = cv2.inRange(hsv, lower_green, upper_green)
+
+        combined = mask_red | mask_green
+
+        kernel = np.ones((7, 7), np.uint8)
+        combined = cv2.dilate(combined, kernel, iterations=3)
+        combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel, iterations=5)
+
+        contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if not contours:
+            return None
+
+        height, width = image.shape[:2]
+        img_area = width * height
+
+        best_contour = None
+        best_score = 0
+
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area < img_area * 0.02:
+                continue
+
+            if len(contour) < 5:
+                continue
+
+            try:
+                ellipse = cv2.fitEllipse(contour)
+                (cx, cy), (ma, mi), angle = ellipse
+
+                if ma <= 0 or mi <= 0:
+                    continue
+
+                ratio = min(ma, mi) / max(ma, mi)
+                if ratio < 0.5:
+                    continue
+
+                ellipse_area = math.pi * ma * mi / 4
+                fill_ratio = area / ellipse_area if ellipse_area > 0 else 0
+
+                center_dist = math.sqrt((cx - width/2)**2 + (cy - height/2)**2)
+                max_dist = math.sqrt((width/2)**2 + (height/2)**2)
+                center_score = 1 - (center_dist / max_dist)
+
+                score = ratio * 0.3 + fill_ratio * 0.4 + center_score * 0.3
+
+                if score > best_score:
+                    best_score = score
+                    best_contour = contour
+            except:
+                continue
+
+        if best_contour is None or len(best_contour) < 5:
+            return None
+
+        try:
+            ellipse = cv2.fitEllipse(best_contour)
+            (cx, cy), (ma, mi), angle = ellipse
+            radius_x = int(ma / 2)
+            radius_y = int(mi / 2)
+            return (int(cx), int(cy), radius_x, radius_y, angle)
+        except:
+            return None
 
     def detect_bull_center(self, image: np.ndarray, approx_center: Tuple[int, int], search_radius: int) -> Optional[Tuple[int, int]]:
         cx, cy = approx_center
@@ -286,46 +354,33 @@ class AdvancedDartboardCalibration:
         best_result = None
         best_confidence = 0
 
-        contour = self.find_dartboard_contour(image)
-        if contour is not None and len(contour) >= 5:
-            try:
-                ellipse = cv2.fitEllipse(contour)
-                (ecx, ecy), (ma, mi), angle = ellipse
+        playing_area = self.find_playing_area(image)
+        if playing_area:
+            cx, cy, rx, ry, angle = playing_area
+            ratio = min(rx, ry) / max(rx, ry) if max(rx, ry) > 0 else 1
+            is_angled = ratio < 0.92
+            avg_radius = int((rx + ry) / 2)
 
-                if ma > 0 and mi > 0:
-                    ratio = min(ma, mi) / max(ma, mi)
-                    is_angled = ratio < 0.92
+            center_dist = math.sqrt((cx - width/2)**2 + (cy - height/2)**2)
+            max_dist = math.sqrt((width/2)**2 + (height/2)**2)
+            center_score = 1 - (center_dist / max_dist)
 
-                    radius_x = int(ma / 2)
-                    radius_y = int(mi / 2)
-                    avg_radius = int((radius_x + radius_y) / 2)
+            confidence = (ratio * 0.3 + center_score * 0.4 + 0.3)
+            confidence = min(0.95, confidence * 1.1)
 
-                    area = cv2.contourArea(contour)
-                    ellipse_area = math.pi * ma * mi / 4
-                    fill_ratio = area / ellipse_area if ellipse_area > 0 else 0
-
-                    center_dist = math.sqrt((ecx - width/2)**2 + (ecy - height/2)**2)
-                    max_dist = math.sqrt((width/2)**2 + (height/2)**2)
-                    center_score = 1 - (center_dist / max_dist)
-
-                    confidence = (ratio * 0.3 + fill_ratio * 0.3 + center_score * 0.4)
-                    confidence = min(0.95, confidence * 1.2)
-
-                    if confidence > best_confidence:
-                        best_confidence = confidence
-                        best_result = {
-                            "center_x": int(ecx),
-                            "center_y": int(ecy),
-                            "radius": avg_radius,
-                            "radius_x": radius_x,
-                            "radius_y": radius_y,
-                            "angle": angle,
-                            "is_angled": is_angled,
-                            "method": "contour_ellipse",
-                            "confidence": confidence
-                        }
-            except Exception:
-                pass
+            if confidence > best_confidence:
+                best_confidence = confidence
+                best_result = {
+                    "center_x": cx,
+                    "center_y": cy,
+                    "radius": avg_radius,
+                    "radius_x": rx,
+                    "radius_y": ry,
+                    "angle": angle,
+                    "is_angled": is_angled,
+                    "method": "playing_area_color",
+                    "confidence": confidence
+                }
 
         color_contour = self.find_dartboard_by_color(image)
         if color_contour is not None and len(color_contour) >= 5:
@@ -350,7 +405,7 @@ class AdvancedDartboardCalibration:
                     center_score = 1 - (center_dist / max_dist)
 
                     confidence = (ratio * 0.25 + fill_ratio * 0.35 + center_score * 0.4)
-                    confidence = min(0.95, confidence * 1.15)
+                    confidence = min(0.92, confidence * 1.1)
 
                     if confidence > best_confidence:
                         best_confidence = confidence
@@ -367,51 +422,6 @@ class AdvancedDartboardCalibration:
                         }
             except Exception:
                 pass
-
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(gray, (9, 9), 2)
-
-        min_radius = int(min(width, height) * 0.15)
-        max_radius = int(min(width, height) * 0.45)
-
-        circles = cv2.HoughCircles(
-            blurred,
-            cv2.HOUGH_GRADIENT,
-            dp=1.2,
-            minDist=int(min(width, height) * 0.4),
-            param1=50,
-            param2=30,
-            minRadius=min_radius,
-            maxRadius=max_radius
-        )
-
-        if circles is not None:
-            for circle in circles[0]:
-                cx, cy, r = int(circle[0]), int(circle[1]), int(circle[2])
-
-                center_dist = math.sqrt((cx - width/2)**2 + (cy - height/2)**2)
-                max_dist = math.sqrt((width/2)**2 + (height/2)**2)
-                center_score = 1 - (center_dist / max_dist)
-
-                size_expected = min(width, height) * 0.35
-                size_diff = abs(r - size_expected) / size_expected
-                size_score = max(0, 1 - size_diff)
-
-                confidence = (center_score * 0.5 + size_score * 0.5) * 0.85
-
-                if confidence > best_confidence:
-                    best_confidence = confidence
-                    best_result = {
-                        "center_x": cx,
-                        "center_y": cy,
-                        "radius": r,
-                        "radius_x": r,
-                        "radius_y": r,
-                        "angle": 0,
-                        "is_angled": False,
-                        "method": "hough_circle",
-                        "confidence": confidence
-                    }
 
         if best_result is None:
             center_x = width // 2
