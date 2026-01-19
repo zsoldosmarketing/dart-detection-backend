@@ -30,6 +30,7 @@ import {
   getApiUrl,
   type AutoCalibrationResult,
 } from '../../lib/dartDetectionApi';
+import { detectBoardFromVideo, type LocalCalibrationResult } from '../../lib/localBoardDetection';
 
 interface CameraDetectionInputProps {
   onThrow: (target: DartTarget) => void;
@@ -159,16 +160,6 @@ export function CameraDetectionInput({
 
     setError(null);
     setIsConnecting(true);
-    setStatusMessage('Szerver ebresztese... (Render free tier - akár 60mp)');
-
-    const connected = await checkConnection(false);
-    if (!connected) {
-      setError('Nem sikerult csatlakozni. A Render szerver esetleg alszik - varj 60mp-et es probald ujra.');
-      setIsConnecting(false);
-      setStatusMessage(null);
-      return;
-    }
-
     setStatusMessage('Kamera inditasa...');
 
     const camera = new CameraManager();
@@ -185,10 +176,12 @@ export function CameraDetectionInput({
     setIsActive(true);
     setIsConnecting(false);
 
+    checkConnection(false);
+
     setTimeout(async () => {
       await runAutoCalibration();
     }, 1000);
-  }, [checkConnection]);
+  }, [checkConnection, runAutoCalibration]);
 
   const stopCamera = useCallback(() => {
     if (detectionIntervalRef.current) {
@@ -214,11 +207,48 @@ export function CameraDetectionInput({
 
     setIsCalibrating(true);
     setError(null);
-    setStatusMessage('Tabla keresese... (tobbszoros modszer)');
+    setStatusMessage('Tabla keresese...');
 
     try {
-      const frameBlob = await captureHighQualityFrame(videoRef.current);
-      const result = await autoCalibrateWithRetry(frameBlob, 2);
+      let result: AutoCalibrationResult | null = null;
+      let usedLocalFallback = false;
+
+      if (apiConnected) {
+        setStatusMessage('Tabla keresese backend-del...');
+        const frameBlob = await captureHighQualityFrame(videoRef.current);
+        result = await autoCalibrateWithRetry(frameBlob, 2);
+
+        if (result && result.success) {
+          await setReferenceImage(frameBlob);
+          referenceFrameRef.current = frameBlob;
+        }
+      }
+
+      if (!result || !result.success) {
+        setStatusMessage('Lokalis felismeres...');
+        const localResult = await detectBoardFromVideo(videoRef.current);
+
+        if (localResult.success) {
+          usedLocalFallback = true;
+          result = {
+            success: true,
+            center_x: localResult.center_x,
+            center_y: localResult.center_y,
+            radius: localResult.radius,
+            radius_x: localResult.radius_x,
+            radius_y: localResult.radius_y,
+            rotation_offset: localResult.rotation_offset,
+            confidence: localResult.confidence,
+            method: localResult.method,
+            message: localResult.message,
+            ellipse: localResult.ellipse,
+            is_angled: localResult.is_angled,
+          };
+
+          const frameBlob = await captureHighQualityFrame(videoRef.current);
+          referenceFrameRef.current = frameBlob;
+        }
+      }
 
       if (result && result.success) {
         calibrationRef.current = result;
@@ -227,16 +257,16 @@ export function CameraDetectionInput({
 
         const methodInfo = result.method ? ` [${result.method}]` : '';
         const angleInfo = result.is_angled ? ' (szogbol)' : '';
-        setStatusMessage(`Tabla OK! (${(result.confidence * 100).toFixed(0)}%)${methodInfo}${angleInfo}`);
+        const localInfo = usedLocalFallback ? ' (offline)' : '';
+        setStatusMessage(`Tabla OK! (${(result.confidence * 100).toFixed(0)}%)${methodInfo}${angleInfo}${localInfo}`);
 
         applyAutoZoom(result);
 
-        await setReferenceImage(frameBlob);
-        referenceFrameRef.current = frameBlob;
-
         setTimeout(() => {
           setStatusMessage(null);
-          startDetectionLoop();
+          if (!usedLocalFallback) {
+            startDetectionLoop();
+          }
         }, 1500);
       } else {
         const tips = [
@@ -256,7 +286,7 @@ export function CameraDetectionInput({
     } finally {
       setIsCalibrating(false);
     }
-  }, [applyAutoZoom]);
+  }, [applyAutoZoom, apiConnected]);
 
   const startDetectionLoop = useCallback(() => {
     if (detectionIntervalRef.current) {
@@ -534,12 +564,12 @@ export function CameraDetectionInput({
 
             <Button
               onClick={startCamera}
-              disabled={isConnecting || !apiConnected}
+              disabled={isConnecting}
               size="lg"
               className="px-8 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-500/25"
               leftIcon={isConnecting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
             >
-              {isConnecting ? 'Csatlakozas...' : 'Kamera Inditas'}
+              {isConnecting ? 'Inditás...' : 'Kamera Inditas'}
             </Button>
           </div>
         ) : (
