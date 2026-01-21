@@ -66,7 +66,6 @@ export function CameraDetectionInput({
   }>({});
   const [availableCameras, setAvailableCameras] = useState<CameraDevice[]>([]);
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
-  const [showCameraSelector, setShowCameraSelector] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -167,9 +166,6 @@ export function CameraDetectionInput({
     }
     cameraRef.current = camera;
 
-    const cameras = await camera.listDevices();
-    setAvailableCameras(cameras);
-
     const success = await camera.start(videoRef.current);
     if (!success) {
       setError('Nem sikerult elinditani a kamerat.');
@@ -181,25 +177,20 @@ export function CameraDetectionInput({
     setIsActive(true);
     setIsConnecting(false);
 
+    camera.listDevices().then(cameras => {
+      setAvailableCameras(cameras);
+      const currentDevice = cameras.find(c => c.deviceId === camera.getSettings().deviceId);
+      if (currentDevice) {
+        setCurrentCameraIndex(cameras.indexOf(currentDevice));
+      }
+    });
+
     await checkConnection(false);
 
     setTimeout(() => {
       startBoardDetectLoop();
     }, 500);
   }, [checkConnection, startBoardDetectLoop]);
-
-  const switchCamera = useCallback(async () => {
-    if (!videoRef.current || availableCameras.length <= 1) return;
-
-    const nextIndex = (currentCameraIndex + 1) % availableCameras.length;
-    setCurrentCameraIndex(nextIndex);
-
-    const nextCamera = availableCameras[nextIndex];
-
-    stopCamera();
-    await new Promise(resolve => setTimeout(resolve, 100));
-    await startCamera(nextCamera.deviceId);
-  }, [availableCameras, currentCameraIndex, startCamera, stopCamera]);
 
   const stopCamera = useCallback(() => {
     if (boardDetectIntervalRef.current) {
@@ -220,6 +211,19 @@ export function CameraDetectionInput({
     boardResultRef.current = null;
     homographyRef.current = null;
   }, []);
+
+  const switchCamera = useCallback(async () => {
+    if (!videoRef.current || availableCameras.length <= 1) return;
+
+    const nextIndex = (currentCameraIndex + 1) % availableCameras.length;
+    setCurrentCameraIndex(nextIndex);
+
+    const nextCamera = availableCameras[nextIndex];
+
+    stopCamera();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await startCamera(nextCamera.deviceId);
+  }, [availableCameras, currentCameraIndex, startCamera, stopCamera]);
 
   const triggerThrowDetection = useCallback(async () => {
     if (!videoRef.current || !isCalibrated || !referenceFrameRef.current || isDetecting) return;
@@ -521,7 +525,8 @@ export function CameraDetectionInput({
               {availableCameras.length > 1 && (
                 <button
                   onClick={switchCamera}
-                  className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
+                  disabled={isConnecting}
+                  className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title={`Kamera valtas (${currentCameraIndex + 1}/${availableCameras.length})`}
                 >
                   <SwitchCamera className="w-4 h-4" />
