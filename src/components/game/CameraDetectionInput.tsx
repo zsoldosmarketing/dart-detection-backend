@@ -561,6 +561,49 @@ export function CameraDetectionInput({
               )}
             </div>
 
+            {remoteCameras.length > 0 && (
+              <div className="mb-6 w-full max-w-sm">
+                <div className="flex items-center gap-2 mb-3 justify-center">
+                  <Smartphone className="w-4 h-4 text-green-400" />
+                  <span className="text-sm font-medium text-green-400">Tavoli Kamera Elerheto!</span>
+                </div>
+                <div className="space-y-2">
+                  {remoteCameras.map((session) => (
+                    <button
+                      key={session.id}
+                      onClick={() => connectToRemoteCamera(session)}
+                      disabled={connectingRemoteId === session.id}
+                      className="w-full text-left p-4 rounded-lg bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 hover:border-green-500/50 transition-all"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Smartphone className="w-5 h-5 text-green-400" />
+                          <div>
+                            <div className="font-medium text-white">{session.device_name}</div>
+                            <div className="text-xs text-dark-400">
+                              {session.status === 'waiting' ? 'Varakozik kapcsolodasra...' : 'Kapcsolodva'}
+                            </div>
+                          </div>
+                        </div>
+                        {connectingRemoteId === session.id ? (
+                          <Loader2 className="w-5 h-5 text-green-400 animate-spin" />
+                        ) : (
+                          <div className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-medium">
+                            Csatlakozas
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="my-4 flex items-center gap-3">
+                  <div className="flex-1 h-px bg-dark-600" />
+                  <span className="text-dark-500 text-xs">vagy</span>
+                  <div className="flex-1 h-px bg-dark-600" />
+                </div>
+              </div>
+            )}
+
             <div className="relative mb-6">
               <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-xl animate-pulse" />
               <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-dark-700 to-dark-800 border-2 border-dark-600 flex items-center justify-center">
@@ -574,13 +617,13 @@ export function CameraDetectionInput({
             </p>
 
             <Button
-              onClick={startCamera}
+              onClick={() => startCamera()}
               disabled={isConnecting || !apiConnected}
               size="lg"
               className="px-8 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-500/25"
               leftIcon={isConnecting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
             >
-              {isConnecting ? 'Inditás...' : 'Kamera Inditas'}
+              {isConnecting ? 'Inditás...' : 'Helyi Kamera Inditas'}
             </Button>
           </div>
         ) : (

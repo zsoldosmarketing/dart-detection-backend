@@ -6,7 +6,6 @@ import {
   Monitor,
   Wifi,
   WifiOff,
-  Check,
   Loader2,
   SwitchCamera,
   Share2,
@@ -21,7 +20,7 @@ interface RemoteCameraShareModalProps {
   onClose: () => void;
 }
 
-type ShareStatus = 'idle' | 'requesting' | 'selecting' | 'sharing' | 'connected' | 'error';
+type ShareStatus = 'idle' | 'starting' | 'sharing' | 'connected' | 'error';
 
 export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareModalProps) {
   const { user } = useAuthStore();
@@ -29,6 +28,7 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cameras, setCameras] = useState<CameraDevice[]>([]);
   const [selectedCameraIndex, setSelectedCameraIndex] = useState(0);
+  const [currentCameraLabel, setCurrentCameraLabel] = useState<string>('');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const cameraRef = useRef<CameraManager | null>(null);
@@ -55,14 +55,14 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
     }
   }, [isOpen, cleanup]);
 
-  const requestCameraAccess = async () => {
+  const startSharing = async (cameraIndex?: number) => {
     if (!user) {
       setErrorMessage('Be kell jelentkezned a kamera megosztashoz');
       setStatus('error');
       return;
     }
 
-    setStatus('requesting');
+    setStatus('starting');
     setErrorMessage(null);
 
     try {
@@ -73,8 +73,8 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
         return;
       }
 
-      const camera = new CameraManager();
-      const deviceList = await camera.listDevices();
+      const tempCamera = new CameraManager();
+      const deviceList = await tempCamera.listDevices();
       setCameras(deviceList);
 
       if (deviceList.length === 0) {
@@ -83,23 +83,20 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
         return;
       }
 
-      setStatus('selecting');
-    } catch (err) {
-      setErrorMessage(`Hiba: ${err}`);
-      setStatus('error');
-    }
-  };
+      const indexToUse = cameraIndex ?? findBackCameraIndex(deviceList);
+      setSelectedCameraIndex(indexToUse);
 
-  const startSharing = async (cameraIndex: number) => {
-    if (!videoRef.current || cameras.length === 0) return;
+      const selectedCamera = deviceList[indexToUse];
+      setCurrentCameraLabel(selectedCamera.label || `Kamera ${indexToUse + 1}`);
 
-    setStatus('sharing');
-    setSelectedCameraIndex(cameraIndex);
-
-    try {
-      const selectedCamera = cameras[cameraIndex];
       const camera = new CameraManager({ deviceId: selectedCamera.deviceId });
       cameraRef.current = camera;
+
+      if (!videoRef.current) {
+        setErrorMessage('Video elem nem talalhato');
+        setStatus('error');
+        return;
+      }
 
       const success = await camera.start(videoRef.current);
       if (!success) {
@@ -137,18 +134,46 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
         return;
       }
 
+      setStatus('sharing');
     } catch (err) {
       setErrorMessage(`Hiba: ${err}`);
       setStatus('error');
     }
   };
 
+  const findBackCameraIndex = (deviceList: CameraDevice[]): number => {
+    const backIndex = deviceList.findIndex(d =>
+      d.label.toLowerCase().includes('back') ||
+      d.label.toLowerCase().includes('hatul') ||
+      d.label.toLowerCase().includes('rear') ||
+      d.label.toLowerCase().includes('environment')
+    );
+    return backIndex >= 0 ? backIndex : 0;
+  };
+
   const switchCamera = async () => {
     if (cameras.length <= 1) return;
+
     const nextIndex = (selectedCameraIndex + 1) % cameras.length;
-    cleanup();
+
+    if (providerRef.current) {
+      providerRef.current.stopSharing();
+      providerRef.current = null;
+    }
+    if (cameraRef.current) {
+      cameraRef.current.stop();
+      cameraRef.current = null;
+    }
+    streamRef.current = null;
+
     await startSharing(nextIndex);
   };
+
+  useEffect(() => {
+    if (isOpen && status === 'idle') {
+      startSharing();
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -162,7 +187,7 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
             </div>
             <div>
               <h2 className="text-lg font-semibold text-white">Kamera Megosztasa</h2>
-              <p className="text-sm text-dark-400">Osztd meg a kamerat mas eszkozoddel</p>
+              <p className="text-sm text-dark-400">Mas eszkozodon hasznalhatod</p>
             </div>
           </div>
           <button
@@ -174,65 +199,11 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
         </div>
 
         <div className="p-4">
-          {status === 'idle' && (
-            <div className="text-center py-8">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-blue-500/20 flex items-center justify-center">
-                <Camera className="w-10 h-10 text-blue-400" />
-              </div>
-              <h3 className="text-lg font-medium text-white mb-2">Kamera Megosztasa</h3>
-              <p className="text-dark-400 text-sm mb-6 max-w-xs mx-auto">
-                Ez az eszkoz kamerajat megoszthatod mas bejelentkezett eszkozodkel virtualis kamerakent.
-              </p>
-              <div className="flex items-center justify-center gap-8 mb-6">
-                <div className="flex flex-col items-center gap-2">
-                  <Smartphone className="w-8 h-8 text-green-400" />
-                  <span className="text-xs text-dark-400">Ez az eszkoz</span>
-                </div>
-                <div className="flex items-center gap-1 text-dark-500">
-                  <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                  <div className="w-8 h-0.5 bg-blue-400/50" />
-                  <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                  <Monitor className="w-8 h-8 text-blue-400" />
-                  <span className="text-xs text-dark-400">Masik eszkoz</span>
-                </div>
-              </div>
-              <Button onClick={requestCameraAccess} className="w-full">
-                <Camera className="w-4 h-4 mr-2" />
-                Kamera Engedelyezese
-              </Button>
-            </div>
-          )}
-
-          {status === 'requesting' && (
+          {status === 'starting' && (
             <div className="text-center py-12">
               <Loader2 className="w-12 h-12 mx-auto mb-4 text-blue-400 animate-spin" />
-              <p className="text-white">Kamera hozzaferes kerese...</p>
+              <p className="text-white">Kamera inditasa...</p>
               <p className="text-dark-400 text-sm mt-2">Engedelyezd a bongeszodben</p>
-            </div>
-          )}
-
-          {status === 'selecting' && (
-            <div className="space-y-4">
-              <p className="text-dark-400 text-sm">Valassz egy kamerat:</p>
-              <div className="space-y-2">
-                {cameras.map((camera, index) => (
-                  <button
-                    key={camera.deviceId}
-                    onClick={() => startSharing(index)}
-                    className="w-full text-left p-4 rounded-lg bg-dark-700 border border-dark-600 hover:border-blue-500/50 hover:bg-dark-600 transition-all"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Camera className="w-5 h-5 text-blue-400" />
-                      <div>
-                        <div className="font-medium text-white">{camera.label}</div>
-                        <div className="text-xs text-dark-400">{camera.deviceId.slice(0, 20)}...</div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 
@@ -254,8 +225,8 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
                     </>
                   ) : (
                     <>
-                      <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                      <span className="text-amber-400 text-xs font-medium">Varakozas...</span>
+                      <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                      <span className="text-green-400 text-xs font-medium">Aktiv</span>
                     </>
                   )}
                 </div>
@@ -263,27 +234,47 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
                   <button
                     onClick={switchCamera}
                     className="absolute top-2 right-2 p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm text-white transition-colors"
+                    title="Kamera valtas"
                   >
                     <SwitchCamera className="w-4 h-4" />
                   </button>
                 )}
               </div>
 
-              <div className="bg-dark-700/50 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  {status === 'connected' ? (
-                    <Check className="w-5 h-5 text-green-400" />
-                  ) : (
-                    <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />
-                  )}
-                  <span className="text-white font-medium">
-                    {status === 'connected' ? 'Kapcsolodva' : 'Varakozas masik eszkozre...'}
-                  </span>
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse" />
+                  <span className="text-green-400 font-medium">Kamera Megosztva</span>
                 </div>
-                <p className="text-dark-400 text-sm">
+                <p className="text-dark-300 text-sm">
+                  {currentCameraLabel}
+                </p>
+              </div>
+
+              <div className="bg-dark-700/50 rounded-lg p-4">
+                <div className="flex items-center justify-center gap-8 mb-4">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="p-3 rounded-full bg-green-500/20">
+                      <Smartphone className="w-6 h-6 text-green-400" />
+                    </div>
+                    <span className="text-xs text-dark-400">Ez az eszkoz</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-dark-500">
+                    <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                    <div className="w-8 h-0.5 bg-green-400/50" />
+                    <div className="w-2 h-2 rounded-full bg-blue-400" />
+                  </div>
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="p-3 rounded-full bg-blue-500/20">
+                      <Monitor className="w-6 h-6 text-blue-400" />
+                    </div>
+                    <span className="text-xs text-dark-400">Masik eszkoz</span>
+                  </div>
+                </div>
+                <p className="text-dark-400 text-sm text-center">
                   {status === 'connected'
-                    ? 'A kamera sikeresen megosztva. A masik eszkoz latja a videot.'
-                    : 'Nyisd meg a dart alkalmazast egy masik eszkozodon es valaszd ki ezt a kamerat.'}
+                    ? 'Masik eszkoz kapcsolodott!'
+                    : 'A masik eszkozon valaszd ki a "Tavoli kamera" opciot'}
                 </p>
               </div>
 
@@ -301,9 +292,16 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
               </div>
               <h3 className="text-lg font-medium text-white mb-2">Hiba tortent</h3>
               <p className="text-dark-400 text-sm mb-6">{errorMessage}</p>
-              <Button onClick={() => setStatus('idle')} variant="secondary" className="w-full">
+              <Button onClick={() => startSharing()} variant="secondary" className="w-full">
                 Ujraproba
               </Button>
+            </div>
+          )}
+
+          {status === 'idle' && (
+            <div className="text-center py-12">
+              <Loader2 className="w-12 h-12 mx-auto mb-4 text-blue-400 animate-spin" />
+              <p className="text-white">Betoltes...</p>
             </div>
           )}
         </div>
