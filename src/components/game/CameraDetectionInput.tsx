@@ -14,9 +14,10 @@ import {
   Target,
   Bug,
   Send,
+  SwitchCamera,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { CameraManager } from '../../lib/cameraManager';
+import { CameraManager, type CameraDevice } from '../../lib/cameraManager';
 import type { DartTarget } from '../../lib/dartsEngine';
 import {
   checkApiHealth,
@@ -63,6 +64,9 @@ export function CameraDetectionInput({
     diff?: string;
     mask?: string;
   }>({});
+  const [availableCameras, setAvailableCameras] = useState<CameraDevice[]>([]);
+  const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
+  const [showCameraSelector, setShowCameraSelector] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -150,7 +154,7 @@ export function CameraDetectionInput({
     }, BOARD_DETECT_INTERVAL);
   }, [runBoardDetection, pendingScore]);
 
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (deviceId?: string) => {
     if (!videoRef.current) return;
 
     setError(null);
@@ -158,7 +162,13 @@ export function CameraDetectionInput({
     setStatusMessage('Kamera inditasa...');
 
     const camera = new CameraManager();
+    if (deviceId) {
+      camera.setDevice(deviceId);
+    }
     cameraRef.current = camera;
+
+    const cameras = await camera.listDevices();
+    setAvailableCameras(cameras);
 
     const success = await camera.start(videoRef.current);
     if (!success) {
@@ -177,6 +187,19 @@ export function CameraDetectionInput({
       startBoardDetectLoop();
     }, 500);
   }, [checkConnection, startBoardDetectLoop]);
+
+  const switchCamera = useCallback(async () => {
+    if (!videoRef.current || availableCameras.length <= 1) return;
+
+    const nextIndex = (currentCameraIndex + 1) % availableCameras.length;
+    setCurrentCameraIndex(nextIndex);
+
+    const nextCamera = availableCameras[nextIndex];
+
+    stopCamera();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await startCamera(nextCamera.deviceId);
+  }, [availableCameras, currentCameraIndex, startCamera, stopCamera]);
 
   const stopCamera = useCallback(() => {
     if (boardDetectIntervalRef.current) {
@@ -467,8 +490,8 @@ export function CameraDetectionInput({
               style={!isFullscreen ? { aspectRatio: '16/9', objectFit: 'contain' } : undefined}
             />
 
-            <div className="absolute top-3 left-3 flex items-center gap-2">
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full backdrop-blur-sm ${
+            <div className="absolute top-3 left-3 flex items-center gap-2 min-h-[32px]">
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full backdrop-blur-sm transition-all ${
                 isCalibrated
                   ? 'bg-green-500/20 border border-green-500/40'
                   : 'bg-amber-500/20 border border-amber-500/40'
@@ -495,6 +518,16 @@ export function CameraDetectionInput({
             </div>
 
             <div className="absolute top-3 right-3 flex gap-1.5">
+              {availableCameras.length > 1 && (
+                <button
+                  onClick={switchCamera}
+                  className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
+                  title={`Kamera valtas (${currentCameraIndex + 1}/${availableCameras.length})`}
+                >
+                  <SwitchCamera className="w-4 h-4" />
+                </button>
+              )}
+
               <button
                 onClick={() => setShowDebug(!showDebug)}
                 className={`p-2 rounded-lg backdrop-blur-sm border transition-colors ${
@@ -603,25 +636,27 @@ export function CameraDetectionInput({
 
       {!isFullscreen && (
         <>
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
-                <AlertCircle className="w-5 h-5 text-red-400" />
+          <div className="min-h-[76px]">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="w-5 h-5 text-red-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-red-300 font-medium">{error}</p>
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="text-red-300 font-medium">{error}</p>
-              </div>
-            </div>
-          )}
+            )}
 
-          {statusMessage && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                <Check className="w-5 h-5 text-blue-400" />
+            {statusMessage && !error && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                  <Check className="w-5 h-5 text-blue-400" />
+                </div>
+                <p className="text-blue-300 font-medium">{statusMessage}</p>
               </div>
-              <p className="text-blue-300 font-medium">{statusMessage}</p>
-            </div>
-          )}
+            )}
+          </div>
 
           {pendingScore && (
             <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl p-5">
@@ -662,22 +697,24 @@ export function CameraDetectionInput({
             </div>
           )}
 
-          {isActive && isCalibrated && !pendingScore && (
-            <div className="flex items-center justify-between px-4 py-3 bg-dark-800/50 rounded-xl border border-dark-700">
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="w-3 h-3 rounded-full bg-green-500" />
-                  <div className="absolute inset-0 w-3 h-3 rounded-full bg-green-500 animate-ping opacity-50" />
+          <div className="min-h-[52px]">
+            {isActive && isCalibrated && !pendingScore && (
+              <div className="flex items-center justify-between px-4 py-3 bg-dark-800/50 rounded-xl border border-dark-700">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className="w-3 h-3 rounded-full bg-green-500" />
+                    <div className="absolute inset-0 w-3 h-3 rounded-full bg-green-500 animate-ping opacity-50" />
+                  </div>
+                  <span className="text-dark-300 text-sm font-medium">
+                    Kesz - Nyomd meg a "Dobas" gombot
+                  </span>
                 </div>
-                <span className="text-dark-300 text-sm font-medium">
-                  Kesz - Nyomd meg a "Dobas" gombot
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-dark-500 text-sm">{remainingDarts} nyil hatra</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-dark-500 text-sm">{remainingDarts} nyil hatra</span>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
 
