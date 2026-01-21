@@ -67,11 +67,11 @@ export class CameraManager {
 
       const constraints: MediaStreamConstraints = {
         video: {
-          deviceId: this.settings.deviceId ? { exact: this.settings.deviceId } : undefined,
+          deviceId: (this.settings.deviceId && this.settings.deviceId.length > 0) ? { exact: this.settings.deviceId } : undefined,
           width: { ideal: this.settings.width },
           height: { ideal: this.settings.height },
           frameRate: { ideal: this.settings.frameRate },
-          facingMode: this.settings.deviceId ? undefined : this.settings.facingMode,
+          facingMode: (this.settings.deviceId && this.settings.deviceId.length > 0) ? undefined : this.settings.facingMode,
         },
         audio: false,
       };
