@@ -30,12 +30,19 @@ interface Suggestion {
   description?: string;
 }
 
+interface DartConfidence {
+  index: number;
+  confidence: number;
+}
+
 interface DartScoreInputProps {
   onThrow: (target: DartTarget) => void;
   onUndo: () => void;
   onSubmit: () => void;
+  onCorrectDart?: (index: number, target: DartTarget) => void;
   currentDarts: DartThrow[];
   queuedDarts: DartTarget[];
+  dartConfidences?: DartConfidence[];
   thrownScore: number;
   queuedScore: number;
   isProcessing: boolean;
@@ -51,8 +58,10 @@ export function DartScoreInput({
   onThrow,
   onUndo,
   onSubmit,
+  onCorrectDart,
   currentDarts,
   queuedDarts,
+  dartConfidences = [],
   thrownScore,
   queuedScore,
   isProcessing,
@@ -64,6 +73,7 @@ export function DartScoreInput({
   autoStart = true,
 }: DartScoreInputProps) {
   const [inputMode, setInputMode] = useState<InputMode>('numberpad');
+  const [editingDartIndex, setEditingDartIndex] = useState<number | null>(null);
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   const [showVoiceHelp, setShowVoiceHelp] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -104,6 +114,48 @@ export function DartScoreInput({
     onThrow(target);
   };
 
+  const getConfidenceColor = (confidence: number | undefined) => {
+    if (confidence === undefined) return { bg: 'bg-primary-100 dark:bg-primary-900/30', text: 'text-primary-600 dark:text-primary-400', glow: '' };
+    if (confidence >= 0.8) return { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-600 dark:text-green-400', glow: 'ring-2 ring-green-500/30' };
+    if (confidence >= 0.6) return { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-600 dark:text-amber-400', glow: 'ring-2 ring-amber-500/30' };
+    return { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-600 dark:text-red-400', glow: 'ring-2 ring-red-500/30' };
+  };
+
+  const handleSlotClick = (idx: number) => {
+    if (currentDarts[idx] && onCorrectDart) {
+      setEditingDartIndex(idx);
+    }
+  };
+
+  const handleCorrectionThrow = (target: DartTarget) => {
+    if (editingDartIndex !== null && onCorrectDart) {
+      onCorrectDart(editingDartIndex, target);
+      setEditingDartIndex(null);
+    }
+  };
+
+  if (editingDartIndex !== null) {
+    return (
+      <Card className="p-2 sm:p-4">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-medium text-dark-300">
+            Javitas: {editingDartIndex + 1}. nyil
+          </span>
+          <button
+            onClick={() => setEditingDartIndex(null)}
+            className="px-3 py-1 rounded-lg bg-dark-700 hover:bg-dark-600 text-white text-sm"
+          >
+            Megse
+          </button>
+        </div>
+        <NumberPadInput
+          onScoreSelect={handleCorrectionThrow}
+          disabled={false}
+        />
+      </Card>
+    );
+  }
+
   return (
     <Card className="p-2 sm:p-4">
       <div className="flex items-center justify-center gap-2 mb-1.5">
@@ -111,23 +163,31 @@ export function DartScoreInput({
           const dart = currentDarts[idx];
           const queuedDart = !dart && queuedDarts[idx - currentDarts.length];
           const targetToShow = dart?.target || queuedDart;
+          const dartConfidence = dartConfidences.find(d => d.index === idx)?.confidence;
 
           const displayValue = targetToShow ? formatDartDisplay(targetToShow) : '-';
           const isQueued = !dart && queuedDart;
+          const colors = dart ? getConfidenceColor(dartConfidence) : null;
+          const canEdit = dart && onCorrectDart;
 
           return (
-            <div
+            <button
               key={idx}
-              className={`w-12 h-12 rounded-lg flex items-center justify-center text-sm font-bold transition-all ${
+              onClick={() => handleSlotClick(idx)}
+              disabled={!canEdit}
+              className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center text-sm font-bold transition-all ${
                 dart
-                  ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
+                  ? `${colors!.bg} ${colors!.text} ${colors!.glow} ${canEdit ? 'cursor-pointer hover:scale-105 active:scale-95' : ''}`
                   : isQueued
                   ? 'bg-secondary-100 dark:bg-secondary-900/30 text-secondary-600 dark:text-secondary-400 animate-pulse'
-                  : 'bg-dark-100 dark:bg-dark-700 text-dark-400'
+                  : 'bg-dark-100 dark:bg-dark-700 text-dark-400 cursor-default'
               }`}
             >
-              {displayValue}
-            </div>
+              <span>{displayValue}</span>
+              {dartConfidence !== undefined && dart && (
+                <span className="text-[10px] opacity-60">{Math.round(dartConfidence * 100)}%</span>
+              )}
+            </button>
           );
         })}
       </div>

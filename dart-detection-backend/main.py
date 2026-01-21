@@ -77,41 +77,99 @@ def image_to_base64(img: np.ndarray, quality: int = 80) -> str:
     return f"data:image/jpeg;base64,{base64.b64encode(buffer).decode()}"
 
 
+def check_board_colors(image: np.ndarray, contour: np.ndarray) -> float:
+    mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    cv2.drawContours(mask, [contour], -1, 255, -1)
+
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    lower_red1 = np.array([0, 70, 50])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([170, 70, 50])
+    upper_red2 = np.array([180, 255, 255])
+    lower_green = np.array([35, 70, 50])
+    upper_green = np.array([85, 255, 255])
+    lower_black = np.array([0, 0, 0])
+    upper_black = np.array([180, 100, 60])
+    lower_white = np.array([0, 0, 180])
+    upper_white = np.array([180, 40, 255])
+
+    mask_red = cv2.bitwise_or(
+        cv2.inRange(hsv, lower_red1, upper_red1),
+        cv2.inRange(hsv, lower_red2, upper_red2)
+    )
+    mask_green = cv2.inRange(hsv, lower_green, upper_green)
+    mask_black = cv2.inRange(hsv, lower_black, upper_black)
+    mask_white = cv2.inRange(hsv, lower_white, upper_white)
+
+    mask_red = cv2.bitwise_and(mask_red, mask)
+    mask_green = cv2.bitwise_and(mask_green, mask)
+    mask_black = cv2.bitwise_and(mask_black, mask)
+    mask_white = cv2.bitwise_and(mask_white, mask)
+
+    total_pixels = cv2.countNonZero(mask)
+    if total_pixels == 0:
+        return 0.0
+
+    red_pixels = cv2.countNonZero(mask_red)
+    green_pixels = cv2.countNonZero(mask_green)
+    black_pixels = cv2.countNonZero(mask_black)
+    white_pixels = cv2.countNonZero(mask_white)
+
+    red_ratio = red_pixels / total_pixels
+    green_ratio = green_pixels / total_pixels
+    black_ratio = black_pixels / total_pixels
+    white_ratio = white_pixels / total_pixels
+
+    has_red = red_ratio > 0.03
+    has_green = green_ratio > 0.03
+    has_black = black_ratio > 0.05
+    has_white = white_ratio > 0.03
+
+    color_count = sum([has_red, has_green, has_black, has_white])
+
+    if has_red and has_green:
+        return min(1.0, (color_count / 4) * 1.5)
+    elif has_red or has_green:
+        return color_count / 4 * 0.7
+    else:
+        return 0.0
+
+
 def find_dartboard_contour(image: np.ndarray) -> Tuple[Optional[np.ndarray], float, np.ndarray]:
     height, width = image.shape[:2]
 
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    lower_red1 = np.array([0, 50, 50])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([170, 50, 50])
+    upper_red2 = np.array([180, 255, 255])
+    lower_green = np.array([35, 50, 50])
+    upper_green = np.array([85, 255, 255])
+
+    mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
+    mask_green = cv2.inRange(hsv, lower_green, upper_green)
+
+    mask_board = cv2.bitwise_or(mask_red1, mask_red2)
+    mask_board = cv2.bitwise_or(mask_board, mask_green)
+
+    kernel = np.ones((7, 7), np.uint8)
+    mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_CLOSE, kernel)
+    mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_OPEN, kernel)
+
+    contours, _ = cv2.findContours(mask_board, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-
     edges = cv2.Canny(blurred, 30, 100)
 
-    kernel = np.ones((3, 3), np.uint8)
-    edges = cv2.dilate(edges, kernel, iterations=2)
-    edges = cv2.erode(edges, kernel, iterations=1)
-
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
     if not contours:
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-        lower_red1 = np.array([0, 50, 50])
-        upper_red1 = np.array([10, 255, 255])
-        lower_red2 = np.array([170, 50, 50])
-        upper_red2 = np.array([180, 255, 255])
-        lower_green = np.array([35, 50, 50])
-        upper_green = np.array([85, 255, 255])
-
-        mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
-        mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
-        mask_green = cv2.inRange(hsv, lower_green, upper_green)
-
-        mask_board = cv2.bitwise_or(mask_red1, mask_red2)
-        mask_board = cv2.bitwise_or(mask_board, mask_green)
-
-        kernel = np.ones((7, 7), np.uint8)
-        mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_CLOSE, kernel)
-
-        contours, _ = cv2.findContours(mask_board, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        kernel = np.ones((3, 3), np.uint8)
+        edges = cv2.dilate(edges, kernel, iterations=2)
+        edges = cv2.erode(edges, kernel, iterations=1)
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     best_contour = None
     best_score = 0
@@ -143,9 +201,11 @@ def find_dartboard_contour(image: np.ndarray) -> Tuple[Optional[np.ndarray], flo
             center_score = 1 - (center_dist / (min(width, height) / 2))
             center_score = max(0, center_score)
 
-            score = (circularity * 0.4 + aspect_ratio * 0.3 + center_score * 0.3) * (area / max_area)
+            color_score = check_board_colors(image, contour)
 
-            if score > best_score and circularity > 0.5 and aspect_ratio > 0.3:
+            score = (circularity * 0.25 + aspect_ratio * 0.2 + center_score * 0.15 + color_score * 0.4) * (area / max_area)
+
+            if score > best_score and circularity > 0.55 and aspect_ratio > 0.4 and color_score > 0.2:
                 best_score = score
                 best_contour = contour
 

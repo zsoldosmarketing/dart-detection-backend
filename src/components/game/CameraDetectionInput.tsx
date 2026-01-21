@@ -81,6 +81,9 @@ export function CameraDetectionInput({
   const [remoteCameras, setRemoteCameras] = useState<RemoteCameraSession[]>([]);
   const [connectingRemoteId, setConnectingRemoteId] = useState<string | null>(null);
   const [activeRemoteCamera, setActiveRemoteCamera] = useState<string | null>(null);
+  const [boardConfidence, setBoardConfidence] = useState<number>(0);
+  const [autoDetectEnabled, setAutoDetectEnabled] = useState(true);
+  const [showSectorOverlay, setShowSectorOverlay] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -93,6 +96,10 @@ export function CameraDetectionInput({
   const homographyRef = useRef<number[][] | null>(null);
   const remoteViewerRef = useRef<RemoteCameraViewer | null>(null);
   const pendingAfterFrameRef = useRef<Blob | null>(null);
+  const lastBrightnessRef = useRef<number | null>(null);
+  const brightnessStableCountRef = useRef<number>(0);
+  const autoDetectIntervalRef = useRef<number | null>(null);
+  const throwCooldownRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!user) return;
@@ -156,13 +163,12 @@ export function CameraDetectionInput({
 
         const cal = boardDetectToCalibration(result);
         calibrationRef.current = cal;
+        setBoardConfidence(result.confidence);
 
         if (!isCalibrated) {
           setIsCalibrated(true);
           referenceFrameRef.current = frameBlob;
           await setReferenceImage(frameBlob);
-          setStatusMessage(`Tabla OK! (${(result.confidence * 100).toFixed(0)}%)`);
-          setTimeout(() => setStatusMessage(null), 2000);
         }
 
         if (result.canonical_preview) {
@@ -232,6 +238,10 @@ export function CameraDetectionInput({
       clearInterval(boardDetectIntervalRef.current);
       boardDetectIntervalRef.current = null;
     }
+    if (autoDetectIntervalRef.current) {
+      clearInterval(autoDetectIntervalRef.current);
+      autoDetectIntervalRef.current = null;
+    }
     if (cameraRef.current) {
       cameraRef.current.stop();
       cameraRef.current = null;
@@ -246,11 +256,14 @@ export function CameraDetectionInput({
     setPendingScore(null);
     setDebugImages({});
     setActiveRemoteCamera(null);
+    setBoardConfidence(0);
     referenceFrameRef.current = null;
     pendingAfterFrameRef.current = null;
     calibrationRef.current = null;
     boardResultRef.current = null;
     homographyRef.current = null;
+    lastBrightnessRef.current = null;
+    brightnessStableCountRef.current = 0;
   }, []);
 
   const switchCamera = useCallback(async () => {
@@ -324,11 +337,33 @@ export function CameraDetectionInput({
     }
   }, [stopCamera, checkConnection, startBoardDetectLoop]);
 
+  const measureBrightness = useCallback((video: HTMLVideoElement): number => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return 0;
+
+    const sampleSize = 100;
+    canvas.width = sampleSize;
+    canvas.height = sampleSize;
+    ctx.drawImage(video, 0, 0, sampleSize, sampleSize);
+
+    const imageData = ctx.getImageData(0, 0, sampleSize, sampleSize);
+    const data = imageData.data;
+
+    let totalBrightness = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      totalBrightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
+    }
+
+    return totalBrightness / (data.length / 4);
+  }, []);
+
+  const triggerThrowDetectionRef = useRef<() => void>(() => {});
+
   const triggerThrowDetection = useCallback(async () => {
     if (!videoRef.current || !isCalibrated || !referenceFrameRef.current || isDetecting) return;
 
     setIsDetecting(true);
-    setStatusMessage('Dobas feldolgozasa...');
 
     try {
       const afterFrame = await captureHighQualityFrame(videoRef.current);
@@ -353,22 +388,64 @@ export function CameraDetectionInput({
           onThrow(target);
           referenceFrameRef.current = afterFrame;
           await setReferenceImage(afterFrame);
-          setStatusMessage(`${result.label} (${result.score} pont) - AUTO`);
-          setTimeout(() => setStatusMessage(null), 2000);
         } else {
           setPendingScore(result);
           pendingAfterFrameRef.current = afterFrame;
         }
-      } else {
-        setError('Nem sikerult feldolgozni a dobast.');
       }
     } catch (err) {
       console.error('[Camera] Throw detection error:', err);
-      setError('Hiba a dobas feldolgozasakor.');
     } finally {
       setIsDetecting(false);
     }
   }, [isCalibrated, isDetecting, onThrow]);
+
+  useEffect(() => {
+    triggerThrowDetectionRef.current = triggerThrowDetection;
+  }, [triggerThrowDetection]);
+
+  const checkForDartThrow = useCallback(() => {
+    if (!videoRef.current || !isCalibrated || !autoDetectEnabled || isDetecting || pendingScore || throwCooldownRef.current || remainingDarts <= 0) {
+      return;
+    }
+
+    const currentBrightness = measureBrightness(videoRef.current);
+    const lastBrightness = lastBrightnessRef.current;
+
+    if (lastBrightness !== null) {
+      const brightnessDiff = Math.abs(currentBrightness - lastBrightness);
+
+      if (brightnessDiff > 8) {
+        brightnessStableCountRef.current = 0;
+      } else {
+        brightnessStableCountRef.current++;
+      }
+
+      if (brightnessStableCountRef.current >= 3 && brightnessDiff < 3) {
+        throwCooldownRef.current = true;
+        brightnessStableCountRef.current = 0;
+        setTimeout(() => {
+          throwCooldownRef.current = false;
+        }, 2000);
+        triggerThrowDetectionRef.current();
+      }
+    }
+
+    lastBrightnessRef.current = currentBrightness;
+  }, [isCalibrated, autoDetectEnabled, isDetecting, pendingScore, measureBrightness, remainingDarts]);
+
+  useEffect(() => {
+    if (isActive && isCalibrated && autoDetectEnabled) {
+      autoDetectIntervalRef.current = window.setInterval(checkForDartThrow, 200);
+    }
+
+    return () => {
+      if (autoDetectIntervalRef.current) {
+        clearInterval(autoDetectIntervalRef.current);
+        autoDetectIntervalRef.current = null;
+      }
+    };
+  }, [isActive, isCalibrated, autoDetectEnabled, checkForDartThrow]);
 
   const confirmPendingScore = useCallback(async () => {
     if (pendingScore) {
@@ -500,6 +577,60 @@ export function CameraDetectionInput({
 
               ctx.restore();
               ctx.setLineDash([]);
+
+              if (showSectorOverlay) {
+                const SEGMENTS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
+                const rotationOffset = -9;
+
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate((angle * Math.PI) / 180);
+
+                for (let i = 0; i < 20; i++) {
+                  const startAngle = ((i * 18 - 9 + rotationOffset) * Math.PI) / 180;
+                  const endAngle = ((i * 18 + 9 + rotationOffset) * Math.PI) / 180;
+                  const midAngle = ((i * 18 + rotationOffset) * Math.PI) / 180;
+
+                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                  ctx.lineWidth = 1;
+                  ctx.beginPath();
+                  ctx.moveTo(a * 0.08 * Math.sin(startAngle), -b * 0.08 * Math.cos(startAngle));
+                  ctx.lineTo(a * Math.sin(startAngle), -b * Math.cos(startAngle));
+                  ctx.stroke();
+
+                  const labelDist = 0.85;
+                  const labelX = a * labelDist * Math.sin(midAngle);
+                  const labelY = -b * labelDist * Math.cos(midAngle);
+
+                  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                  ctx.font = 'bold 14px sans-serif';
+                  ctx.textAlign = 'center';
+                  ctx.textBaseline = 'middle';
+                  ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                  ctx.shadowBlur = 4;
+                  ctx.fillText(String(SEGMENTS[i]), labelX, labelY);
+                  ctx.shadowBlur = 0;
+                }
+
+                ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, a * 0.58, b * 0.58, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.ellipse(0, 0, a * 0.63, b * 0.63, 0, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, a * 0.95, b * 0.95, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.restore();
+              }
             }
           }
 
@@ -519,7 +650,7 @@ export function CameraDetectionInput({
       draw();
       return () => cancelAnimationFrame(animationId);
     }
-  }, [isActive, isDetecting]);
+  }, [isActive, isDetecting, showSectorOverlay]);
 
   useEffect(() => {
     return () => {
@@ -807,7 +938,7 @@ export function CameraDetectionInput({
 
       {!isFullscreen && (
         <>
-          <div className="min-h-[76px]">
+          <div className="min-h-[76px] space-y-3">
             {error && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
                 <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
@@ -819,7 +950,66 @@ export function CameraDetectionInput({
               </div>
             )}
 
-            {statusMessage && !error && (
+            {isCalibrated && !error && (
+              <div className={`rounded-xl p-3 flex items-center gap-3 transition-all duration-300 ${
+                boardConfidence >= 0.6
+                  ? 'bg-green-500/10 border border-green-500/30'
+                  : boardConfidence >= 0.4
+                    ? 'bg-amber-500/10 border border-amber-500/30'
+                    : 'bg-red-500/10 border border-red-500/30'
+              }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                  boardConfidence >= 0.6
+                    ? 'bg-green-500/20'
+                    : boardConfidence >= 0.4
+                      ? 'bg-amber-500/20'
+                      : 'bg-red-500/20'
+                }`}>
+                  <Check className={`w-4 h-4 ${
+                    boardConfidence >= 0.6
+                      ? 'text-green-400'
+                      : boardConfidence >= 0.4
+                        ? 'text-amber-400'
+                        : 'text-red-400'
+                  }`} />
+                </div>
+                <div className="flex-1 flex items-center justify-between">
+                  <span className={`font-medium ${
+                    boardConfidence >= 0.6
+                      ? 'text-green-300'
+                      : boardConfidence >= 0.4
+                        ? 'text-amber-300'
+                        : 'text-red-300'
+                  }`}>
+                    Tabla OK ({(boardConfidence * 100).toFixed(0)}%)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setAutoDetectEnabled(!autoDetectEnabled)}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                        autoDetectEnabled
+                          ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                          : 'bg-dark-600 text-dark-400 hover:bg-dark-500'
+                      }`}
+                    >
+                      {autoDetectEnabled ? 'Auto ON' : 'Auto OFF'}
+                    </button>
+                    <button
+                      onClick={() => setShowSectorOverlay(!showSectorOverlay)}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                        showSectorOverlay
+                          ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'
+                          : 'bg-dark-600 text-dark-400 hover:bg-dark-500'
+                      }`}
+                    >
+                      Szektorok
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {statusMessage && !error && !isCalibrated && (
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
                   <Check className="w-5 h-5 text-blue-400" />
