@@ -10,11 +10,13 @@ import base64
 from typing import Optional, List, Tuple, Dict, Any
 from pydantic import BaseModel
 import json
+from image_preprocessing import ImagePreprocessor
+from advanced_detection import AdvancedDartDetection
 
 app = FastAPI(
-    title="Dart Detection API v3",
-    description="Real board detection with homography and perspective correction",
-    version="3.0.0"
+    title="Dart Detection API v4",
+    description="Advanced board detection with preprocessing and multi-method dart detection",
+    version="4.0.0"
 )
 
 app.add_middleware(
@@ -46,6 +48,7 @@ session_data: Dict[str, Any] = {
     "ellipse": None,
     "board_found": False,
     "reference_canonical": None,
+    "advanced_detector": None,
 }
 
 
@@ -77,41 +80,99 @@ def image_to_base64(img: np.ndarray, quality: int = 80) -> str:
     return f"data:image/jpeg;base64,{base64.b64encode(buffer).decode()}"
 
 
+def check_board_colors(image: np.ndarray, contour: np.ndarray) -> float:
+    mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    cv2.drawContours(mask, [contour], -1, 255, -1)
+
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    lower_red1 = np.array([0, 70, 50])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([170, 70, 50])
+    upper_red2 = np.array([180, 255, 255])
+    lower_green = np.array([35, 70, 50])
+    upper_green = np.array([85, 255, 255])
+    lower_black = np.array([0, 0, 0])
+    upper_black = np.array([180, 100, 60])
+    lower_white = np.array([0, 0, 180])
+    upper_white = np.array([180, 40, 255])
+
+    mask_red = cv2.bitwise_or(
+        cv2.inRange(hsv, lower_red1, upper_red1),
+        cv2.inRange(hsv, lower_red2, upper_red2)
+    )
+    mask_green = cv2.inRange(hsv, lower_green, upper_green)
+    mask_black = cv2.inRange(hsv, lower_black, upper_black)
+    mask_white = cv2.inRange(hsv, lower_white, upper_white)
+
+    mask_red = cv2.bitwise_and(mask_red, mask)
+    mask_green = cv2.bitwise_and(mask_green, mask)
+    mask_black = cv2.bitwise_and(mask_black, mask)
+    mask_white = cv2.bitwise_and(mask_white, mask)
+
+    total_pixels = cv2.countNonZero(mask)
+    if total_pixels == 0:
+        return 0.0
+
+    red_pixels = cv2.countNonZero(mask_red)
+    green_pixels = cv2.countNonZero(mask_green)
+    black_pixels = cv2.countNonZero(mask_black)
+    white_pixels = cv2.countNonZero(mask_white)
+
+    red_ratio = red_pixels / total_pixels
+    green_ratio = green_pixels / total_pixels
+    black_ratio = black_pixels / total_pixels
+    white_ratio = white_pixels / total_pixels
+
+    has_red = red_ratio > 0.03
+    has_green = green_ratio > 0.03
+    has_black = black_ratio > 0.05
+    has_white = white_ratio > 0.03
+
+    color_count = sum([has_red, has_green, has_black, has_white])
+
+    if has_red and has_green:
+        return min(1.0, (color_count / 4) * 1.5)
+    elif has_red or has_green:
+        return color_count / 4 * 0.7
+    else:
+        return 0.0
+
+
 def find_dartboard_contour(image: np.ndarray) -> Tuple[Optional[np.ndarray], float, np.ndarray]:
     height, width = image.shape[:2]
 
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    lower_red1 = np.array([0, 50, 50])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([170, 50, 50])
+    upper_red2 = np.array([180, 255, 255])
+    lower_green = np.array([35, 50, 50])
+    upper_green = np.array([85, 255, 255])
+
+    mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
+    mask_green = cv2.inRange(hsv, lower_green, upper_green)
+
+    mask_board = cv2.bitwise_or(mask_red1, mask_red2)
+    mask_board = cv2.bitwise_or(mask_board, mask_green)
+
+    kernel = np.ones((7, 7), np.uint8)
+    mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_CLOSE, kernel)
+    mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_OPEN, kernel)
+
+    contours, _ = cv2.findContours(mask_board, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-
     edges = cv2.Canny(blurred, 30, 100)
 
-    kernel = np.ones((3, 3), np.uint8)
-    edges = cv2.dilate(edges, kernel, iterations=2)
-    edges = cv2.erode(edges, kernel, iterations=1)
-
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
     if not contours:
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-        lower_red1 = np.array([0, 50, 50])
-        upper_red1 = np.array([10, 255, 255])
-        lower_red2 = np.array([170, 50, 50])
-        upper_red2 = np.array([180, 255, 255])
-        lower_green = np.array([35, 50, 50])
-        upper_green = np.array([85, 255, 255])
-
-        mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
-        mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
-        mask_green = cv2.inRange(hsv, lower_green, upper_green)
-
-        mask_board = cv2.bitwise_or(mask_red1, mask_red2)
-        mask_board = cv2.bitwise_or(mask_board, mask_green)
-
-        kernel = np.ones((7, 7), np.uint8)
-        mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_CLOSE, kernel)
-
-        contours, _ = cv2.findContours(mask_board, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        kernel = np.ones((3, 3), np.uint8)
+        edges = cv2.dilate(edges, kernel, iterations=2)
+        edges = cv2.erode(edges, kernel, iterations=1)
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     best_contour = None
     best_score = 0
@@ -143,9 +204,11 @@ def find_dartboard_contour(image: np.ndarray) -> Tuple[Optional[np.ndarray], flo
             center_score = 1 - (center_dist / (min(width, height) / 2))
             center_score = max(0, center_score)
 
-            score = (circularity * 0.4 + aspect_ratio * 0.3 + center_score * 0.3) * (area / max_area)
+            color_score = check_board_colors(image, contour)
 
-            if score > best_score and circularity > 0.5 and aspect_ratio > 0.3:
+            score = (circularity * 0.25 + aspect_ratio * 0.2 + center_score * 0.15 + color_score * 0.4) * (area / max_area)
+
+            if score > best_score and circularity > 0.55 and aspect_ratio > 0.4 and color_score > 0.2:
                 best_score = score
                 best_contour = contour
 
@@ -308,7 +371,7 @@ def detect_dart_in_canonical(before: np.ndarray, after: np.ndarray) -> Tuple[Opt
     diff = cv2.absdiff(after, before)
     gray_diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
 
-    _, thresh = cv2.threshold(gray_diff, 25, 255, cv2.THRESH_BINARY)
+    _, thresh = cv2.threshold(gray_diff, 15, 255, cv2.THRESH_BINARY)
 
     kernel = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
@@ -378,7 +441,7 @@ def get_score_from_canonical_position(x: int, y: int, rotation_offset: float = -
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "Dart Detection API v3 - Real board detection with homography", "version": "3.0.0"}
+    return {"status": "ok", "message": "Dart Detection API v4 - Advanced preprocessing and multi-method detection", "version": "4.0.0"}
 
 
 @app.get("/health")
@@ -403,7 +466,9 @@ async def board_detect(
     if img is None:
         raise HTTPException(status_code=400, detail="Invalid image")
 
-    contour, score, edges = find_dartboard_contour(img)
+    preprocessed = ImagePreprocessor.adaptive_preprocessing(img)
+
+    contour, score, edges = find_dartboard_contour(preprocessed)
 
     if contour is None or len(contour) < 5:
         return BoardDetectResponse(
@@ -450,6 +515,14 @@ async def board_detect(
     session_data["ellipse"] = ellipse
     session_data["board_found"] = True
     session_data["reference_canonical"] = canonical.copy()
+
+    calibration = {
+        "center_x": CANONICAL_CENTER,
+        "center_y": CANONICAL_CENTER,
+        "radius": CANONICAL_RADIUS,
+        "rotation_offset": -9.0
+    }
+    session_data["advanced_detector"] = AdvancedDartDetection(calibration)
 
     overlay_outer = generate_overlay_points(ellipse, 64)
     overlay_triple = generate_ring_overlay(ellipse, RADIUS_RATIOS["outer_triple"], 64)
@@ -512,12 +585,54 @@ async def throw_score(
     if before_img is None or after_img is None:
         raise HTTPException(status_code=400, detail="Invalid image(s)")
 
-    before_canonical = warp_image(before_img, H, CANONICAL_SIZE)
-    after_canonical = warp_image(after_img, H, CANONICAL_SIZE)
+    preprocessed_before = ImagePreprocessor.adaptive_preprocessing(before_img)
+    preprocessed_after = ImagePreprocessor.adaptive_preprocessing(after_img)
 
-    tip, confidence, diff_img, mask_img = detect_dart_in_canonical(before_canonical, after_canonical)
+    before_canonical = warp_image(preprocessed_before, H, CANONICAL_SIZE)
+    after_canonical = warp_image(preprocessed_after, H, CANONICAL_SIZE)
+
+    tip = None
+    confidence = 0.0
+    diff_img = None
+    mask_img = None
+    label = "MISS"
+    score_value = 0
+
+    advanced_detector = session_data.get("advanced_detector")
+    if advanced_detector:
+        result = advanced_detector.detect_multiple_darts(after_canonical, before_canonical)
+        if result.darts:
+            best_dart = result.darts[0]
+            tip = (best_dart.x, best_dart.y)
+            confidence = best_dart.confidence
+            label = best_dart.score
+            if label.startswith("T"):
+                score_value = int(label[1:]) * 3
+            elif label.startswith("D") and label != "D-BULL":
+                score_value = int(label[1:]) * 2
+            elif label == "D-BULL":
+                score_value = 50
+            elif label == "BULL":
+                score_value = 25
+            elif label == "MISS":
+                score_value = 0
+            else:
+                try:
+                    score_value = int(label)
+                except ValueError:
+                    score_value = 0
 
     if tip is None:
+        tip_basic, confidence_basic, diff_img, mask_img = detect_dart_in_canonical(before_canonical, after_canonical)
+        if tip_basic:
+            tip = tip_basic
+            confidence = confidence_basic
+            label, score_value = get_score_from_canonical_position(tip[0], tip[1])
+
+    if tip is None:
+        diff_img_fallback = cv2.absdiff(after_canonical, before_canonical)
+        gray_diff = cv2.cvtColor(diff_img_fallback, cv2.COLOR_BGR2GRAY)
+        _, mask_img_fallback = cv2.threshold(gray_diff, 15, 255, cv2.THRESH_BINARY)
         return ThrowScoreResponse(
             label="MISS",
             score=0,
@@ -525,13 +640,11 @@ async def throw_score(
             decision="ASSIST",
             message="No dart detected. Manual input recommended.",
             debug={
-                "diff_preview": image_to_base64(diff_img, 60),
-                "mask_preview": image_to_base64(cv2.cvtColor(mask_img, cv2.COLOR_GRAY2BGR), 60),
-                "canonical_after": image_to_base64(after_canonical, 60)
+                "diff_preview": image_to_base64(diff_img_fallback, 80),
+                "mask_preview": image_to_base64(cv2.cvtColor(mask_img_fallback, cv2.COLOR_GRAY2BGR), 80),
+                "canonical_after": image_to_base64(after_canonical, 80)
             }
         )
-
-    label, score_value = get_score_from_canonical_position(tip[0], tip[1])
 
     tip_original = None
     H_inv = session_data.get("inverse_homography")
@@ -553,6 +666,12 @@ async def throw_score(
     cv2.circle(debug_canonical, (CANONICAL_CENTER, CANONICAL_CENTER), 5, (255, 0, 0), -1)
     cv2.circle(debug_canonical, (CANONICAL_CENTER, CANONICAL_CENTER), CANONICAL_RADIUS, (255, 255, 0), 1)
 
+    if diff_img is None:
+        diff_img = cv2.absdiff(after_canonical, before_canonical)
+    if mask_img is None:
+        gray_diff = cv2.cvtColor(diff_img, cv2.COLOR_BGR2GRAY)
+        _, mask_img = cv2.threshold(gray_diff, 15, 255, cv2.THRESH_BINARY)
+
     return ThrowScoreResponse(
         label=label,
         score=score_value,
@@ -562,9 +681,9 @@ async def throw_score(
         tip_original=tip_original,
         message=f"Detected {label} ({score_value} points) with {confidence*100:.0f}% confidence",
         debug={
-            "diff_preview": image_to_base64(diff_img, 60),
-            "mask_preview": image_to_base64(cv2.cvtColor(mask_img, cv2.COLOR_GRAY2BGR), 60),
-            "canonical_preview": image_to_base64(debug_canonical, 60)
+            "diff_preview": image_to_base64(diff_img, 80),
+            "mask_preview": image_to_base64(cv2.cvtColor(mask_img, cv2.COLOR_GRAY2BGR), 80),
+            "canonical_preview": image_to_base64(debug_canonical, 80)
         }
     )
 
@@ -621,6 +740,7 @@ async def reset_session():
         "ellipse": None,
         "board_found": False,
         "reference_canonical": None,
+        "advanced_detector": None,
     }
     return {"status": "reset", "message": "Session cleared"}
 

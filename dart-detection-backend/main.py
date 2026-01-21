@@ -10,11 +10,13 @@ import base64
 from typing import Optional, List, Tuple, Dict, Any
 from pydantic import BaseModel
 import json
+from image_preprocessing import ImagePreprocessor
+from advanced_detection import AdvancedDartDetection
 
 app = FastAPI(
-    title="Dart Detection API v3",
-    description="Real board detection with homography and perspective correction",
-    version="3.0.0"
+    title="Dart Detection API v4",
+    description="Advanced board detection with preprocessing and multi-method dart detection",
+    version="4.0.0"
 )
 
 app.add_middleware(
@@ -46,6 +48,7 @@ session_data: Dict[str, Any] = {
     "ellipse": None,
     "board_found": False,
     "reference_canonical": None,
+    "advanced_detector": None,
 }
 
 
@@ -438,7 +441,7 @@ def get_score_from_canonical_position(x: int, y: int, rotation_offset: float = -
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "Dart Detection API v3 - Real board detection with homography", "version": "3.0.0"}
+    return {"status": "ok", "message": "Dart Detection API v4 - Advanced preprocessing and multi-method detection", "version": "4.0.0"}
 
 
 @app.get("/health")
@@ -463,7 +466,9 @@ async def board_detect(
     if img is None:
         raise HTTPException(status_code=400, detail="Invalid image")
 
-    contour, score, edges = find_dartboard_contour(img)
+    preprocessed = ImagePreprocessor.adaptive_preprocessing(img)
+
+    contour, score, edges = find_dartboard_contour(preprocessed)
 
     if contour is None or len(contour) < 5:
         return BoardDetectResponse(
@@ -510,6 +515,14 @@ async def board_detect(
     session_data["ellipse"] = ellipse
     session_data["board_found"] = True
     session_data["reference_canonical"] = canonical.copy()
+
+    calibration = {
+        "center_x": CANONICAL_CENTER,
+        "center_y": CANONICAL_CENTER,
+        "radius": CANONICAL_RADIUS,
+        "rotation_offset": -9.0
+    }
+    session_data["advanced_detector"] = AdvancedDartDetection(calibration)
 
     overlay_outer = generate_overlay_points(ellipse, 64)
     overlay_triple = generate_ring_overlay(ellipse, RADIUS_RATIOS["outer_triple"], 64)
@@ -572,12 +585,54 @@ async def throw_score(
     if before_img is None or after_img is None:
         raise HTTPException(status_code=400, detail="Invalid image(s)")
 
-    before_canonical = warp_image(before_img, H, CANONICAL_SIZE)
-    after_canonical = warp_image(after_img, H, CANONICAL_SIZE)
+    preprocessed_before = ImagePreprocessor.adaptive_preprocessing(before_img)
+    preprocessed_after = ImagePreprocessor.adaptive_preprocessing(after_img)
 
-    tip, confidence, diff_img, mask_img = detect_dart_in_canonical(before_canonical, after_canonical)
+    before_canonical = warp_image(preprocessed_before, H, CANONICAL_SIZE)
+    after_canonical = warp_image(preprocessed_after, H, CANONICAL_SIZE)
+
+    tip = None
+    confidence = 0.0
+    diff_img = None
+    mask_img = None
+    label = "MISS"
+    score_value = 0
+
+    advanced_detector = session_data.get("advanced_detector")
+    if advanced_detector:
+        result = advanced_detector.detect_multiple_darts(after_canonical, before_canonical)
+        if result.darts:
+            best_dart = result.darts[0]
+            tip = (best_dart.x, best_dart.y)
+            confidence = best_dart.confidence
+            label = best_dart.score
+            if label.startswith("T"):
+                score_value = int(label[1:]) * 3
+            elif label.startswith("D") and label != "D-BULL":
+                score_value = int(label[1:]) * 2
+            elif label == "D-BULL":
+                score_value = 50
+            elif label == "BULL":
+                score_value = 25
+            elif label == "MISS":
+                score_value = 0
+            else:
+                try:
+                    score_value = int(label)
+                except ValueError:
+                    score_value = 0
 
     if tip is None:
+        tip_basic, confidence_basic, diff_img, mask_img = detect_dart_in_canonical(before_canonical, after_canonical)
+        if tip_basic:
+            tip = tip_basic
+            confidence = confidence_basic
+            label, score_value = get_score_from_canonical_position(tip[0], tip[1])
+
+    if tip is None:
+        diff_img_fallback = cv2.absdiff(after_canonical, before_canonical)
+        gray_diff = cv2.cvtColor(diff_img_fallback, cv2.COLOR_BGR2GRAY)
+        _, mask_img_fallback = cv2.threshold(gray_diff, 15, 255, cv2.THRESH_BINARY)
         return ThrowScoreResponse(
             label="MISS",
             score=0,
@@ -585,13 +640,11 @@ async def throw_score(
             decision="ASSIST",
             message="No dart detected. Manual input recommended.",
             debug={
-                "diff_preview": image_to_base64(diff_img, 80),
-                "mask_preview": image_to_base64(cv2.cvtColor(mask_img, cv2.COLOR_GRAY2BGR), 80),
+                "diff_preview": image_to_base64(diff_img_fallback, 80),
+                "mask_preview": image_to_base64(cv2.cvtColor(mask_img_fallback, cv2.COLOR_GRAY2BGR), 80),
                 "canonical_after": image_to_base64(after_canonical, 80)
             }
         )
-
-    label, score_value = get_score_from_canonical_position(tip[0], tip[1])
 
     tip_original = None
     H_inv = session_data.get("inverse_homography")
@@ -612,6 +665,12 @@ async def throw_score(
     cv2.circle(debug_canonical, tip, 8, (0, 255, 0), 2)
     cv2.circle(debug_canonical, (CANONICAL_CENTER, CANONICAL_CENTER), 5, (255, 0, 0), -1)
     cv2.circle(debug_canonical, (CANONICAL_CENTER, CANONICAL_CENTER), CANONICAL_RADIUS, (255, 255, 0), 1)
+
+    if diff_img is None:
+        diff_img = cv2.absdiff(after_canonical, before_canonical)
+    if mask_img is None:
+        gray_diff = cv2.cvtColor(diff_img, cv2.COLOR_BGR2GRAY)
+        _, mask_img = cv2.threshold(gray_diff, 15, 255, cv2.THRESH_BINARY)
 
     return ThrowScoreResponse(
         label=label,
@@ -681,6 +740,7 @@ async def reset_session():
         "ellipse": None,
         "board_found": False,
         "reference_canonical": None,
+        "advanced_detector": None,
     }
     return {"status": "reset", "message": "Session cleared"}
 
