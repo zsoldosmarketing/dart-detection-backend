@@ -92,6 +92,7 @@ export function CameraDetectionInput({
   const boardResultRef = useRef<BoardDetectResult | null>(null);
   const homographyRef = useRef<number[][] | null>(null);
   const remoteViewerRef = useRef<RemoteCameraViewer | null>(null);
+  const pendingAfterFrameRef = useRef<Blob | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -246,6 +247,7 @@ export function CameraDetectionInput({
     setDebugImages({});
     setActiveRemoteCamera(null);
     referenceFrameRef.current = null;
+    pendingAfterFrameRef.current = null;
     calibrationRef.current = null;
     boardResultRef.current = null;
     homographyRef.current = null;
@@ -350,10 +352,12 @@ export function CameraDetectionInput({
           const target = parseScoreToTarget(result.label);
           onThrow(target);
           referenceFrameRef.current = afterFrame;
+          await setReferenceImage(afterFrame);
           setStatusMessage(`${result.label} (${result.score} pont) - AUTO`);
           setTimeout(() => setStatusMessage(null), 2000);
         } else {
           setPendingScore(result);
+          pendingAfterFrameRef.current = afterFrame;
         }
       } else {
         setError('Nem sikerult feldolgozni a dobast.');
@@ -366,22 +370,33 @@ export function CameraDetectionInput({
     }
   }, [isCalibrated, isDetecting, onThrow]);
 
-  const confirmPendingScore = useCallback(() => {
+  const confirmPendingScore = useCallback(async () => {
     if (pendingScore) {
       const target = parseScoreToTarget(pendingScore.label);
       onThrow(target);
       setPendingScore(null);
 
-      if (videoRef.current) {
-        captureVideoFrame(videoRef.current).then(frame => {
-          referenceFrameRef.current = frame;
-        });
+      if (pendingAfterFrameRef.current) {
+        referenceFrameRef.current = pendingAfterFrameRef.current;
+        await setReferenceImage(pendingAfterFrameRef.current);
+        pendingAfterFrameRef.current = null;
+      } else if (videoRef.current) {
+        const frame = await captureVideoFrame(videoRef.current);
+        referenceFrameRef.current = frame;
+        await setReferenceImage(frame);
       }
     }
   }, [pendingScore, onThrow]);
 
-  const rejectPendingScore = useCallback(() => {
+  const rejectPendingScore = useCallback(async () => {
     setPendingScore(null);
+
+    if (videoRef.current) {
+      const frame = await captureVideoFrame(videoRef.current);
+      referenceFrameRef.current = frame;
+      await setReferenceImage(frame);
+    }
+    pendingAfterFrameRef.current = null;
   }, []);
 
   const resetReference = useCallback(async () => {

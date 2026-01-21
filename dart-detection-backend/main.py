@@ -308,7 +308,7 @@ def detect_dart_in_canonical(before: np.ndarray, after: np.ndarray) -> Tuple[Opt
     diff = cv2.absdiff(after, before)
     gray_diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
 
-    _, thresh = cv2.threshold(gray_diff, 25, 255, cv2.THRESH_BINARY)
+    _, thresh = cv2.threshold(gray_diff, 15, 255, cv2.THRESH_BINARY)
 
     kernel = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
@@ -525,9 +525,9 @@ async def throw_score(
             decision="ASSIST",
             message="No dart detected. Manual input recommended.",
             debug={
-                "diff_preview": image_to_base64(diff_img, 60),
-                "mask_preview": image_to_base64(cv2.cvtColor(mask_img, cv2.COLOR_GRAY2BGR), 60),
-                "canonical_after": image_to_base64(after_canonical, 60)
+                "diff_preview": image_to_base64(diff_img, 80),
+                "mask_preview": image_to_base64(cv2.cvtColor(mask_img, cv2.COLOR_GRAY2BGR), 80),
+                "canonical_after": image_to_base64(after_canonical, 80)
             }
         )
 
@@ -562,9 +562,9 @@ async def throw_score(
         tip_original=tip_original,
         message=f"Detected {label} ({score_value} points) with {confidence*100:.0f}% confidence",
         debug={
-            "diff_preview": image_to_base64(diff_img, 60),
-            "mask_preview": image_to_base64(cv2.cvtColor(mask_img, cv2.COLOR_GRAY2BGR), 60),
-            "canonical_preview": image_to_base64(debug_canonical, 60)
+            "diff_preview": image_to_base64(diff_img, 80),
+            "mask_preview": image_to_base64(cv2.cvtColor(mask_img, cv2.COLOR_GRAY2BGR), 80),
+            "canonical_preview": image_to_base64(debug_canonical, 80)
         }
     )
 
