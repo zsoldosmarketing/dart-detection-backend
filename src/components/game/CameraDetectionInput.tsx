@@ -15,6 +15,7 @@ import {
   Bug,
   Send,
   SwitchCamera,
+  Settings,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { CameraManager, type CameraDevice } from '../../lib/cameraManager';
@@ -59,6 +60,7 @@ export function CameraDetectionInput({
   const [pendingScore, setPendingScore] = useState<ThrowScoreResult | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const [showCameraSettings, setShowCameraSettings] = useState(false);
   const [debugImages, setDebugImages] = useState<{
     canonical?: string;
     diff?: string;
@@ -224,6 +226,18 @@ export function CameraDetectionInput({
     await new Promise(resolve => setTimeout(resolve, 100));
     await startCamera(nextCamera.deviceId);
   }, [availableCameras, currentCameraIndex, startCamera, stopCamera]);
+
+  const selectCamera = useCallback(async (cameraIndex: number) => {
+    if (!videoRef.current || cameraIndex < 0 || cameraIndex >= availableCameras.length) return;
+
+    setCurrentCameraIndex(cameraIndex);
+    const selectedCamera = availableCameras[cameraIndex];
+
+    stopCamera();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await startCamera(selectedCamera.deviceId);
+    setShowCameraSettings(false);
+  }, [availableCameras, startCamera, stopCamera]);
 
   const triggerThrowDetection = useCallback(async () => {
     if (!videoRef.current || !isCalibrated || !referenceFrameRef.current || isDetecting) return;
@@ -522,6 +536,17 @@ export function CameraDetectionInput({
             </div>
 
             <div className="absolute top-3 right-3 flex gap-1.5">
+              {availableCameras.length > 0 && (
+                <button
+                  onClick={() => setShowCameraSettings(true)}
+                  disabled={isConnecting}
+                  className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Kamera beallitasok"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+              )}
+
               {availableCameras.length > 1 && (
                 <button
                   onClick={switchCamera}
@@ -750,6 +775,69 @@ export function CameraDetectionInput({
             >
               Nem
             </Button>
+          </div>
+        </div>
+      )}
+
+      {showCameraSettings && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-dark-800 rounded-xl border border-dark-700 shadow-2xl max-w-lg w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-500/20 rounded-lg">
+                  <Camera className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Kamera valasztas</h3>
+                  <p className="text-sm text-dark-400">Valassz az elerheto kamerak kozul</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCameraSettings(false)}
+                className="p-2 hover:bg-dark-700 rounded-lg transition-colors text-dark-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {availableCameras.map((camera, index) => (
+                <button
+                  key={camera.deviceId}
+                  onClick={() => selectCamera(index)}
+                  className={`w-full text-left p-4 rounded-lg border transition-all ${
+                    index === currentCameraIndex
+                      ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
+                      : 'bg-dark-700 border-dark-600 text-white hover:bg-dark-600 hover:border-dark-500'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Camera className={`w-5 h-5 ${index === currentCameraIndex ? 'text-blue-400' : 'text-dark-400'}`} />
+                      <div>
+                        <div className="font-medium">{camera.label}</div>
+                        <div className="text-xs text-dark-400 mt-0.5">
+                          {camera.deviceId.slice(0, 16)}...
+                        </div>
+                      </div>
+                    </div>
+                    {index === currentCameraIndex && (
+                      <div className="flex items-center gap-2 text-blue-400">
+                        <Check className="w-5 h-5" />
+                        <span className="text-sm font-medium">Aktiv</span>
+                      </div>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {availableCameras.length === 0 && (
+              <div className="text-center py-8 text-dark-400">
+                <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>Nem talalhato kamera</p>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -48,15 +48,15 @@ export class CameraManager {
 
   async listDevices(): Promise<CameraDevice[]> {
     try {
-      await navigator.mediaDevices.getUserMedia({ video: true });
       const devices = await navigator.mediaDevices.enumerateDevices();
       return devices
         .filter(d => d.kind === 'videoinput')
         .map(d => ({
           deviceId: d.deviceId,
-          label: d.label || `Camera ${d.deviceId.slice(0, 8)}`,
+          label: d.label || `Kamera ${d.deviceId.slice(0, 8)}`,
         }));
-    } catch {
+    } catch (err) {
+      console.error('[CameraManager] Failed to list devices:', err);
       return [];
     }
   }
@@ -65,14 +65,22 @@ export class CameraManager {
     try {
       this.stopInternal(false);
 
+      const hasSpecificDevice = this.settings.deviceId && this.settings.deviceId.length > 0;
+
+      const videoConstraints: MediaTrackConstraints = {
+        width: { ideal: this.settings.width },
+        height: { ideal: this.settings.height },
+        frameRate: { ideal: this.settings.frameRate },
+      };
+
+      if (hasSpecificDevice) {
+        videoConstraints.deviceId = { ideal: this.settings.deviceId };
+      } else {
+        videoConstraints.facingMode = this.settings.facingMode;
+      }
+
       const constraints: MediaStreamConstraints = {
-        video: {
-          deviceId: (this.settings.deviceId && this.settings.deviceId.length > 0) ? { exact: this.settings.deviceId } : undefined,
-          width: { ideal: this.settings.width },
-          height: { ideal: this.settings.height },
-          frameRate: { ideal: this.settings.frameRate },
-          facingMode: (this.settings.deviceId && this.settings.deviceId.length > 0) ? undefined : this.settings.facingMode,
-        },
+        video: videoConstraints,
         audio: false,
       };
 
