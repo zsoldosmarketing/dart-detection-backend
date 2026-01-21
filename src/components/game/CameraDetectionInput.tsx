@@ -82,7 +82,7 @@ export function CameraDetectionInput({
   const [connectingRemoteId, setConnectingRemoteId] = useState<string | null>(null);
   const [activeRemoteCamera, setActiveRemoteCamera] = useState<string | null>(null);
   const [boardConfidence, setBoardConfidence] = useState<number>(0);
-  const [autoDetectEnabled, setAutoDetectEnabled] = useState(true);
+  const [autoDetectEnabled, setAutoDetectEnabled] = useState(false);
   const [showSectorOverlay, setShowSectorOverlay] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -150,10 +150,11 @@ export function CameraDetectionInput({
     return () => clearInterval(interval);
   }, [checkConnection]);
 
-  const runBoardDetection = useCallback(async () => {
+  const runBoardDetection = useCallback(async (forceCalibrate: boolean = false) => {
     if (!videoRef.current || !apiConnected) return;
 
     try {
+      setIsCalibrating(true);
       const frameBlob = await captureVideoFrame(videoRef.current);
       const result = await detectBoard(frameBlob);
 
@@ -165,7 +166,7 @@ export function CameraDetectionInput({
         calibrationRef.current = cal;
         setBoardConfidence(result.confidence);
 
-        if (!isCalibrated) {
+        if (!isCalibrated || forceCalibrate) {
           setIsCalibrated(true);
           referenceFrameRef.current = frameBlob;
           await setReferenceImage(frameBlob);
@@ -177,22 +178,18 @@ export function CameraDetectionInput({
       }
     } catch (err) {
       console.error('[Camera] Board detection error:', err);
+    } finally {
+      setIsCalibrating(false);
     }
   }, [apiConnected, isCalibrated]);
 
+  const recalibrate = useCallback(async () => {
+    await runBoardDetection(true);
+  }, [runBoardDetection]);
+
   const startBoardDetectLoop = useCallback(() => {
-    if (boardDetectIntervalRef.current) {
-      clearInterval(boardDetectIntervalRef.current);
-    }
-
-    runBoardDetection();
-
-    boardDetectIntervalRef.current = window.setInterval(() => {
-      if (!pendingScore) {
-        runBoardDetection();
-      }
-    }, BOARD_DETECT_INTERVAL);
-  }, [runBoardDetection, pendingScore]);
+    runBoardDetection(false);
+  }, [runBoardDetection]);
 
   const startCamera = useCallback(async (deviceId?: string) => {
     if (!videoRef.current) return;
@@ -580,40 +577,43 @@ export function CameraDetectionInput({
 
               if (showSectorOverlay) {
                 const SEGMENTS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
-                const rotationOffset = -9;
+                const rotationOffset = calibrationRef.current?.rotation_offset ?? -9;
 
                 ctx.save();
                 ctx.translate(cx, cy);
                 ctx.rotate((angle * Math.PI) / 180);
 
-                for (let i = 0; i < 20; i++) {
-                  const startAngle = ((i * 18 - 9 + rotationOffset) * Math.PI) / 180;
-                  const endAngle = ((i * 18 + 9 + rotationOffset) * Math.PI) / 180;
-                  const midAngle = ((i * 18 + rotationOffset) * Math.PI) / 180;
+                const scaleRatio = Math.min(a, b) / Math.max(a, b);
 
-                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-                  ctx.lineWidth = 1;
+                for (let i = 0; i < 20; i++) {
+                  const baseAngle = i * 18 + rotationOffset;
+                  const startAngle = ((baseAngle - 9) * Math.PI) / 180;
+                  const midAngle = (baseAngle * Math.PI) / 180;
+
+                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                  ctx.lineWidth = 1.5;
                   ctx.beginPath();
                   ctx.moveTo(a * 0.08 * Math.sin(startAngle), -b * 0.08 * Math.cos(startAngle));
-                  ctx.lineTo(a * Math.sin(startAngle), -b * Math.cos(startAngle));
+                  ctx.lineTo(a * 0.98 * Math.sin(startAngle), -b * 0.98 * Math.cos(startAngle));
                   ctx.stroke();
 
-                  const labelDist = 0.85;
+                  const labelDist = 0.78;
                   const labelX = a * labelDist * Math.sin(midAngle);
                   const labelY = -b * labelDist * Math.cos(midAngle);
 
-                  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-                  ctx.font = 'bold 14px sans-serif';
+                  const fontSize = Math.max(10, Math.min(16, Math.min(a, b) * 0.08));
+                  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                  ctx.font = `bold ${fontSize}px sans-serif`;
                   ctx.textAlign = 'center';
                   ctx.textBaseline = 'middle';
-                  ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-                  ctx.shadowBlur = 4;
+                  ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+                  ctx.shadowBlur = 6;
                   ctx.fillText(String(SEGMENTS[i]), labelX, labelY);
                   ctx.shadowBlur = 0;
                 }
 
-                ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
                 ctx.lineWidth = 2;
+                ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
                 ctx.beginPath();
                 ctx.ellipse(0, 0, a * 0.58, b * 0.58, 0, 0, Math.PI * 2);
                 ctx.stroke();
@@ -621,12 +621,20 @@ export function CameraDetectionInput({
                 ctx.ellipse(0, 0, a * 0.63, b * 0.63, 0, 0, Math.PI * 2);
                 ctx.stroke();
 
-                ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
+                ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
                 ctx.beginPath();
                 ctx.ellipse(0, 0, a * 0.95, b * 0.95, 0, 0, Math.PI * 2);
                 ctx.stroke();
                 ctx.beginPath();
                 ctx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, a * 0.032, b * 0.032, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.ellipse(0, 0, a * 0.08, b * 0.08, 0, 0, Math.PI * 2);
                 ctx.stroke();
 
                 ctx.restore();
@@ -983,7 +991,14 @@ export function CameraDetectionInput({
                   }`}>
                     Tabla OK ({(boardConfidence * 100).toFixed(0)}%)
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={recalibrate}
+                      disabled={isCalibrating}
+                      className="px-2 py-1 rounded text-xs font-medium transition-colors bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 disabled:opacity-50"
+                    >
+                      {isCalibrating ? 'Kalibralas...' : 'Ujrakalibral'}
+                    </button>
                     <button
                       onClick={() => setAutoDetectEnabled(!autoDetectEnabled)}
                       className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
@@ -992,7 +1007,7 @@ export function CameraDetectionInput({
                           : 'bg-dark-600 text-dark-400 hover:bg-dark-500'
                       }`}
                     >
-                      {autoDetectEnabled ? 'Auto ON' : 'Auto OFF'}
+                      {autoDetectEnabled ? 'Auto' : 'Manual'}
                     </button>
                     <button
                       onClick={() => setShowSectorOverlay(!showSectorOverlay)}
