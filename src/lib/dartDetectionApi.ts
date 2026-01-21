@@ -1,24 +1,39 @@
 import type { DartTarget } from './dartsEngine';
 
-export interface ApiCalibrationData {
-  center_x: number;
-  center_y: number;
-  radius: number;
-  rotation_offset?: number;
-}
-
-export interface ApiDetectionResult {
-  score: string;
-  confidence: number;
-  position: { x: number; y: number } | null;
-}
-
 export interface EllipseData {
-  center_x: number;
-  center_y: number;
-  axis_major: number;
-  axis_minor: number;
+  cx: number;
+  cy: number;
+  a: number;
+  b: number;
   angle: number;
+}
+
+export interface BoardDetectResult {
+  board_found: boolean;
+  confidence: number;
+  ellipse: EllipseData | null;
+  homography: number[][] | null;
+  overlay_points: number[][] | null;
+  bull_center: number[] | null;
+  canonical_preview: string | null;
+  debug_contour: string | null;
+  message: string;
+}
+
+export interface ThrowScoreResult {
+  label: string;
+  score: number;
+  confidence: number;
+  decision: 'AUTO' | 'ASSIST' | 'RETRY';
+  tip_canonical: number[] | null;
+  tip_original: number[] | null;
+  debug: {
+    diff_preview?: string;
+    mask_preview?: string;
+    canonical_preview?: string;
+    canonical_after?: string;
+  } | null;
+  message: string;
 }
 
 export interface AutoCalibrationResult {
@@ -36,40 +51,18 @@ export interface AutoCalibrationResult {
   is_angled?: boolean;
   suggested_zoom?: number;
   board_visible_percent?: number;
-}
-
-export interface DartDetectionAdvanced {
-  x: number;
-  y: number;
-  score: string;
-  confidence: number;
-  dart_id: number | null;
-}
-
-export interface MultiDartDetectionResult {
-  darts: DartDetectionAdvanced[];
-  total_confidence: number;
-  method: string;
-  message: string;
+  homography?: number[][] | null;
+  overlay_points?: number[][] | null;
+  canonical_preview?: string | null;
 }
 
 const DEFAULT_API_URL = import.meta.env.VITE_DART_DETECTION_API_URL || 'https://dart-detection-backend.onrender.com';
-
-(function cleanupBadOverrides() {
-  const override = localStorage.getItem('dart_backend_url_override');
-  if (override && (override.includes('-latest') || !override.includes('dart-detection-backend.onrender.com'))) {
-    localStorage.removeItem('dart_backend_url_override');
-    console.log('[DartAPI] Removed invalid backend override:', override);
-  }
-})();
 
 export function getApiUrl(): string {
   const override = localStorage.getItem('dart_backend_url_override');
   if (override && override.includes('dart-detection-backend.onrender.com')) {
     return override;
   }
-  localStorage.removeItem('dart_backend_url_override');
-  console.log('[DartAPI] Using URL:', DEFAULT_API_URL);
   return DEFAULT_API_URL;
 }
 
@@ -77,7 +70,7 @@ export function isApiConfigured(): boolean {
   return DEFAULT_API_URL.length > 0;
 }
 
-export async function checkApiHealth(retries = 3): Promise<{ status: string; calibrated: boolean } | null> {
+export async function checkApiHealth(retries = 3): Promise<{ status: string; board_found: boolean; has_homography: boolean } | null> {
   const apiUrl = getApiUrl();
   if (!apiUrl) return null;
 
@@ -100,113 +93,133 @@ export async function checkApiHealth(retries = 3): Promise<{ status: string; cal
   return null;
 }
 
-export async function calibrateApi(data: ApiCalibrationData): Promise<boolean> {
-  const apiUrl = getApiUrl();
-  if (!apiUrl) return false;
-
-  try {
-    const response = await fetch(`${apiUrl}/calibrate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
-export async function autoCalibrate(
-  imageBlob: Blob,
-  useAdvanced: boolean = true
-): Promise<AutoCalibrationResult | null> {
+export async function detectBoard(imageBlob: Blob): Promise<BoardDetectResult | null> {
   const apiUrl = getApiUrl();
   if (!apiUrl) return null;
 
   try {
     const formData = new FormData();
-    formData.append('file', imageBlob, 'calibration.jpg');
+    formData.append('image', imageBlob, 'board.jpg');
 
-    const url = `${apiUrl}/auto-calibrate?use_advanced=${useAdvanced}`;
-
-    console.log('[API] Starting calibration, timeout: 30s');
-    const response = await fetch(url, {
+    console.log('[API] Detecting board...');
+    const response = await fetch(`${apiUrl}/board/detect`, {
       method: 'POST',
       body: formData,
       signal: AbortSignal.timeout(30000),
     });
 
     if (!response.ok) {
-      console.error('[API] Calibration failed:', response.status);
+      console.error('[API] Board detection failed:', response.status);
       return null;
     }
     const result = await response.json();
-    console.log('[API] Calibration result:', result);
+    console.log('[API] Board detection result:', result);
     return result;
   } catch (err) {
-    console.error('[API] Calibration error:', err instanceof Error ? err.message : 'timeout');
+    console.error('[API] Board detection error:', err instanceof Error ? err.message : 'timeout');
     return null;
   }
 }
 
-export async function autoCalibrateWithRetry(
-  imageBlob: Blob,
-  maxRetries: number = 2
-): Promise<AutoCalibrationResult | null> {
+export async function detectBoardWithRetry(imageBlob: Blob, maxRetries = 2): Promise<BoardDetectResult | null> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const result = await autoCalibrate(imageBlob, true);
-
-    if (result && result.success && result.confidence >= 0.4) {
+    const result = await detectBoard(imageBlob);
+    if (result && result.board_found && result.confidence >= 0.4) {
       return result;
     }
+    if (attempt < maxRetries - 1) {
+      await new Promise(r => setTimeout(r, 500));
+    }
   }
-
-  return {
-    success: false,
-    center_x: null,
-    center_y: null,
-    radius: null,
-    rotation_offset: null,
-    confidence: 0,
-    method: 'failed',
-    message: 'Nem talaltam tablat. Tippek: jobb megvilagitas, kozelebb a tablahoz, tiszta hatter.',
-  };
+  return null;
 }
 
-export async function setReferenceImage(imageBlob: Blob): Promise<boolean> {
+export async function scoreThrow(
+  beforeBlob: Blob,
+  afterBlob: Blob,
+  homography?: number[][]
+): Promise<ThrowScoreResult | null> {
   const apiUrl = getApiUrl();
-  if (!apiUrl) return false;
+  if (!apiUrl) return null;
 
   try {
     const formData = new FormData();
-    formData.append('file', imageBlob, 'reference.jpg');
+    formData.append('before', beforeBlob, 'before.jpg');
+    formData.append('after', afterBlob, 'after.jpg');
+    if (homography) {
+      formData.append('homography', JSON.stringify(homography));
+    }
+
+    console.log('[API] Scoring throw...');
+    const response = await fetch(`${apiUrl}/throw/score`, {
+      method: 'POST',
+      body: formData,
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!response.ok) {
+      console.error('[API] Throw scoring failed:', response.status);
+      return null;
+    }
+    const result = await response.json();
+    console.log('[API] Throw score result:', result);
+    return result;
+  } catch (err) {
+    console.error('[API] Throw scoring error:', err instanceof Error ? err.message : 'timeout');
+    return null;
+  }
+}
+
+export async function setReferenceImage(imageBlob: Blob): Promise<{ status: string; canonical_preview?: string } | null> {
+  const apiUrl = getApiUrl();
+  if (!apiUrl) return null;
+
+  try {
+    const formData = new FormData();
+    formData.append('image', imageBlob, 'reference.jpg');
 
     const response = await fetch(`${apiUrl}/set-reference`, {
       method: 'POST',
       body: formData,
       signal: AbortSignal.timeout(15000),
     });
-    return response.ok;
+    if (!response.ok) return null;
+    return await response.json();
   } catch (err) {
     console.error('[API] Set reference error:', err);
+    return null;
+  }
+}
+
+export async function resetSession(): Promise<boolean> {
+  const apiUrl = getApiUrl();
+  if (!apiUrl) return false;
+
+  try {
+    const response = await fetch(`${apiUrl}/reset`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(5000),
+    });
+    return response.ok;
+  } catch {
     return false;
   }
 }
 
-export async function detectDart(imageBlob: Blob): Promise<ApiDetectionResult | null> {
+export async function getSessionStatus(): Promise<{
+  board_found: boolean;
+  has_homography: boolean;
+  has_reference: boolean;
+  ellipse: EllipseData | null;
+} | null> {
   const apiUrl = getApiUrl();
   if (!apiUrl) return null;
 
   try {
-    const formData = new FormData();
-    formData.append('file', imageBlob, 'dart.jpg');
-
-    const response = await fetch(`${apiUrl}/detect`, {
-      method: 'POST',
-      body: formData,
-      signal: AbortSignal.timeout(10000),
+    const response = await fetch(`${apiUrl}/session/status`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000),
     });
-
     if (!response.ok) return null;
     return await response.json();
   } catch {
@@ -214,127 +227,74 @@ export async function detectDart(imageBlob: Blob): Promise<ApiDetectionResult | 
   }
 }
 
-export async function detectDartWithPrevious(
-  currentBlob: Blob,
-  previousBlob: Blob
-): Promise<ApiDetectionResult | null> {
-  const apiUrl = getApiUrl();
-  if (!apiUrl) return null;
-
-  try {
-    const formData = new FormData();
-    formData.append('current', currentBlob, 'current.jpg');
-    formData.append('previous', previousBlob, 'previous.jpg');
-
-    const response = await fetch(`${apiUrl}/detect-multiple`, {
-      method: 'POST',
-      body: formData,
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!response.ok) return null;
-    return await response.json();
-  } catch {
-    return null;
+export function boardDetectToCalibration(result: BoardDetectResult): AutoCalibrationResult {
+  if (!result.board_found || !result.ellipse) {
+    return {
+      success: false,
+      center_x: null,
+      center_y: null,
+      radius: null,
+      rotation_offset: null,
+      confidence: 0,
+      message: result.message,
+    };
   }
+
+  const { cx, cy, a, b, angle } = result.ellipse;
+  const avgRadius = (a + b) / 2;
+
+  return {
+    success: true,
+    center_x: cx,
+    center_y: cy,
+    radius: avgRadius,
+    radius_x: a,
+    radius_y: b,
+    rotation_offset: -9.0,
+    confidence: result.confidence,
+    method: 'homography',
+    message: result.message,
+    ellipse: result.ellipse,
+    is_angled: Math.abs(a - b) / Math.max(a, b) > 0.1,
+    homography: result.homography,
+    overlay_points: result.overlay_points,
+    canonical_preview: result.canonical_preview,
+  };
 }
 
-export function parseScoreToTarget(score: string): DartTarget {
-  if (!score || score === 'MISS' || score === 'UNCALIBRATED') {
+export function parseScoreToTarget(label: string): DartTarget {
+  if (!label || label === 'MISS') {
     return 'MISS';
   }
 
-  if (score === 'D-BULL') {
+  if (label === 'D-BULL') {
     return 'BULL';
   }
 
-  if (score === 'BULL') {
+  if (label === 'BULL') {
     return 'OB';
   }
 
-  if (score.startsWith('T')) {
-    const num = parseInt(score.slice(1), 10);
+  if (label.startsWith('T')) {
+    const num = parseInt(label.slice(1), 10);
     if (num >= 1 && num <= 20) {
       return `T${num}` as DartTarget;
     }
   }
 
-  if (score.startsWith('D')) {
-    const num = parseInt(score.slice(1), 10);
+  if (label.startsWith('D')) {
+    const num = parseInt(label.slice(1), 10);
     if (num >= 1 && num <= 20) {
       return `D${num}` as DartTarget;
     }
   }
 
-  const num = parseInt(score, 10);
+  const num = parseInt(label, 10);
   if (!isNaN(num) && num >= 1 && num <= 20) {
     return `S${num}` as DartTarget;
   }
 
   return 'MISS';
-}
-
-export async function detectDartAdvanced(
-  currentBlob: Blob,
-  referenceBlob?: Blob,
-  preprocess: boolean = true
-): Promise<MultiDartDetectionResult | null> {
-  const apiUrl = getApiUrl();
-  if (!apiUrl) return null;
-
-  try {
-    const formData = new FormData();
-    formData.append('current', currentBlob, 'current.jpg');
-    if (referenceBlob) {
-      formData.append('reference', referenceBlob, 'reference.jpg');
-    }
-
-    const url = `${apiUrl}/detect-advanced?preprocess=${preprocess}`;
-
-    console.log('[API] Starting detection, timeout: 30s');
-    const response = await fetch(url, {
-      method: 'POST',
-      body: formData,
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (!response.ok) {
-      console.error('[API] Detection failed:', response.status);
-      return null;
-    }
-    const result = await response.json();
-    console.log('[API] Detection result:', result);
-    return result;
-  } catch (err) {
-    console.error('[API] Detection error:', err instanceof Error ? err.message : 'timeout');
-    return null;
-  }
-}
-
-export async function preprocessImage(
-  imageBlob: Blob,
-  method: 'adaptive' | 'full' | 'enhance' | 'denoise' = 'adaptive'
-): Promise<{ status: string; method: string; image_base64: string } | null> {
-  const apiUrl = getApiUrl();
-  if (!apiUrl) return null;
-
-  try {
-    const formData = new FormData();
-    formData.append('file', imageBlob, 'image.jpg');
-
-    const url = `${apiUrl}/preprocess-image?method=${method}`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      body: formData,
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!response.ok) return null;
-    return await response.json();
-  } catch {
-    return null;
-  }
 }
 
 export function captureVideoFrame(video: HTMLVideoElement, quality: number = 0.80): Promise<Blob> {
@@ -364,4 +324,27 @@ export function captureVideoFrame(video: HTMLVideoElement, quality: number = 0.8
 
 export function captureHighQualityFrame(video: HTMLVideoElement): Promise<Blob> {
   return captureVideoFrame(video, 0.85);
+}
+
+export async function autoCalibrate(imageBlob: Blob): Promise<AutoCalibrationResult | null> {
+  const result = await detectBoard(imageBlob);
+  if (!result) return null;
+  return boardDetectToCalibration(result);
+}
+
+export async function autoCalibrateWithRetry(imageBlob: Blob, maxRetries = 2): Promise<AutoCalibrationResult | null> {
+  const result = await detectBoardWithRetry(imageBlob, maxRetries);
+  if (!result) {
+    return {
+      success: false,
+      center_x: null,
+      center_y: null,
+      radius: null,
+      rotation_offset: null,
+      confidence: 0,
+      method: 'failed',
+      message: 'Tabla nem talalhato. Probald jobb megvilagitassal vagy kozelebb.',
+    };
+  }
+  return boardDetectToCalibration(result);
 }

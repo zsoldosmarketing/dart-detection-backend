@@ -9,28 +9,29 @@ import {
   Crosshair,
   Wifi,
   WifiOff,
-  ZoomIn,
-  ZoomOut,
   Maximize2,
   Minimize2,
   Target,
-  Settings2,
+  Bug,
+  Send,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { CameraManager } from '../../lib/cameraManager';
 import type { DartTarget } from '../../lib/dartsEngine';
 import {
   checkApiHealth,
+  detectBoard,
+  scoreThrow,
   setReferenceImage,
   parseScoreToTarget,
   captureVideoFrame,
   captureHighQualityFrame,
-  autoCalibrateWithRetry,
-  detectDartAdvanced,
   getApiUrl,
+  boardDetectToCalibration,
+  type BoardDetectResult,
+  type ThrowScoreResult,
   type AutoCalibrationResult,
 } from '../../lib/dartDetectionApi';
-import { detectBoardFromVideo, type LocalCalibrationResult } from '../../lib/localBoardDetection';
 
 interface CameraDetectionInputProps {
   onThrow: (target: DartTarget) => void;
@@ -38,8 +39,8 @@ interface CameraDetectionInputProps {
   remainingDarts?: number;
 }
 
-const DETECTION_INTERVAL_MS = 800;
-const AUTO_SUBMIT_CONFIDENCE = 0.75;
+const BOARD_DETECT_INTERVAL = 1000;
+const AUTO_SUBMIT_CONFIDENCE = 0.70;
 
 export function CameraDetectionInput({
   onThrow,
@@ -54,30 +55,31 @@ export function CameraDetectionInput({
   const [isDetecting, setIsDetecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [pendingScore, setPendingScore] = useState<{ score: string; target: DartTarget; confidence: number } | null>(null);
-  const [lastDetectedDarts, setLastDetectedDarts] = useState<number>(0);
+  const [pendingScore, setPendingScore] = useState<ThrowScoreResult | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
-  const [showSettings, setShowSettings] = useState(false);
-  const [autoZoom, setAutoZoom] = useState(true);
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugImages, setDebugImages] = useState<{
+    canonical?: string;
+    diff?: string;
+    mask?: string;
+  }>({});
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<CameraManager | null>(null);
-  const detectionIntervalRef = useRef<number | null>(null);
+  const boardDetectIntervalRef = useRef<number | null>(null);
   const referenceFrameRef = useRef<Blob | null>(null);
   const calibrationRef = useRef<AutoCalibrationResult | null>(null);
+  const boardResultRef = useRef<BoardDetectResult | null>(null);
+  const homographyRef = useRef<number[][] | null>(null);
 
   const checkConnection = useCallback(async (showStatus = false) => {
     if (showStatus) {
       setStatusMessage('Csatlakozas a szerverhez...');
     }
     try {
-      console.log('[Camera] Checking backend connection...');
       const health = await checkApiHealth(3);
-      console.log('[Camera] Health response:', health);
       if (health) {
         setApiConnected(true);
         if (showStatus) {
@@ -91,7 +93,7 @@ export function CameraDetectionInput({
     }
     setApiConnected(false);
     if (showStatus) {
-      setStatusMessage('Szerver nem elerheto! (Render free tier alszik vagy lefagyott - varj 1-2 percet)');
+      setStatusMessage('Szerver nem elerheto - varj 1-2 percet (Render free tier)');
       setTimeout(() => setStatusMessage(null), 6000);
     }
     return false;
@@ -103,57 +105,50 @@ export function CameraDetectionInput({
     return () => clearInterval(interval);
   }, [checkConnection]);
 
-  const applyAutoZoom = useCallback((calibration: AutoCalibrationResult) => {
-    if (!autoZoom || !calibration.center_x || !calibration.center_y || !calibration.radius) return;
-    if (!videoRef.current) return;
+  const runBoardDetection = useCallback(async () => {
+    if (!videoRef.current || !apiConnected) return;
 
-    const videoWidth = videoRef.current.videoWidth;
-    const videoHeight = videoRef.current.videoHeight;
+    try {
+      const frameBlob = await captureVideoFrame(videoRef.current);
+      const result = await detectBoard(frameBlob);
 
-    if (videoWidth === 0 || videoHeight === 0) return;
+      if (result && result.board_found) {
+        boardResultRef.current = result;
+        homographyRef.current = result.homography;
 
-    const suggestedZoom = calibration.suggested_zoom || 1.0;
-    const boardVisible = calibration.board_visible_percent || 100;
+        const cal = boardDetectToCalibration(result);
+        calibrationRef.current = cal;
 
-    let newZoom = 1.0;
+        if (!isCalibrated) {
+          setIsCalibrated(true);
+          referenceFrameRef.current = frameBlob;
+          await setReferenceImage(frameBlob);
+          setStatusMessage(`Tabla OK! (${(result.confidence * 100).toFixed(0)}%)`);
+          setTimeout(() => setStatusMessage(null), 2000);
+        }
 
-    if (boardVisible >= 95) {
-      newZoom = Math.min(suggestedZoom, 1.8);
-    } else if (boardVisible >= 80) {
-      newZoom = Math.min(suggestedZoom * 0.9, 1.5);
-    } else {
-      newZoom = 1.0;
+        if (result.canonical_preview) {
+          setDebugImages(prev => ({ ...prev, canonical: result.canonical_preview! }));
+        }
+      }
+    } catch (err) {
+      console.error('[Camera] Board detection error:', err);
+    }
+  }, [apiConnected, isCalibrated]);
+
+  const startBoardDetectLoop = useCallback(() => {
+    if (boardDetectIntervalRef.current) {
+      clearInterval(boardDetectIntervalRef.current);
     }
 
-    newZoom = Math.max(1.0, Math.min(newZoom, 2.0));
+    runBoardDetection();
 
-    const radiusX = calibration.radius_x || calibration.radius;
-    const radiusY = calibration.radius_y || calibration.radius;
-
-    const boardLeft = calibration.center_x - radiusX;
-    const boardRight = calibration.center_x + radiusX;
-    const boardTop = calibration.center_y - radiusY;
-    const boardBottom = calibration.center_y + radiusY;
-
-    const margin = Math.max(radiusX, radiusY) * 0.1;
-    const wouldCropLeft = (boardLeft - margin) * newZoom < 0;
-    const wouldCropRight = (boardRight + margin) * newZoom > videoWidth * newZoom;
-    const wouldCropTop = (boardTop - margin) * newZoom < 0;
-    const wouldCropBottom = (boardBottom + margin) * newZoom > videoHeight * newZoom;
-
-    if (wouldCropLeft || wouldCropRight || wouldCropTop || wouldCropBottom) {
-      newZoom = Math.max(1.0, newZoom * 0.85);
-    }
-
-    const centerOffsetX = calibration.center_x - videoWidth / 2;
-    const centerOffsetY = calibration.center_y - videoHeight / 2;
-
-    const panX = -centerOffsetX * (newZoom - 1) / newZoom;
-    const panY = -centerOffsetY * (newZoom - 1) / newZoom;
-
-    setZoomLevel(newZoom);
-    setPanOffset({ x: panX, y: panY });
-  }, [autoZoom]);
+    boardDetectIntervalRef.current = window.setInterval(() => {
+      if (!pendingScore) {
+        runBoardDetection();
+      }
+    }, BOARD_DETECT_INTERVAL);
+  }, [runBoardDetection, pendingScore]);
 
   const startCamera = useCallback(async () => {
     if (!videoRef.current) return;
@@ -167,7 +162,7 @@ export function CameraDetectionInput({
 
     const success = await camera.start(videoRef.current);
     if (!success) {
-      setError('Nem sikerult elinditani a kamerat. Engedelyezd a kamera hasznalatat.');
+      setError('Nem sikerult elinditani a kamerat.');
       setIsConnecting(false);
       setStatusMessage(null);
       return;
@@ -176,17 +171,17 @@ export function CameraDetectionInput({
     setIsActive(true);
     setIsConnecting(false);
 
-    checkConnection(false);
+    await checkConnection(false);
 
-    setTimeout(async () => {
-      await runAutoCalibration();
-    }, 1000);
-  }, [checkConnection, runAutoCalibration]);
+    setTimeout(() => {
+      startBoardDetectLoop();
+    }, 500);
+  }, [checkConnection, startBoardDetectLoop]);
 
   const stopCamera = useCallback(() => {
-    if (detectionIntervalRef.current) {
-      clearInterval(detectionIntervalRef.current);
-      detectionIntervalRef.current = null;
+    if (boardDetectIntervalRef.current) {
+      clearInterval(boardDetectIntervalRef.current);
+      boardDetectIntervalRef.current = null;
     }
     if (cameraRef.current) {
       cameraRef.current.stop();
@@ -196,146 +191,61 @@ export function CameraDetectionInput({
     setIsDetecting(false);
     setIsCalibrated(false);
     setPendingScore(null);
-    setZoomLevel(1);
-    setPanOffset({ x: 0, y: 0 });
+    setDebugImages({});
     referenceFrameRef.current = null;
     calibrationRef.current = null;
+    boardResultRef.current = null;
+    homographyRef.current = null;
   }, []);
 
-  const runAutoCalibration = useCallback(async () => {
-    if (!videoRef.current) return;
+  const triggerThrowDetection = useCallback(async () => {
+    if (!videoRef.current || !isCalibrated || !referenceFrameRef.current || isDetecting) return;
 
-    setIsCalibrating(true);
-    setError(null);
-    setStatusMessage('Tabla keresese...');
+    setIsDetecting(true);
+    setStatusMessage('Dobas feldolgozasa...');
 
     try {
-      let result: AutoCalibrationResult | null = null;
-      let usedLocalFallback = false;
+      const afterFrame = await captureHighQualityFrame(videoRef.current);
 
-      if (apiConnected) {
-        setStatusMessage('Tabla keresese backend-del...');
-        const frameBlob = await captureHighQualityFrame(videoRef.current);
-        result = await autoCalibrateWithRetry(frameBlob, 2);
+      const result = await scoreThrow(
+        referenceFrameRef.current,
+        afterFrame,
+        homographyRef.current || undefined
+      );
 
-        if (result && result.success) {
-          await setReferenceImage(frameBlob);
-          referenceFrameRef.current = frameBlob;
+      if (result) {
+        if (result.debug) {
+          setDebugImages({
+            diff: result.debug.diff_preview,
+            mask: result.debug.mask_preview,
+            canonical: result.debug.canonical_preview || result.debug.canonical_after,
+          });
         }
-      }
 
-      if (!result || !result.success) {
-        setStatusMessage('Lokalis felismeres...');
-        const localResult = await detectBoardFromVideo(videoRef.current);
-
-        if (localResult.success) {
-          usedLocalFallback = true;
-          result = {
-            success: true,
-            center_x: localResult.center_x,
-            center_y: localResult.center_y,
-            radius: localResult.radius,
-            radius_x: localResult.radius_x,
-            radius_y: localResult.radius_y,
-            rotation_offset: localResult.rotation_offset,
-            confidence: localResult.confidence,
-            method: localResult.method,
-            message: localResult.message,
-            ellipse: localResult.ellipse,
-            is_angled: localResult.is_angled,
-          };
-
-          const frameBlob = await captureHighQualityFrame(videoRef.current);
-          referenceFrameRef.current = frameBlob;
+        if (result.decision === 'AUTO' && result.confidence >= AUTO_SUBMIT_CONFIDENCE) {
+          const target = parseScoreToTarget(result.label);
+          onThrow(target);
+          referenceFrameRef.current = afterFrame;
+          setStatusMessage(`${result.label} (${result.score} pont) - AUTO`);
+          setTimeout(() => setStatusMessage(null), 2000);
+        } else {
+          setPendingScore(result);
         }
-      }
-
-      if (result && result.success) {
-        calibrationRef.current = result;
-        setIsCalibrated(true);
-        setError(null);
-
-        const methodInfo = result.method ? ` [${result.method}]` : '';
-        const angleInfo = result.is_angled ? ' (szogbol)' : '';
-        const localInfo = usedLocalFallback ? ' (offline)' : '';
-        setStatusMessage(`Tabla OK! (${(result.confidence * 100).toFixed(0)}%)${methodInfo}${angleInfo}${localInfo}`);
-
-        applyAutoZoom(result);
-
-        setTimeout(() => {
-          setStatusMessage(null);
-          if (!usedLocalFallback) {
-            startDetectionLoop();
-          }
-        }, 1500);
       } else {
-        const tips = [
-          'Jobb megvilagitas szukseges',
-          'Menj kozelebb a tablahoz',
-          'A tabla legyen kozepen',
-          'Kerüld a tükrözodest',
-        ];
-        const randomTip = tips[Math.floor(Math.random() * tips.length)];
-        setError(`Tabla nem talalhato. Tipp: ${randomTip}`);
-        setStatusMessage(null);
+        setError('Nem sikerult feldolgozni a dobast.');
       }
     } catch (err) {
-      console.error('Calibration error:', err);
-      setError('Hiba a tabla felismeresekor. Probald ujra.');
-      setStatusMessage(null);
+      console.error('[Camera] Throw detection error:', err);
+      setError('Hiba a dobas feldolgozasakor.');
     } finally {
-      setIsCalibrating(false);
+      setIsDetecting(false);
     }
-  }, [applyAutoZoom, apiConnected]);
-
-  const startDetectionLoop = useCallback(() => {
-    if (detectionIntervalRef.current) {
-      clearInterval(detectionIntervalRef.current);
-    }
-
-    setLastDetectedDarts(0);
-
-    detectionIntervalRef.current = window.setInterval(async () => {
-      if (!videoRef.current || disabled || pendingScore) return;
-
-      setIsDetecting(true);
-
-      try {
-        const currentFrame = await captureVideoFrame(videoRef.current);
-        const result = await detectDartAdvanced(currentFrame, referenceFrameRef.current || undefined);
-
-        if (result && result.darts && result.darts.length > 0) {
-          const newDartCount = result.darts.length;
-
-          if (newDartCount > lastDetectedDarts) {
-            const latestDart = result.darts[result.darts.length - 1];
-            const target = parseScoreToTarget(latestDart.score);
-
-            if (latestDart.confidence >= AUTO_SUBMIT_CONFIDENCE) {
-              onThrow(target);
-              setLastDetectedDarts(newDartCount);
-              referenceFrameRef.current = currentFrame;
-            } else {
-              setPendingScore({
-                score: latestDart.score,
-                target,
-                confidence: latestDart.confidence,
-              });
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Detection error:', err);
-      } finally {
-        setIsDetecting(false);
-      }
-    }, DETECTION_INTERVAL_MS);
-  }, [disabled, pendingScore, lastDetectedDarts, onThrow]);
+  }, [isCalibrated, isDetecting, onThrow]);
 
   const confirmPendingScore = useCallback(() => {
     if (pendingScore) {
-      onThrow(pendingScore.target);
-      setLastDetectedDarts(prev => prev + 1);
+      const target = parseScoreToTarget(pendingScore.label);
+      onThrow(target);
       setPendingScore(null);
 
       if (videoRef.current) {
@@ -358,25 +268,11 @@ export function CameraDetectionInput({
       const frameBlob = await captureVideoFrame(videoRef.current);
       await setReferenceImage(frameBlob);
       referenceFrameRef.current = frameBlob;
-      setLastDetectedDarts(0);
       setStatusMessage('Referencia OK!');
       setTimeout(() => setStatusMessage(null), 1500);
     } catch {
       setError('Referencia frissites sikertelen');
     }
-  }, []);
-
-  const handleZoomIn = useCallback(() => {
-    setZoomLevel(prev => Math.min(prev + 0.3, 3));
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    setZoomLevel(prev => Math.max(prev - 0.3, 1));
-  }, []);
-
-  const handleResetZoom = useCallback(() => {
-    setZoomLevel(1);
-    setPanOffset({ x: 0, y: 0 });
   }, []);
 
   const toggleFullscreen = useCallback(() => {
@@ -397,85 +293,76 @@ export function CameraDetectionInput({
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
 
-          ctx.save();
-          ctx.translate(canvas.width / 2, canvas.height / 2);
-          ctx.scale(zoomLevel, zoomLevel);
-          ctx.translate(-canvas.width / 2 + panOffset.x, -canvas.height / 2 + panOffset.y);
           ctx.drawImage(video, 0, 0);
 
-          if (calibrationRef.current && calibrationRef.current.success) {
-            const cal = calibrationRef.current;
-            const { center_x, center_y, radius, ellipse, is_angled } = cal;
-            const radiusX = cal.radius_x || radius;
-            const radiusY = cal.radius_y || radius;
+          const boardResult = boardResultRef.current;
+          if (boardResult && boardResult.board_found && boardResult.overlay_points) {
+            const points = boardResult.overlay_points;
 
-            if (center_x && center_y && radius) {
-              const bullX = ellipse ? ellipse.center_x : center_x;
-              const bullY = ellipse ? ellipse.center_y : center_y;
-              const drawRadiusX = ellipse ? ellipse.axis_major / 2 : radiusX;
-              const drawRadiusY = ellipse ? ellipse.axis_minor / 2 : radiusY;
-              const angle = ellipse ? ellipse.angle : 0;
+            ctx.strokeStyle = 'rgba(34, 197, 94, 0.9)';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([10, 5]);
 
-              ctx.save();
-              ctx.translate(bullX, bullY);
-              ctx.rotate((angle * Math.PI) / 180);
+            ctx.beginPath();
+            if (points.length > 0) {
+              ctx.moveTo(points[0][0], points[0][1]);
+              for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i][0], points[i][1]);
+              }
+              ctx.closePath();
+            }
+            ctx.stroke();
 
-              ctx.strokeStyle = 'rgba(34, 197, 94, 0.9)';
-              ctx.lineWidth = 3;
-              ctx.setLineDash([10, 5]);
-              ctx.beginPath();
-              ctx.ellipse(0, 0, drawRadiusX, drawRadiusY, 0, 0, Math.PI * 2);
-              ctx.stroke();
+            ctx.setLineDash([]);
 
-              ctx.strokeStyle = 'rgba(34, 197, 94, 0.4)';
-              ctx.lineWidth = 1;
-              ctx.setLineDash([5, 5]);
-              ctx.beginPath();
-              ctx.ellipse(0, 0, drawRadiusX * 0.63, drawRadiusY * 0.63, 0, 0, Math.PI * 2);
-              ctx.stroke();
-
-              ctx.beginPath();
-              ctx.ellipse(0, 0, drawRadiusX * 0.08, drawRadiusY * 0.08, 0, 0, Math.PI * 2);
-              ctx.stroke();
-
-              ctx.setLineDash([]);
-
-              ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
-              ctx.lineWidth = 1;
-              ctx.beginPath();
-              ctx.moveTo(-25, 0);
-              ctx.lineTo(25, 0);
-              ctx.moveTo(0, -25);
-              ctx.lineTo(0, 25);
-              ctx.stroke();
-
-              ctx.restore();
+            if (boardResult.bull_center) {
+              const [bx, by] = boardResult.bull_center;
 
               ctx.fillStyle = 'rgba(34, 197, 94, 1)';
               ctx.shadowColor = 'rgba(34, 197, 94, 0.8)';
               ctx.shadowBlur = 12;
               ctx.beginPath();
-              ctx.arc(bullX, bullY, 6, 0, Math.PI * 2);
+              ctx.arc(bx, by, 8, 0, Math.PI * 2);
               ctx.fill();
               ctx.shadowBlur = 0;
 
               ctx.fillStyle = '#fff';
               ctx.beginPath();
-              ctx.arc(bullX, bullY, 2, 0, Math.PI * 2);
+              ctx.arc(bx, by, 3, 0, Math.PI * 2);
               ctx.fill();
 
-              if (is_angled) {
-                ctx.save();
-                ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
-                ctx.font = 'bold 12px sans-serif';
-                ctx.textAlign = 'left';
-                ctx.fillText('Szogbol', bullX + drawRadiusX + 10, bullY);
-                ctx.restore();
-              }
+              ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(bx - 20, by);
+              ctx.lineTo(bx + 20, by);
+              ctx.moveTo(bx, by - 20);
+              ctx.lineTo(bx, by + 20);
+              ctx.stroke();
+            }
+
+            if (boardResult.ellipse) {
+              const { cx, cy, a, b, angle } = boardResult.ellipse;
+
+              ctx.save();
+              ctx.translate(cx, cy);
+              ctx.rotate((angle * Math.PI) / 180);
+
+              ctx.strokeStyle = 'rgba(34, 197, 94, 0.3)';
+              ctx.lineWidth = 1;
+              ctx.setLineDash([5, 5]);
+              ctx.beginPath();
+              ctx.ellipse(0, 0, a * 0.63, b * 0.63, 0, 0, Math.PI * 2);
+              ctx.stroke();
+
+              ctx.beginPath();
+              ctx.ellipse(0, 0, a * 0.08, b * 0.08, 0, 0, Math.PI * 2);
+              ctx.stroke();
+
+              ctx.restore();
+              ctx.setLineDash([]);
             }
           }
-
-          ctx.restore();
 
           if (isDetecting) {
             const scanY = (Date.now() % 2000) / 2000 * canvas.height;
@@ -493,7 +380,7 @@ export function CameraDetectionInput({
       draw();
       return () => cancelAnimationFrame(animationId);
     }
-  }, [isActive, isDetecting, zoomLevel, panOffset]);
+  }, [isActive, isDetecting]);
 
   useEffect(() => {
     return () => {
@@ -527,7 +414,7 @@ export function CameraDetectionInput({
                 <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/30">
                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                   <Wifi className="w-4 h-4 text-green-400" />
-                  <span className="text-green-400 text-sm font-medium">Szerver kapcsolat aktiv</span>
+                  <span className="text-green-400 text-sm font-medium">Szerver aktiv</span>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-3">
@@ -557,14 +444,14 @@ export function CameraDetectionInput({
               </div>
             </div>
 
-            <h3 className="text-lg font-semibold text-white mb-2">Automatikus Felismeres</h3>
+            <h3 className="text-lg font-semibold text-white mb-2">Kamera Felismeres v3</h3>
             <p className="text-dark-400 mb-6 max-w-sm">
-              Iranyitsd a kamerat a darttablara. A rendszer automatikusan felismeri a dobasokat.
+              Valodi tabla detektalas homography-val. Az overlay a backend altal visszakuldott pontokat rajzolja.
             </p>
 
             <Button
               onClick={startCamera}
-              disabled={isConnecting}
+              disabled={isConnecting || !apiConnected}
               size="lg"
               className="px-8 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-500/25"
               leftIcon={isConnecting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
@@ -594,7 +481,7 @@ export function CameraDetectionInput({
                 ) : (
                   <>
                     <RefreshCw className="w-4 h-4 text-amber-400 animate-spin" />
-                    <span className="text-amber-400 text-xs font-medium">Kalibralas...</span>
+                    <span className="text-amber-400 text-xs font-medium">Keresés...</span>
                   </>
                 )}
               </div>
@@ -602,61 +489,23 @@ export function CameraDetectionInput({
               {isDetecting && (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/20 border border-blue-500/40 backdrop-blur-sm">
                   <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                  <span className="text-blue-400 text-xs font-medium">Figyeles</span>
+                  <span className="text-blue-400 text-xs font-medium">Feldolgozas</span>
                 </div>
               )}
             </div>
 
             <div className="absolute top-3 right-3 flex gap-1.5">
-              {showSettings && (
-                <div className="absolute top-12 right-0 bg-dark-800 border border-dark-600 rounded-lg p-3 shadow-xl min-w-[200px] z-10">
-                  <label className="flex items-center gap-2 text-sm text-dark-300 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={autoZoom}
-                      onChange={(e) => setAutoZoom(e.target.checked)}
-                      className="w-4 h-4 rounded bg-dark-700 border-dark-600"
-                    />
-                    Auto-zoom tablara
-                  </label>
-                </div>
-              )}
-
               <button
-                onClick={() => setShowSettings(!showSettings)}
-                className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
-                title="Beallitasok"
+                onClick={() => setShowDebug(!showDebug)}
+                className={`p-2 rounded-lg backdrop-blur-sm border transition-colors ${
+                  showDebug
+                    ? 'bg-blue-500/30 border-blue-500/50 text-blue-300'
+                    : 'bg-black/60 hover:bg-black/80 border-white/10 text-white/70 hover:text-white'
+                }`}
+                title="Debug panel"
               >
-                <Settings2 className="w-4 h-4" />
+                <Bug className="w-4 h-4" />
               </button>
-
-              <button
-                onClick={handleZoomOut}
-                disabled={zoomLevel <= 1}
-                className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-40"
-                title="Kicsinyites"
-              >
-                <ZoomOut className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={handleZoomIn}
-                disabled={zoomLevel >= 3}
-                className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-40"
-                title="Nagyitas"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </button>
-
-              {zoomLevel > 1 && (
-                <button
-                  onClick={handleResetZoom}
-                  className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
-                  title="Zoom visszaallitas"
-                >
-                  <span className="text-xs font-medium">1x</span>
-                </button>
-              )}
 
               <button
                 onClick={toggleFullscreen}
@@ -670,71 +519,97 @@ export function CameraDetectionInput({
             <div className="absolute bottom-3 left-3 right-3 flex justify-between items-end">
               <div className="flex gap-1.5">
                 <button
-                  onClick={runAutoCalibration}
-                  disabled={isCalibrating}
-                  className="p-2.5 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-40"
-                  title="Tabla ujrafelismerese"
-                >
-                  <Crosshair className="w-5 h-5" />
-                </button>
-
-                <button
                   onClick={resetReference}
                   className="p-2.5 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
                   title="Referencia frissites"
                 >
                   <RefreshCw className="w-5 h-5" />
                 </button>
+
+                <button
+                  onClick={() => {
+                    setIsCalibrated(false);
+                    boardResultRef.current = null;
+                    calibrationRef.current = null;
+                  }}
+                  className="p-2.5 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
+                  title="Tabla ujrafelismerese"
+                >
+                  <Crosshair className="w-5 h-5" />
+                </button>
               </div>
 
-              <button
-                onClick={stopCamera}
-                className="p-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 backdrop-blur-sm border border-red-500/40 text-red-400 hover:text-red-300 transition-colors"
-                title="Kamera leallitas"
-              >
-                <CameraOff className="w-5 h-5" />
-              </button>
+              <div className="flex gap-1.5">
+                {isCalibrated && !pendingScore && (
+                  <button
+                    onClick={triggerThrowDetection}
+                    disabled={isDetecting || disabled}
+                    className="px-4 py-2.5 rounded-lg bg-green-500/80 hover:bg-green-500 backdrop-blur-sm border border-green-400/50 text-white font-medium transition-colors disabled:opacity-40 flex items-center gap-2"
+                    title="Dobas rogzitese"
+                  >
+                    <Send className="w-5 h-5" />
+                    <span>Dobas</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={stopCamera}
+                  className="p-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 backdrop-blur-sm border border-red-500/40 text-red-400 hover:text-red-300 transition-colors"
+                  title="Kamera leallitas"
+                >
+                  <CameraOff className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-
-            {isCalibrating && (
-              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center">
-                <div className="relative">
-                  <div className="absolute inset-0 bg-blue-500/30 rounded-full blur-xl animate-pulse" />
-                  <div className="relative w-20 h-20 rounded-full border-4 border-blue-500/30 border-t-blue-500 animate-spin" />
-                </div>
-                <p className="text-blue-300 font-medium mt-4">Tabla automatikus felismerese...</p>
-                <p className="text-dark-400 text-sm mt-1">Varj, amig a rendszer megtalaja a tablat</p>
-              </div>
-            )}
-
-            {zoomLevel > 1 && (
-              <div className="absolute bottom-16 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/60 backdrop-blur-sm border border-white/10">
-                <span className="text-white/70 text-xs font-medium">{zoomLevel.toFixed(1)}x zoom</span>
-              </div>
-            )}
           </div>
         )}
       </div>
 
+      {showDebug && isActive && (
+        <div className="bg-dark-800 border border-dark-700 rounded-xl p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+            <Bug className="w-4 h-4" />
+            Debug Previewk
+          </h4>
+          <div className="grid grid-cols-3 gap-3">
+            {debugImages.canonical && (
+              <div className="space-y-1">
+                <span className="text-xs text-dark-400">Canonical (warp)</span>
+                <img src={debugImages.canonical} alt="Canonical" className="w-full rounded border border-dark-600" />
+              </div>
+            )}
+            {debugImages.diff && (
+              <div className="space-y-1">
+                <span className="text-xs text-dark-400">Diff</span>
+                <img src={debugImages.diff} alt="Diff" className="w-full rounded border border-dark-600" />
+              </div>
+            )}
+            {debugImages.mask && (
+              <div className="space-y-1">
+                <span className="text-xs text-dark-400">Mask</span>
+                <img src={debugImages.mask} alt="Mask" className="w-full rounded border border-dark-600" />
+              </div>
+            )}
+          </div>
+          {boardResultRef.current && (
+            <div className="text-xs text-dark-400 font-mono">
+              Confidence: {(boardResultRef.current.confidence * 100).toFixed(0)}% |
+              Homography: {boardResultRef.current.homography ? 'Yes' : 'No'} |
+              Points: {boardResultRef.current.overlay_points?.length || 0}
+            </div>
+          )}
+        </div>
+      )}
+
       {!isFullscreen && (
         <>
-          {error && !isCalibrated && (
+          {error && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
                 <AlertCircle className="w-5 h-5 text-red-400" />
               </div>
               <div className="flex-1">
                 <p className="text-red-300 font-medium">{error}</p>
-                {isActive && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={runAutoCalibration}
-                    className="mt-3 border-red-500/30 text-red-300 hover:bg-red-500/10"
-                  >
-                    Ujra probalom
-                  </Button>
-                )}
               </div>
             </div>
           )}
@@ -752,7 +627,8 @@ export function CameraDetectionInput({
             <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-2xl font-bold text-amber-300">{pendingScore.score}</p>
+                  <p className="text-2xl font-bold text-amber-300">{pendingScore.label}</p>
+                  <p className="text-lg text-amber-200">{pendingScore.score} pont</p>
                   <div className="flex items-center gap-2 mt-1">
                     <div className="h-1.5 w-24 bg-dark-700 rounded-full overflow-hidden">
                       <div
@@ -761,7 +637,7 @@ export function CameraDetectionInput({
                       />
                     </div>
                     <span className="text-amber-400/70 text-sm">
-                      {(pendingScore.confidence * 100).toFixed(0)}% biztossag
+                      {(pendingScore.confidence * 100).toFixed(0)}% | {pendingScore.decision}
                     </span>
                   </div>
                 </div>
@@ -794,7 +670,7 @@ export function CameraDetectionInput({
                   <div className="absolute inset-0 w-3 h-3 rounded-full bg-green-500 animate-ping opacity-50" />
                 </div>
                 <span className="text-dark-300 text-sm font-medium">
-                  Automatikus felismeres aktiv
+                  Kesz - Nyomd meg a "Dobas" gombot
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -808,7 +684,10 @@ export function CameraDetectionInput({
       {isFullscreen && pendingScore && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-dark-800 border border-dark-600 rounded-xl p-4 shadow-2xl w-80">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xl font-bold text-amber-300">{pendingScore.score}</p>
+            <div>
+              <p className="text-xl font-bold text-amber-300">{pendingScore.label}</p>
+              <p className="text-sm text-amber-200">{pendingScore.score} pont</p>
+            </div>
             <span className="text-amber-400/70 text-sm">{(pendingScore.confidence * 100).toFixed(0)}%</span>
           </div>
           <div className="flex gap-2">
