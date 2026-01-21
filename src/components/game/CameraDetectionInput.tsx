@@ -16,10 +16,19 @@ import {
   Send,
   SwitchCamera,
   Settings,
+  Smartphone,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { CameraManager, type CameraDevice } from '../../lib/cameraManager';
 import type { DartTarget } from '../../lib/dartsEngine';
+import {
+  getActiveRemoteCameras,
+  subscribeToRemoteCameras,
+  RemoteCameraViewer,
+  type RemoteCameraSession,
+} from '../../lib/remoteCameraSharing';
+import { useAuthStore } from '../../stores/authStore';
 import {
   checkApiHealth,
   detectBoard,
@@ -49,6 +58,7 @@ export function CameraDetectionInput({
   disabled = false,
   remainingDarts = 3,
 }: CameraDetectionInputProps) {
+  const { user } = useAuthStore();
   const [isActive, setIsActive] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isCalibrating, setIsCalibrating] = useState(false);
@@ -68,6 +78,9 @@ export function CameraDetectionInput({
   }>({});
   const [availableCameras, setAvailableCameras] = useState<CameraDevice[]>([]);
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
+  const [remoteCameras, setRemoteCameras] = useState<RemoteCameraSession[]>([]);
+  const [connectingRemoteId, setConnectingRemoteId] = useState<string | null>(null);
+  const [activeRemoteCamera, setActiveRemoteCamera] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -78,6 +91,25 @@ export function CameraDetectionInput({
   const calibrationRef = useRef<AutoCalibrationResult | null>(null);
   const boardResultRef = useRef<BoardDetectResult | null>(null);
   const homographyRef = useRef<number[][] | null>(null);
+  const remoteViewerRef = useRef<RemoteCameraViewer | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const loadRemoteCameras = async () => {
+      const sessions = await getActiveRemoteCameras();
+      setRemoteCameras(sessions);
+    };
+    loadRemoteCameras();
+
+    const channel = subscribeToRemoteCameras(user.id, (sessions) => {
+      setRemoteCameras(sessions);
+    });
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [user]);
 
   const checkConnection = useCallback(async (showStatus = false) => {
     if (showStatus) {
@@ -203,11 +235,16 @@ export function CameraDetectionInput({
       cameraRef.current.stop();
       cameraRef.current = null;
     }
+    if (remoteViewerRef.current) {
+      remoteViewerRef.current.disconnect();
+      remoteViewerRef.current = null;
+    }
     setIsActive(false);
     setIsDetecting(false);
     setIsCalibrated(false);
     setPendingScore(null);
     setDebugImages({});
+    setActiveRemoteCamera(null);
     referenceFrameRef.current = null;
     calibrationRef.current = null;
     boardResultRef.current = null;
@@ -238,6 +275,52 @@ export function CameraDetectionInput({
     await startCamera(selectedCamera.deviceId);
     setShowCameraSettings(false);
   }, [availableCameras, startCamera, stopCamera]);
+
+  const connectToRemoteCamera = useCallback(async (session: RemoteCameraSession) => {
+    if (!videoRef.current) return;
+
+    setConnectingRemoteId(session.id);
+    stopCamera();
+
+    if (remoteViewerRef.current) {
+      await remoteViewerRef.current.disconnect();
+      remoteViewerRef.current = null;
+    }
+
+    const viewer = new RemoteCameraViewer({
+      onStream: (stream) => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          setIsActive(true);
+          setActiveRemoteCamera(session.id);
+          setConnectingRemoteId(null);
+          setShowCameraSettings(false);
+
+          checkConnection(false);
+          setTimeout(() => {
+            startBoardDetectLoop();
+          }, 500);
+        }
+      },
+      onStatusChange: (status) => {
+        if (status === 'disconnected') {
+          setIsActive(false);
+          setActiveRemoteCamera(null);
+        }
+      },
+      onError: (err) => {
+        setError(`Tavoli kamera hiba: ${err}`);
+        setConnectingRemoteId(null);
+      },
+    });
+
+    remoteViewerRef.current = viewer;
+    const success = await viewer.connectToSession(session.id);
+    if (!success) {
+      setError('Nem sikerult csatlakozni a tavoli kamerahoz');
+      setConnectingRemoteId(null);
+    }
+  }, [stopCamera, checkConnection, startBoardDetectLoop]);
 
   const triggerThrowDetection = useCallback(async () => {
     if (!videoRef.current || !isCalibrated || !referenceFrameRef.current || isDetecting) return;
@@ -781,7 +864,7 @@ export function CameraDetectionInput({
 
       {showCameraSettings && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-dark-800 rounded-xl border border-dark-700 shadow-2xl max-w-lg w-full p-6">
+          <div className="bg-dark-800 rounded-xl border border-dark-700 shadow-2xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-500/20 rounded-lg">
@@ -800,42 +883,99 @@ export function CameraDetectionInput({
               </button>
             </div>
 
-            <div className="space-y-2">
-              {availableCameras.map((camera, index) => (
-                <button
-                  key={camera.deviceId}
-                  onClick={() => selectCamera(index)}
-                  className={`w-full text-left p-4 rounded-lg border transition-all ${
-                    index === currentCameraIndex
-                      ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-                      : 'bg-dark-700 border-dark-600 text-white hover:bg-dark-600 hover:border-dark-500'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Camera className={`w-5 h-5 ${index === currentCameraIndex ? 'text-blue-400' : 'text-dark-400'}`} />
-                      <div>
-                        <div className="font-medium">{camera.label}</div>
-                        <div className="text-xs text-dark-400 mt-0.5">
-                          {camera.deviceId.slice(0, 16)}...
+            {remoteCameras.length > 0 && (
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Smartphone className="w-4 h-4 text-green-400" />
+                  <span className="text-sm font-medium text-green-400">Tavoli Kamerak</span>
+                </div>
+                <div className="space-y-2">
+                  {remoteCameras.map((session) => (
+                    <button
+                      key={session.id}
+                      onClick={() => connectToRemoteCamera(session)}
+                      disabled={connectingRemoteId === session.id}
+                      className={`w-full text-left p-4 rounded-lg border transition-all ${
+                        activeRemoteCamera === session.id
+                          ? 'bg-green-500/20 border-green-500/50 text-green-300'
+                          : 'bg-dark-700 border-dark-600 text-white hover:bg-dark-600 hover:border-green-500/30'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Smartphone className={`w-5 h-5 ${activeRemoteCamera === session.id ? 'text-green-400' : 'text-green-400/60'}`} />
+                          <div>
+                            <div className="font-medium flex items-center gap-2">
+                              {session.device_name}
+                              {session.status === 'waiting' && (
+                                <span className="text-xs text-amber-400">(varakozik)</span>
+                              )}
+                            </div>
+                            <div className="text-xs text-dark-400 mt-0.5">
+                              Tavoli {session.device_type}
+                            </div>
+                          </div>
                         </div>
+                        {connectingRemoteId === session.id ? (
+                          <Loader2 className="w-5 h-5 text-green-400 animate-spin" />
+                        ) : activeRemoteCamera === session.id ? (
+                          <div className="flex items-center gap-2 text-green-400">
+                            <Wifi className="w-5 h-5" />
+                            <span className="text-sm font-medium">Aktiv</span>
+                          </div>
+                        ) : null}
                       </div>
-                    </div>
-                    {index === currentCameraIndex && (
-                      <div className="flex items-center gap-2 text-blue-400">
-                        <Check className="w-5 h-5" />
-                        <span className="text-sm font-medium">Aktiv</span>
-                      </div>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            {availableCameras.length === 0 && (
+            {availableCameras.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Camera className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm font-medium text-blue-400">Helyi Kamerak</span>
+                </div>
+                <div className="space-y-2">
+                  {availableCameras.map((camera, index) => (
+                    <button
+                      key={camera.deviceId}
+                      onClick={() => selectCamera(index)}
+                      className={`w-full text-left p-4 rounded-lg border transition-all ${
+                        index === currentCameraIndex && !activeRemoteCamera
+                          ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
+                          : 'bg-dark-700 border-dark-600 text-white hover:bg-dark-600 hover:border-dark-500'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Camera className={`w-5 h-5 ${index === currentCameraIndex && !activeRemoteCamera ? 'text-blue-400' : 'text-dark-400'}`} />
+                          <div>
+                            <div className="font-medium">{camera.label}</div>
+                            <div className="text-xs text-dark-400 mt-0.5">
+                              {camera.deviceId.slice(0, 16)}...
+                            </div>
+                          </div>
+                        </div>
+                        {index === currentCameraIndex && !activeRemoteCamera && (
+                          <div className="flex items-center gap-2 text-blue-400">
+                            <Check className="w-5 h-5" />
+                            <span className="text-sm font-medium">Aktiv</span>
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {availableCameras.length === 0 && remoteCameras.length === 0 && (
               <div className="text-center py-8 text-dark-400">
                 <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>Nem talalhato kamera</p>
+                <p className="text-xs mt-2">Oszd meg a kamerad egy masik eszkozrol</p>
               </div>
             )}
           </div>

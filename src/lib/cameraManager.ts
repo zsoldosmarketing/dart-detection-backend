@@ -226,6 +226,10 @@ export class CameraManager {
     return this.videoElement;
   }
 
+  getStream(): MediaStream | null {
+    return this.stream;
+  }
+
   getActualResolution(): { width: number; height: number } | null {
     if (!this.videoElement) return null;
     return {

@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, Sun, Moon, LogOut, Target, Download, User } from 'lucide-react';
+import { Bell, Sun, Moon, LogOut, Target, Download, User, Camera } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useNotificationStore } from '../../stores/notificationStore';
 import { usePWAInstall } from '../../lib/pwaInstall';
 import { Button } from '../ui/Button';
 import { PWAInstallPrompt } from '../ui/PWAInstallPrompt';
+import { RemoteCameraShareModal } from '../camera/RemoteCameraShareModal';
 import { t } from '../../lib/i18n';
 
 export function Header() {
@@ -14,6 +16,7 @@ export function Header() {
   const { unreadCount } = useNotificationStore();
   const { isInstallable, isInstalled, install, showPrompt, dismissPrompt } = usePWAInstall();
   const navigate = useNavigate();
+  const [showCameraShare, setShowCameraShare] = useState(false);
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
@@ -54,6 +57,17 @@ export function Header() {
               >
                 <Download className="w-5 h-5" />
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-primary-500 rounded-full animate-pulse" />
+              </button>
+            )}
+
+            {user && (
+              <button
+                onClick={() => setShowCameraShare(true)}
+                className="p-2 rounded-lg text-dark-500 dark:text-dark-400 hover:bg-dark-100 dark:hover:bg-dark-700 transition-colors"
+                aria-label="Share camera"
+                title="Kamera megosztasa mas eszkozzel"
+              >
+                <Camera className="w-5 h-5" />
               </button>
             )}
 
@@ -120,6 +134,11 @@ export function Header() {
     </header>
 
     {showPrompt && <PWAInstallPrompt onInstall={handleInstall} onDismiss={dismissPrompt} />}
+
+    <RemoteCameraShareModal
+      isOpen={showCameraShare}
+      onClose={() => setShowCameraShare(false)}
+    />
     </>
   );
 }
