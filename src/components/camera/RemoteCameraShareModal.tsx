@@ -171,7 +171,9 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
 
   useEffect(() => {
     if (isOpen && status === 'idle') {
-      startSharing();
+      requestAnimationFrame(() => {
+        startSharing();
+      });
     }
   }, [isOpen]);
 
@@ -199,6 +201,41 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
         </div>
 
         <div className="p-4">
+          <div className={`relative aspect-video bg-black rounded-lg overflow-hidden ${
+            status === 'sharing' || status === 'connected' ? 'mb-4' : 'h-0 overflow-hidden opacity-0 absolute'
+          }`}>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute top-2 left-2 flex items-center gap-2 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm z-10">
+              {status === 'connected' ? (
+                <>
+                  <Wifi className="w-3 h-3 text-green-400" />
+                  <span className="text-green-400 text-xs font-medium">Kapcsolodva</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                  <span className="text-green-400 text-xs font-medium">Aktiv</span>
+                </>
+              )}
+            </div>
+            {cameras.length > 1 && (
+              <button
+                onClick={switchCamera}
+                className="absolute top-2 right-2 p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm text-white transition-colors z-10"
+                title="Kamera valtas"
+              >
+                <SwitchCamera className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+
           {status === 'starting' && (
             <div className="text-center py-12">
               <Loader2 className="w-12 h-12 mx-auto mb-4 text-blue-400 animate-spin" />
@@ -209,38 +246,6 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
 
           {(status === 'sharing' || status === 'connected') && (
             <div className="space-y-4">
-              <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute top-2 left-2 flex items-center gap-2 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm">
-                  {status === 'connected' ? (
-                    <>
-                      <Wifi className="w-3 h-3 text-green-400" />
-                      <span className="text-green-400 text-xs font-medium">Kapcsolodva</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                      <span className="text-green-400 text-xs font-medium">Aktiv</span>
-                    </>
-                  )}
-                </div>
-                {cameras.length > 1 && (
-                  <button
-                    onClick={switchCamera}
-                    className="absolute top-2 right-2 p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm text-white transition-colors"
-                    title="Kamera valtas"
-                  >
-                    <SwitchCamera className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-
               <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse" />
