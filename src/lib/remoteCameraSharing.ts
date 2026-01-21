@@ -234,6 +234,9 @@ export class RemoteCameraViewer {
   private onStream?: (stream: MediaStream) => void;
   private onStatusChange?: (status: string) => void;
   private onError?: (error: string) => void;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 3;
+  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor(callbacks?: {
     onStream?: (stream: MediaStream) => void;
@@ -285,9 +288,18 @@ export class RemoteCameraViewer {
       this.peerConnection.onconnectionstatechange = () => {
         const state = this.peerConnection?.connectionState;
         if (state === 'connected') {
+          this.reconnectAttempts = 0;
           this.onStatusChange?.('connected');
         } else if (state === 'disconnected' || state === 'failed') {
           this.onStatusChange?.('disconnected');
+          this.attemptReconnect();
+        }
+      };
+
+      this.peerConnection.oniceconnectionstatechange = () => {
+        const state = this.peerConnection?.iceConnectionState;
+        if (state === 'disconnected' || state === 'failed') {
+          this.attemptReconnect();
         }
       };
 
@@ -357,7 +369,37 @@ export class RemoteCameraViewer {
       .subscribe();
   }
 
+  private attemptReconnect() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts || !this.sessionId) {
+      return;
+    }
+
+    this.reconnectAttempts++;
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 5000);
+
+    this.reconnectTimeout = setTimeout(async () => {
+      if (this.sessionId) {
+        this.onStatusChange?.('reconnecting');
+
+        if (this.peerConnection) {
+          this.peerConnection.close();
+          this.peerConnection = null;
+        }
+
+        const success = await this.connectToSession(this.sessionId);
+        if (!success && this.reconnectAttempts < this.maxReconnectAttempts) {
+          this.attemptReconnect();
+        }
+      }
+    }, delay);
+  }
+
   async disconnect() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+
     if (this.channel) {
       await this.channel.unsubscribe();
       this.channel = null;
@@ -370,6 +412,7 @@ export class RemoteCameraViewer {
 
     this.remoteStream = null;
     this.sessionId = null;
+    this.reconnectAttempts = 0;
   }
 
   getStream(): MediaStream | null {
@@ -378,8 +421,11 @@ export class RemoteCameraViewer {
 }
 
 export async function getActiveRemoteCameras(): Promise<RemoteCameraSession[]> {
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return [];
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+  if (authError || !userData.user) {
+    console.log('[RemoteCamera] No authenticated user');
+    return [];
+  }
 
   const { data, error } = await supabase
     .from('remote_camera_sessions')
@@ -389,7 +435,12 @@ export async function getActiveRemoteCameras(): Promise<RemoteCameraSession[]> {
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false });
 
-  if (error) return [];
+  if (error) {
+    console.error('[RemoteCamera] Failed to fetch sessions:', error.message);
+    return [];
+  }
+
+  console.log('[RemoteCamera] Found', data?.length || 0, 'sessions for user', userData.user.id);
   return data || [];
 }
 

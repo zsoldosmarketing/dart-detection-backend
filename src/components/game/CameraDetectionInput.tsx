@@ -105,16 +105,29 @@ export function CameraDetectionInput({
     if (!user) return;
 
     const loadRemoteCameras = async () => {
-      const sessions = await getActiveRemoteCameras();
-      setRemoteCameras(sessions);
+      try {
+        const sessions = await getActiveRemoteCameras();
+        const uniqueSessions = sessions.filter((session, index, self) =>
+          index === self.findIndex(s => s.id === session.id)
+        );
+        setRemoteCameras(uniqueSessions);
+      } catch (err) {
+        console.error('[RemoteCamera] Failed to load sessions:', err);
+      }
     };
     loadRemoteCameras();
 
+    const pollInterval = setInterval(loadRemoteCameras, 5000);
+
     const channel = subscribeToRemoteCameras(user.id, (sessions) => {
-      setRemoteCameras(sessions);
+      const uniqueSessions = sessions.filter((session, index, self) =>
+        index === self.findIndex(s => s.id === session.id)
+      );
+      setRemoteCameras(uniqueSessions);
     });
 
     return () => {
+      clearInterval(pollInterval);
       channel.unsubscribe();
     };
   }, [user]);
