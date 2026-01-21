@@ -215,7 +215,20 @@ export function CameraDetectionInput({
   }, [runBoardDetection]);
 
   const runInitialCalibration = useCallback(async () => {
-    await runBoardDetection(true);
+    const attemptDetection = async (attemptsLeft: number) => {
+      if (attemptsLeft <= 0) {
+        setStatusMessage('Tabla nem talalhato - probalj jobb szogbol');
+        return;
+      }
+
+      await runBoardDetection(true);
+
+      if (!calibrationRef.current?.success) {
+        setTimeout(() => attemptDetection(attemptsLeft - 1), 2000);
+      }
+    };
+
+    attemptDetection(10);
   }, [runBoardDetection]);
 
   const startCamera = useCallback(async (deviceId?: string) => {
