@@ -96,8 +96,6 @@ export function CameraDetectionInput({
   const homographyRef = useRef<number[][] | null>(null);
   const remoteViewerRef = useRef<RemoteCameraViewer | null>(null);
   const pendingAfterFrameRef = useRef<Blob | null>(null);
-  const lastBrightnessRef = useRef<number | null>(null);
-  const brightnessStableCountRef = useRef<number>(0);
   const autoDetectIntervalRef = useRef<number | null>(null);
   const throwCooldownRef = useRef<boolean>(false);
 
@@ -216,15 +214,9 @@ export function CameraDetectionInput({
     await runBoardDetection(true);
   }, [runBoardDetection]);
 
-  const startBoardDetectLoop = useCallback(() => {
-    const attemptDetection = async () => {
-      await runBoardDetection(false);
-      if (!isCalibrated) {
-        setTimeout(attemptDetection, 2000);
-      }
-    };
-    attemptDetection();
-  }, [runBoardDetection, isCalibrated]);
+  const runInitialCalibration = useCallback(async () => {
+    await runBoardDetection(true);
+  }, [runBoardDetection]);
 
   const startCamera = useCallback(async (deviceId?: string) => {
     if (!videoRef.current) return;
@@ -261,9 +253,9 @@ export function CameraDetectionInput({
     await checkConnection(false);
 
     setTimeout(() => {
-      startBoardDetectLoop();
+      runInitialCalibration();
     }, 500);
-  }, [checkConnection, startBoardDetectLoop]);
+  }, [checkConnection, runInitialCalibration]);
 
   const stopCamera = useCallback(() => {
     if (boardDetectIntervalRef.current) {
@@ -294,8 +286,10 @@ export function CameraDetectionInput({
     calibrationRef.current = null;
     boardResultRef.current = null;
     homographyRef.current = null;
-    lastBrightnessRef.current = null;
-    brightnessStableCountRef.current = 0;
+    lastFrameDataRef.current = null;
+    motionHistoryRef.current = [];
+    motionDetectedRef.current = false;
+    stableCountRef.current = 0;
   }, []);
 
   const switchCamera = useCallback(async () => {
@@ -345,7 +339,7 @@ export function CameraDetectionInput({
 
           checkConnection(false);
           setTimeout(() => {
-            startBoardDetectLoop();
+            runInitialCalibration();
           }, 500);
         }
       },
@@ -367,27 +361,52 @@ export function CameraDetectionInput({
       setError('Nem sikerult csatlakozni a tavoli kamerahoz');
       setConnectingRemoteId(null);
     }
-  }, [stopCamera, checkConnection, startBoardDetectLoop]);
+  }, [stopCamera, checkConnection, runInitialCalibration]);
 
-  const measureBrightness = useCallback((video: HTMLVideoElement): number => {
+  const lastFrameDataRef = useRef<Uint8ClampedArray | null>(null);
+  const motionHistoryRef = useRef<number[]>([]);
+  const MOTION_HISTORY_SIZE = 5;
+  const MOTION_THRESHOLD_HIGH = 15;
+  const MOTION_THRESHOLD_LOW = 3;
+
+  const measureMotion = useCallback((video: HTMLVideoElement): number => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) return 0;
 
-    const sampleSize = 100;
+    const sampleSize = 80;
     canvas.width = sampleSize;
     canvas.height = sampleSize;
     ctx.drawImage(video, 0, 0, sampleSize, sampleSize);
 
     const imageData = ctx.getImageData(0, 0, sampleSize, sampleSize);
-    const data = imageData.data;
+    const currentData = imageData.data;
 
-    let totalBrightness = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      totalBrightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
+    if (!lastFrameDataRef.current) {
+      lastFrameDataRef.current = new Uint8ClampedArray(currentData);
+      return 0;
     }
 
-    return totalBrightness / (data.length / 4);
+    let totalDiff = 0;
+    let changedPixels = 0;
+    const pixelCount = currentData.length / 4;
+
+    for (let i = 0; i < currentData.length; i += 4) {
+      const rDiff = Math.abs(currentData[i] - lastFrameDataRef.current[i]);
+      const gDiff = Math.abs(currentData[i + 1] - lastFrameDataRef.current[i + 1]);
+      const bDiff = Math.abs(currentData[i + 2] - lastFrameDataRef.current[i + 2]);
+      const pixelDiff = (rDiff + gDiff + bDiff) / 3;
+
+      if (pixelDiff > 20) {
+        changedPixels++;
+        totalDiff += pixelDiff;
+      }
+    }
+
+    lastFrameDataRef.current = new Uint8ClampedArray(currentData);
+
+    const motionPercent = (changedPixels / pixelCount) * 100;
+    return motionPercent;
   }, []);
 
   const triggerThrowDetectionRef = useRef<() => void>(() => {});
@@ -436,35 +455,43 @@ export function CameraDetectionInput({
     triggerThrowDetectionRef.current = triggerThrowDetection;
   }, [triggerThrowDetection]);
 
+  const motionDetectedRef = useRef<boolean>(false);
+  const stableCountRef = useRef<number>(0);
+  const STABLE_FRAMES_NEEDED = 4;
+
   const checkForDartThrow = useCallback(() => {
     if (!videoRef.current || !isCalibrated || !autoDetectEnabled || isDetecting || pendingScore || throwCooldownRef.current || remainingDarts <= 0) {
       return;
     }
 
-    const currentBrightness = measureBrightness(videoRef.current);
-    const lastBrightness = lastBrightnessRef.current;
+    const motion = measureMotion(videoRef.current);
 
-    if (lastBrightness !== null) {
-      const brightnessDiff = Math.abs(currentBrightness - lastBrightness);
+    motionHistoryRef.current.push(motion);
+    if (motionHistoryRef.current.length > MOTION_HISTORY_SIZE) {
+      motionHistoryRef.current.shift();
+    }
 
-      if (brightnessDiff > 8) {
-        brightnessStableCountRef.current = 0;
-      } else {
-        brightnessStableCountRef.current++;
-      }
+    if (motion > MOTION_THRESHOLD_HIGH) {
+      motionDetectedRef.current = true;
+      stableCountRef.current = 0;
+    }
 
-      if (brightnessStableCountRef.current >= 3 && brightnessDiff < 3) {
+    if (motionDetectedRef.current && motion < MOTION_THRESHOLD_LOW) {
+      stableCountRef.current++;
+
+      if (stableCountRef.current >= STABLE_FRAMES_NEEDED) {
+        motionDetectedRef.current = false;
+        stableCountRef.current = 0;
         throwCooldownRef.current = true;
-        brightnessStableCountRef.current = 0;
+
         setTimeout(() => {
           throwCooldownRef.current = false;
-        }, 2000);
+        }, 2500);
+
         triggerThrowDetectionRef.current();
       }
     }
-
-    lastBrightnessRef.current = currentBrightness;
-  }, [isCalibrated, autoDetectEnabled, isDetecting, pendingScore, measureBrightness, remainingDarts]);
+  }, [isCalibrated, autoDetectEnabled, isDetecting, pendingScore, measureMotion, remainingDarts]);
 
   useEffect(() => {
     if (isActive && isCalibrated && autoDetectEnabled) {
