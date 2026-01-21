@@ -486,7 +486,7 @@ export function CameraDetectionInput({
 
         setTimeout(() => {
           throwCooldownRef.current = false;
-        }, 2500);
+        }, 1200);
 
         triggerThrowDetectionRef.current();
       }
