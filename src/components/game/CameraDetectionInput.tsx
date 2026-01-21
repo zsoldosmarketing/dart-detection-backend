@@ -164,10 +164,17 @@ export function CameraDetectionInput({
   }, [checkConnection]);
 
   const runBoardDetection = useCallback(async (forceCalibrate: boolean = false) => {
-    if (!videoRef.current || !apiConnected) return;
+    if (!videoRef.current) return;
+
+    const healthResult = await checkApiHealth(1);
+    if (!healthResult) {
+      setStatusMessage('Backend nem elerheto - varakozas...');
+      return;
+    }
 
     try {
       setIsCalibrating(true);
+      setStatusMessage('Tabla keresese...');
       const frameBlob = await captureVideoFrame(videoRef.current);
       const result = await detectBoard(frameBlob);
 
@@ -178,31 +185,46 @@ export function CameraDetectionInput({
         const cal = boardDetectToCalibration(result);
         calibrationRef.current = cal;
         setBoardConfidence(result.confidence);
+        setApiConnected(true);
 
         if (!isCalibrated || forceCalibrate) {
           setIsCalibrated(true);
           referenceFrameRef.current = frameBlob;
           await setReferenceImage(frameBlob);
+          setStatusMessage('Tabla kalibrálva!');
+          setTimeout(() => setStatusMessage(null), 2000);
+        } else {
+          setStatusMessage(null);
         }
 
         if (result.canonical_preview) {
           setDebugImages(prev => ({ ...prev, canonical: result.canonical_preview! }));
         }
+      } else {
+        setStatusMessage('Tabla nem talalhato - mozgasd a kamerat');
+        setBoardConfidence(0);
       }
     } catch (err) {
       console.error('[Camera] Board detection error:', err);
+      setStatusMessage('Hiba a tabla kereseskor');
     } finally {
       setIsCalibrating(false);
     }
-  }, [apiConnected, isCalibrated]);
+  }, [isCalibrated]);
 
   const recalibrate = useCallback(async () => {
     await runBoardDetection(true);
   }, [runBoardDetection]);
 
   const startBoardDetectLoop = useCallback(() => {
-    runBoardDetection(false);
-  }, [runBoardDetection]);
+    const attemptDetection = async () => {
+      await runBoardDetection(false);
+      if (!isCalibrated) {
+        setTimeout(attemptDetection, 2000);
+      }
+    };
+    attemptDetection();
+  }, [runBoardDetection, isCalibrated]);
 
   const startCamera = useCallback(async (deviceId?: string) => {
     if (!videoRef.current) return;
