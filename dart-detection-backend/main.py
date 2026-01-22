@@ -12,6 +12,7 @@ from pydantic import BaseModel
 import json
 from image_preprocessing import ImagePreprocessor
 from advanced_detection import AdvancedDartDetection
+from advanced_calibration import AdvancedDartboardCalibration, CalibrationResult
 
 app = FastAPI(
     title="Dart Detection API v4",
@@ -466,38 +467,23 @@ async def board_detect(
     if img is None:
         raise HTTPException(status_code=400, detail="Invalid image")
 
-    preprocessed = ImagePreprocessor.adaptive_preprocessing(img)
+    calibrator = AdvancedDartboardCalibration()
+    calib_result = calibrator.calibrate_dartboard(img)
 
-    contour, score, edges = find_dartboard_contour(preprocessed)
-
-    if contour is None or len(contour) < 5:
+    if not calib_result.success or calib_result.center_x is None:
         return BoardDetectResponse(
             board_found=False,
             confidence=0.0,
-            message="No dartboard contour found. Ensure the board is visible.",
-            debug_contour=image_to_base64(edges) if edges is not None else None
+            message=calib_result.message
         )
 
-    try:
-        ellipse = cv2.fitEllipse(contour)
-    except cv2.error:
-        return BoardDetectResponse(
-            board_found=False,
-            confidence=0.0,
-            message="Could not fit ellipse to contour"
-        )
+    cx = calib_result.center_x
+    cy = calib_result.center_y
+    rx = calib_result.radius_x
+    ry = calib_result.radius_y
+    angle = calib_result.ellipse.angle if calib_result.ellipse else 0.0
 
-    (cx, cy), (axis_w, axis_h), angle = ellipse
-
-    search_radius = int(min(axis_w, axis_h) / 4)
-    bull = find_bull_center(img, (cx, cy), search_radius)
-
-    if bull:
-        dist = math.sqrt((bull[0] - cx)**2 + (bull[1] - cy)**2)
-        if dist < search_radius:
-            cx, cy = bull
-            ellipse = ((cx, cy), (axis_w, axis_h), angle)
-            score = min(0.98, score + 0.1)
+    ellipse = ((float(cx), float(cy)), (float(rx * 2), float(ry * 2)), float(angle))
 
     H, H_inv = compute_homography_from_ellipse(ellipse, CANONICAL_SIZE)
 
@@ -520,32 +506,27 @@ async def board_detect(
         "center_x": CANONICAL_CENTER,
         "center_y": CANONICAL_CENTER,
         "radius": CANONICAL_RADIUS,
-        "rotation_offset": -9.0
+        "rotation_offset": calib_result.rotation_offset
     }
     session_data["advanced_detector"] = AdvancedDartDetection(calibration)
 
     overlay_outer = generate_overlay_points(ellipse, 64)
-    overlay_triple = generate_ring_overlay(ellipse, RADIUS_RATIOS["outer_triple"], 64)
-    overlay_double_start = generate_ring_overlay(ellipse, RADIUS_RATIOS["inner_double"], 64)
-    overlay_bull = generate_ring_overlay(ellipse, RADIUS_RATIOS["single_bull"], 32)
-
-    confidence = min(0.95, score * 1.2)
 
     return BoardDetectResponse(
         board_found=True,
-        confidence=confidence,
+        confidence=calib_result.confidence,
         ellipse={
             "cx": float(cx),
             "cy": float(cy),
-            "a": float(axis_w / 2),
-            "b": float(axis_h / 2),
+            "a": float(rx),
+            "b": float(ry),
             "angle": float(angle)
         },
         homography=H.tolist(),
         overlay_points=overlay_outer,
         bull_center=[float(cx), float(cy)],
         canonical_preview=image_to_base64(canonical, 70),
-        message=f"Board detected with {confidence*100:.0f}% confidence"
+        message=calib_result.message
     )
 
 
