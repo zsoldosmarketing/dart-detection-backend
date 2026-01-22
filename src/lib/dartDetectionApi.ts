@@ -60,8 +60,8 @@ const DEFAULT_API_URL = import.meta.env.VITE_DART_DETECTION_API_URL || 'https://
 
 export function getApiUrl(): string {
   const override = localStorage.getItem('dart_backend_url_override');
-  if (override && override.includes('dart-detection-backend.onrender.com')) {
-    return override;
+  if (override && override.trim().startsWith('http')) {
+    return override.trim();
   }
   return DEFAULT_API_URL;
 }
@@ -95,13 +95,16 @@ export async function checkApiHealth(retries = 3): Promise<{ status: string; boa
 
 export async function detectBoard(imageBlob: Blob): Promise<BoardDetectResult | null> {
   const apiUrl = getApiUrl();
-  if (!apiUrl) return null;
+  if (!apiUrl) {
+    console.error('[API] No API URL configured');
+    return null;
+  }
 
   try {
     const formData = new FormData();
     formData.append('image', imageBlob, 'board.jpg');
 
-    console.log('[API] Detecting board...');
+    console.log('[API] Detecting board, image size:', imageBlob.size, 'bytes');
     const response = await fetch(`${apiUrl}/board/detect`, {
       method: 'POST',
       body: formData,
@@ -109,11 +112,18 @@ export async function detectBoard(imageBlob: Blob): Promise<BoardDetectResult | 
     });
 
     if (!response.ok) {
-      console.error('[API] Board detection failed:', response.status);
+      const errorText = await response.text().catch(() => 'unknown');
+      console.error('[API] Board detection failed:', response.status, errorText);
       return null;
     }
     const result = await response.json();
-    console.log('[API] Board detection result:', result);
+    console.log('[API] Board detection result:', {
+      board_found: result.board_found,
+      confidence: result.confidence,
+      message: result.message,
+      has_ellipse: !!result.ellipse,
+      has_homography: !!result.homography,
+    });
     return result;
   } catch (err) {
     console.error('[API] Board detection error:', err instanceof Error ? err.message : 'timeout');

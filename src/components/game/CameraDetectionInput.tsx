@@ -151,29 +151,48 @@ export function CameraDetectionInput({
   }, [checkConnection]);
 
   const runBoardDetection = useCallback(async () => {
-    if (!videoRef.current || !apiConnected) return;
+    if (!videoRef.current) {
+      console.log('[Camera] No video element');
+      return;
+    }
+    if (!apiConnected) {
+      console.log('[Camera] API not connected, skipping detection');
+      return;
+    }
 
     try {
       const frameBlob = await captureVideoFrame(videoRef.current);
+      console.log('[Camera] Captured frame:', frameBlob.size, 'bytes');
+
       const result = await detectBoard(frameBlob);
 
-      if (result && result.board_found) {
-        boardResultRef.current = result;
-        homographyRef.current = result.homography;
+      if (result) {
+        if (result.board_found) {
+          console.log('[Camera] Board found! Confidence:', result.confidence);
+          boardResultRef.current = result;
+          homographyRef.current = result.homography;
 
-        const cal = boardDetectToCalibration(result);
-        calibrationRef.current = cal;
-        setBoardConfidence(result.confidence);
+          const cal = boardDetectToCalibration(result);
+          calibrationRef.current = cal;
+          setBoardConfidence(result.confidence);
 
-        if (!isCalibrated) {
-          setIsCalibrated(true);
-          referenceFrameRef.current = frameBlob;
-          await setReferenceImage(frameBlob);
+          if (!isCalibrated) {
+            setIsCalibrated(true);
+            referenceFrameRef.current = frameBlob;
+            await setReferenceImage(frameBlob);
+          }
+
+          if (result.canonical_preview) {
+            setDebugImages(prev => ({ ...prev, canonical: result.canonical_preview! }));
+          }
+        } else {
+          console.log('[Camera] Board not found:', result.message);
+          if (result.debug_contour) {
+            setDebugImages(prev => ({ ...prev, diff: result.debug_contour! }));
+          }
         }
-
-        if (result.canonical_preview) {
-          setDebugImages(prev => ({ ...prev, canonical: result.canonical_preview! }));
-        }
+      } else {
+        console.log('[Camera] No result from detection API');
       }
     } catch (err) {
       console.error('[Camera] Board detection error:', err);
@@ -226,11 +245,30 @@ export function CameraDetectionInput({
       }
     });
 
-    await checkConnection(false);
+    const connected = await checkConnection(false);
+    console.log('[Camera] API connection status:', connected);
 
-    setTimeout(() => {
-      startBoardDetectLoop();
-    }, 500);
+    if (connected) {
+      setStatusMessage('Tabla keresese...');
+      setTimeout(() => {
+        startBoardDetectLoop();
+      }, 300);
+    } else {
+      setStatusMessage('Szerver nem elerheto - probalkozik ujra...');
+      const retryConnection = async () => {
+        for (let i = 0; i < 5; i++) {
+          await new Promise(r => setTimeout(r, 3000));
+          const retryConnected = await checkConnection(false);
+          if (retryConnected) {
+            setStatusMessage('Tabla keresese...');
+            startBoardDetectLoop();
+            return;
+          }
+        }
+        setError('Szerver nem elerheto. Probalj kesobb ujra.');
+      };
+      retryConnection();
+    }
   }, [checkConnection, startBoardDetectLoop]);
 
   const stopCamera = useCallback(() => {
@@ -1012,9 +1050,14 @@ export function CameraDetectionInput({
             {statusMessage && !error && !isCalibrated && (
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                  <Check className="w-5 h-5 text-blue-400" />
+                  <RefreshCw className="w-5 h-5 text-blue-400 animate-spin" />
                 </div>
-                <p className="text-blue-300 font-medium">{statusMessage}</p>
+                <div className="flex-1">
+                  <p className="text-blue-300 font-medium">{statusMessage}</p>
+                  <p className="text-blue-400/60 text-sm mt-1">
+                    Iranyitsd a kamerat a darts tablara
+                  </p>
+                </div>
               </div>
             )}
           </div>
