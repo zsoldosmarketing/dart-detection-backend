@@ -164,12 +164,6 @@ export function CameraDetectionInput({
   const runBoardDetection = useCallback(async (forceCalibrate: boolean = false) => {
     if (!videoRef.current) return;
 
-    const healthResult = await checkApiHealth(1);
-    if (!healthResult) {
-      setStatusMessage('Backend nem elerheto - varakozas...');
-      return;
-    }
-
     try {
       setIsCalibrating(true);
       setStatusMessage('Tabla keresese...');
