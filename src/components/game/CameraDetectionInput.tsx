@@ -82,7 +82,7 @@ export function CameraDetectionInput({
   const [connectingRemoteId, setConnectingRemoteId] = useState<string | null>(null);
   const [activeRemoteCamera, setActiveRemoteCamera] = useState<string | null>(null);
   const [boardConfidence, setBoardConfidence] = useState<number>(0);
-  const [autoDetectEnabled, setAutoDetectEnabled] = useState(false);
+  const [autoDetectEnabled, setAutoDetectEnabled] = useState(true);
   const [showSectorOverlay, setShowSectorOverlay] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -96,6 +96,8 @@ export function CameraDetectionInput({
   const homographyRef = useRef<number[][] | null>(null);
   const remoteViewerRef = useRef<RemoteCameraViewer | null>(null);
   const pendingAfterFrameRef = useRef<Blob | null>(null);
+  const lastBrightnessRef = useRef<number | null>(null);
+  const brightnessStableCountRef = useRef<number>(0);
   const autoDetectIntervalRef = useRef<number | null>(null);
   const throwCooldownRef = useRef<boolean>(false);
 
@@ -103,29 +105,16 @@ export function CameraDetectionInput({
     if (!user) return;
 
     const loadRemoteCameras = async () => {
-      try {
-        const sessions = await getActiveRemoteCameras();
-        const uniqueSessions = sessions.filter((session, index, self) =>
-          index === self.findIndex(s => s.id === session.id)
-        );
-        setRemoteCameras(uniqueSessions);
-      } catch (err) {
-        console.error('[RemoteCamera] Failed to load sessions:', err);
-      }
+      const sessions = await getActiveRemoteCameras();
+      setRemoteCameras(sessions);
     };
     loadRemoteCameras();
 
-    const pollInterval = setInterval(loadRemoteCameras, 5000);
-
     const channel = subscribeToRemoteCameras(user.id, (sessions) => {
-      const uniqueSessions = sessions.filter((session, index, self) =>
-        index === self.findIndex(s => s.id === session.id)
-      );
-      setRemoteCameras(uniqueSessions);
+      setRemoteCameras(sessions);
     });
 
     return () => {
-      clearInterval(pollInterval);
       channel.unsubscribe();
     };
   }, [user]);
@@ -161,12 +150,10 @@ export function CameraDetectionInput({
     return () => clearInterval(interval);
   }, [checkConnection]);
 
-  const runBoardDetection = useCallback(async (forceCalibrate: boolean = false) => {
-    if (!videoRef.current) return;
+  const runBoardDetection = useCallback(async () => {
+    if (!videoRef.current || !apiConnected) return;
 
     try {
-      setIsCalibrating(true);
-      setStatusMessage('Tabla keresese...');
       const frameBlob = await captureVideoFrame(videoRef.current);
       const result = await detectBoard(frameBlob);
 
@@ -177,53 +164,35 @@ export function CameraDetectionInput({
         const cal = boardDetectToCalibration(result);
         calibrationRef.current = cal;
         setBoardConfidence(result.confidence);
-        setApiConnected(true);
 
-        if (!isCalibrated || forceCalibrate) {
+        if (!isCalibrated) {
           setIsCalibrated(true);
           referenceFrameRef.current = frameBlob;
           await setReferenceImage(frameBlob);
-          setStatusMessage('Tabla kalibrálva!');
-          setTimeout(() => setStatusMessage(null), 2000);
-        } else {
-          setStatusMessage(null);
         }
 
         if (result.canonical_preview) {
           setDebugImages(prev => ({ ...prev, canonical: result.canonical_preview! }));
         }
-      } else {
-        setStatusMessage('Tabla nem talalhato - mozgasd a kamerat');
-        setBoardConfidence(0);
       }
     } catch (err) {
       console.error('[Camera] Board detection error:', err);
-      setStatusMessage('Hiba a tabla kereseskor');
-    } finally {
-      setIsCalibrating(false);
     }
-  }, [isCalibrated]);
+  }, [apiConnected, isCalibrated]);
 
-  const recalibrate = useCallback(async () => {
-    await runBoardDetection(true);
-  }, [runBoardDetection]);
+  const startBoardDetectLoop = useCallback(() => {
+    if (boardDetectIntervalRef.current) {
+      clearInterval(boardDetectIntervalRef.current);
+    }
 
-  const runInitialCalibration = useCallback(async () => {
-    const attemptDetection = async (attemptsLeft: number) => {
-      if (attemptsLeft <= 0) {
-        setStatusMessage('Tabla nem talalhato - probalj jobb szogbol');
-        return;
+    runBoardDetection();
+
+    boardDetectIntervalRef.current = window.setInterval(() => {
+      if (!pendingScore) {
+        runBoardDetection();
       }
-
-      await runBoardDetection(true);
-
-      if (!calibrationRef.current?.success) {
-        setTimeout(() => attemptDetection(attemptsLeft - 1), 2000);
-      }
-    };
-
-    attemptDetection(10);
-  }, [runBoardDetection]);
+    }, BOARD_DETECT_INTERVAL);
+  }, [runBoardDetection, pendingScore]);
 
   const startCamera = useCallback(async (deviceId?: string) => {
     if (!videoRef.current) return;
@@ -260,9 +229,9 @@ export function CameraDetectionInput({
     await checkConnection(false);
 
     setTimeout(() => {
-      runInitialCalibration();
+      startBoardDetectLoop();
     }, 500);
-  }, [checkConnection, runInitialCalibration]);
+  }, [checkConnection, startBoardDetectLoop]);
 
   const stopCamera = useCallback(() => {
     if (boardDetectIntervalRef.current) {
@@ -293,10 +262,8 @@ export function CameraDetectionInput({
     calibrationRef.current = null;
     boardResultRef.current = null;
     homographyRef.current = null;
-    lastFrameDataRef.current = null;
-    motionHistoryRef.current = [];
-    motionDetectedRef.current = false;
-    stableCountRef.current = 0;
+    lastBrightnessRef.current = null;
+    brightnessStableCountRef.current = 0;
   }, []);
 
   const switchCamera = useCallback(async () => {
@@ -346,7 +313,7 @@ export function CameraDetectionInput({
 
           checkConnection(false);
           setTimeout(() => {
-            runInitialCalibration();
+            startBoardDetectLoop();
           }, 500);
         }
       },
@@ -368,52 +335,27 @@ export function CameraDetectionInput({
       setError('Nem sikerult csatlakozni a tavoli kamerahoz');
       setConnectingRemoteId(null);
     }
-  }, [stopCamera, checkConnection, runInitialCalibration]);
+  }, [stopCamera, checkConnection, startBoardDetectLoop]);
 
-  const lastFrameDataRef = useRef<Uint8ClampedArray | null>(null);
-  const motionHistoryRef = useRef<number[]>([]);
-  const MOTION_HISTORY_SIZE = 5;
-  const MOTION_THRESHOLD_HIGH = 15;
-  const MOTION_THRESHOLD_LOW = 3;
-
-  const measureMotion = useCallback((video: HTMLVideoElement): number => {
+  const measureBrightness = useCallback((video: HTMLVideoElement): number => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) return 0;
 
-    const sampleSize = 80;
+    const sampleSize = 100;
     canvas.width = sampleSize;
     canvas.height = sampleSize;
     ctx.drawImage(video, 0, 0, sampleSize, sampleSize);
 
     const imageData = ctx.getImageData(0, 0, sampleSize, sampleSize);
-    const currentData = imageData.data;
+    const data = imageData.data;
 
-    if (!lastFrameDataRef.current) {
-      lastFrameDataRef.current = new Uint8ClampedArray(currentData);
-      return 0;
+    let totalBrightness = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      totalBrightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
     }
 
-    let totalDiff = 0;
-    let changedPixels = 0;
-    const pixelCount = currentData.length / 4;
-
-    for (let i = 0; i < currentData.length; i += 4) {
-      const rDiff = Math.abs(currentData[i] - lastFrameDataRef.current[i]);
-      const gDiff = Math.abs(currentData[i + 1] - lastFrameDataRef.current[i + 1]);
-      const bDiff = Math.abs(currentData[i + 2] - lastFrameDataRef.current[i + 2]);
-      const pixelDiff = (rDiff + gDiff + bDiff) / 3;
-
-      if (pixelDiff > 20) {
-        changedPixels++;
-        totalDiff += pixelDiff;
-      }
-    }
-
-    lastFrameDataRef.current = new Uint8ClampedArray(currentData);
-
-    const motionPercent = (changedPixels / pixelCount) * 100;
-    return motionPercent;
+    return totalBrightness / (data.length / 4);
   }, []);
 
   const triggerThrowDetectionRef = useRef<() => void>(() => {});
@@ -462,43 +404,35 @@ export function CameraDetectionInput({
     triggerThrowDetectionRef.current = triggerThrowDetection;
   }, [triggerThrowDetection]);
 
-  const motionDetectedRef = useRef<boolean>(false);
-  const stableCountRef = useRef<number>(0);
-  const STABLE_FRAMES_NEEDED = 4;
-
   const checkForDartThrow = useCallback(() => {
     if (!videoRef.current || !isCalibrated || !autoDetectEnabled || isDetecting || pendingScore || throwCooldownRef.current || remainingDarts <= 0) {
       return;
     }
 
-    const motion = measureMotion(videoRef.current);
+    const currentBrightness = measureBrightness(videoRef.current);
+    const lastBrightness = lastBrightnessRef.current;
 
-    motionHistoryRef.current.push(motion);
-    if (motionHistoryRef.current.length > MOTION_HISTORY_SIZE) {
-      motionHistoryRef.current.shift();
-    }
+    if (lastBrightness !== null) {
+      const brightnessDiff = Math.abs(currentBrightness - lastBrightness);
 
-    if (motion > MOTION_THRESHOLD_HIGH) {
-      motionDetectedRef.current = true;
-      stableCountRef.current = 0;
-    }
+      if (brightnessDiff > 8) {
+        brightnessStableCountRef.current = 0;
+      } else {
+        brightnessStableCountRef.current++;
+      }
 
-    if (motionDetectedRef.current && motion < MOTION_THRESHOLD_LOW) {
-      stableCountRef.current++;
-
-      if (stableCountRef.current >= STABLE_FRAMES_NEEDED) {
-        motionDetectedRef.current = false;
-        stableCountRef.current = 0;
+      if (brightnessStableCountRef.current >= 3 && brightnessDiff < 3) {
         throwCooldownRef.current = true;
-
+        brightnessStableCountRef.current = 0;
         setTimeout(() => {
           throwCooldownRef.current = false;
-        }, 1200);
-
+        }, 2000);
         triggerThrowDetectionRef.current();
       }
     }
-  }, [isCalibrated, autoDetectEnabled, isDetecting, pendingScore, measureMotion, remainingDarts]);
+
+    lastBrightnessRef.current = currentBrightness;
+  }, [isCalibrated, autoDetectEnabled, isDetecting, pendingScore, measureBrightness, remainingDarts]);
 
   useEffect(() => {
     if (isActive && isCalibrated && autoDetectEnabled) {
@@ -646,43 +580,40 @@ export function CameraDetectionInput({
 
               if (showSectorOverlay) {
                 const SEGMENTS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
-                const rotationOffset = calibrationRef.current?.rotation_offset ?? -9;
+                const rotationOffset = -9;
 
                 ctx.save();
                 ctx.translate(cx, cy);
                 ctx.rotate((angle * Math.PI) / 180);
 
-                const scaleRatio = Math.min(a, b) / Math.max(a, b);
-
                 for (let i = 0; i < 20; i++) {
-                  const baseAngle = i * 18 + rotationOffset;
-                  const startAngle = ((baseAngle - 9) * Math.PI) / 180;
-                  const midAngle = (baseAngle * Math.PI) / 180;
+                  const startAngle = ((i * 18 - 9 + rotationOffset) * Math.PI) / 180;
+                  const endAngle = ((i * 18 + 9 + rotationOffset) * Math.PI) / 180;
+                  const midAngle = ((i * 18 + rotationOffset) * Math.PI) / 180;
 
-                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-                  ctx.lineWidth = 1.5;
+                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                  ctx.lineWidth = 1;
                   ctx.beginPath();
                   ctx.moveTo(a * 0.08 * Math.sin(startAngle), -b * 0.08 * Math.cos(startAngle));
-                  ctx.lineTo(a * 0.98 * Math.sin(startAngle), -b * 0.98 * Math.cos(startAngle));
+                  ctx.lineTo(a * Math.sin(startAngle), -b * Math.cos(startAngle));
                   ctx.stroke();
 
-                  const labelDist = 0.78;
+                  const labelDist = 0.85;
                   const labelX = a * labelDist * Math.sin(midAngle);
                   const labelY = -b * labelDist * Math.cos(midAngle);
 
-                  const fontSize = Math.max(10, Math.min(16, Math.min(a, b) * 0.08));
-                  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-                  ctx.font = `bold ${fontSize}px sans-serif`;
+                  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                  ctx.font = 'bold 14px sans-serif';
                   ctx.textAlign = 'center';
                   ctx.textBaseline = 'middle';
-                  ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-                  ctx.shadowBlur = 6;
+                  ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                  ctx.shadowBlur = 4;
                   ctx.fillText(String(SEGMENTS[i]), labelX, labelY);
                   ctx.shadowBlur = 0;
                 }
 
+                ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
                 ctx.lineWidth = 2;
-                ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
                 ctx.beginPath();
                 ctx.ellipse(0, 0, a * 0.58, b * 0.58, 0, 0, Math.PI * 2);
                 ctx.stroke();
@@ -690,20 +621,12 @@ export function CameraDetectionInput({
                 ctx.ellipse(0, 0, a * 0.63, b * 0.63, 0, 0, Math.PI * 2);
                 ctx.stroke();
 
-                ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+                ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
                 ctx.beginPath();
                 ctx.ellipse(0, 0, a * 0.95, b * 0.95, 0, 0, Math.PI * 2);
                 ctx.stroke();
                 ctx.beginPath();
                 ctx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
-                ctx.stroke();
-
-                ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
-                ctx.beginPath();
-                ctx.ellipse(0, 0, a * 0.032, b * 0.032, 0, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.ellipse(0, 0, a * 0.08, b * 0.08, 0, 0, Math.PI * 2);
                 ctx.stroke();
 
                 ctx.restore();
@@ -885,14 +808,6 @@ export function CameraDetectionInput({
             </div>
 
             <div className="absolute top-3 right-3 flex gap-1.5">
-              <button
-                onClick={stopCamera}
-                className="p-2 rounded-lg bg-red-500/80 hover:bg-red-500 backdrop-blur-sm border border-red-400/50 text-white transition-all shadow-lg hover:shadow-red-500/50"
-                title="Kamera leallitas"
-              >
-                <CameraOff className="w-4 h-4" />
-              </button>
-
               {availableCameras.length > 0 && (
                 <button
                   onClick={() => setShowCameraSettings(true)}
@@ -971,6 +886,14 @@ export function CameraDetectionInput({
                     <span>Dobas</span>
                   </button>
                 )}
+
+                <button
+                  onClick={stopCamera}
+                  className="p-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 backdrop-blur-sm border border-red-500/40 text-red-400 hover:text-red-300 transition-colors"
+                  title="Kamera leallitas"
+                >
+                  <CameraOff className="w-5 h-5" />
+                </button>
               </div>
             </div>
           </div>
@@ -1060,14 +983,7 @@ export function CameraDetectionInput({
                   }`}>
                     Tabla OK ({(boardConfidence * 100).toFixed(0)}%)
                   </span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={recalibrate}
-                      disabled={isCalibrating}
-                      className="px-2 py-1 rounded text-xs font-medium transition-colors bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 disabled:opacity-50"
-                    >
-                      {isCalibrating ? 'Kalibralas...' : 'Ujrakalibral'}
-                    </button>
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={() => setAutoDetectEnabled(!autoDetectEnabled)}
                       className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
@@ -1076,7 +992,7 @@ export function CameraDetectionInput({
                           : 'bg-dark-600 text-dark-400 hover:bg-dark-500'
                       }`}
                     >
-                      {autoDetectEnabled ? 'Auto' : 'Manual'}
+                      {autoDetectEnabled ? 'Auto ON' : 'Auto OFF'}
                     </button>
                     <button
                       onClick={() => setShowSectorOverlay(!showSectorOverlay)}

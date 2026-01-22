@@ -91,44 +91,6 @@ class AdvancedDartDetection:
         segment_index = int(adjusted_angle / 18) % 20
         return DARTBOARD_SEGMENTS[segment_index]
 
-    def _find_dart_tip(self, points: np.ndarray, board_cx: float, board_cy: float) -> Tuple[int, int]:
-        if len(points) < 3:
-            return int(np.mean(points[:, 0])), int(np.mean(points[:, 1]))
-
-        distances = np.sqrt((points[:, 0] - board_cx)**2 + (points[:, 1] - board_cy)**2)
-
-        sharpness_scores = np.zeros(len(points))
-        n_points = len(points)
-
-        for i in range(n_points):
-            prev_idx = (i - 2) % n_points
-            next_idx = (i + 2) % n_points
-
-            v1 = points[prev_idx] - points[i]
-            v2 = points[next_idx] - points[i]
-
-            len1 = np.linalg.norm(v1)
-            len2 = np.linalg.norm(v2)
-
-            if len1 > 0 and len2 > 0:
-                cos_angle = np.dot(v1, v2) / (len1 * len2)
-                cos_angle = np.clip(cos_angle, -1, 1)
-                angle = np.arccos(cos_angle)
-                sharpness_scores[i] = math.pi - angle
-
-        sharpness_scores = sharpness_scores / (np.max(sharpness_scores) + 1e-6)
-
-        max_dist = np.max(distances)
-        min_dist = np.min(distances)
-        dist_range = max_dist - min_dist + 1e-6
-        proximity_scores = 1.0 - (distances - min_dist) / dist_range
-
-        combined_scores = 0.4 * sharpness_scores + 0.6 * proximity_scores
-
-        best_idx = np.argmax(combined_scores)
-
-        return int(points[best_idx, 0]), int(points[best_idx, 1])
-
     def detect_darts_difference(self, current_image: np.ndarray,
                                reference_image: np.ndarray) -> List[Tuple[int, int, float]]:
         curr_proc = self.preprocess_for_detection(current_image)
@@ -189,7 +151,9 @@ class AdvancedDartDetection:
                 board_cx = self.calibration["center_x"]
                 board_cy = self.calibration["center_y"]
 
-                tip_x, tip_y = self._find_dart_tip(points, board_cx, board_cy)
+                distances = np.sqrt((points[:, 0] - board_cx)**2 + (points[:, 1] - board_cy)**2)
+                tip_idx = np.argmin(distances)
+                tip_x, tip_y = points[tip_idx]
             else:
                 tip_x, tip_y = cx, cy
 
@@ -265,7 +229,9 @@ class AdvancedDartDetection:
                 board_cx = self.calibration["center_x"]
                 board_cy = self.calibration["center_y"]
 
-                tip_x, tip_y = self._find_dart_tip(points, board_cx, board_cy)
+                distances = np.sqrt((points[:, 0] - board_cx)**2 + (points[:, 1] - board_cy)**2)
+                tip_idx = np.argmin(distances)
+                tip_x, tip_y = points[tip_idx]
             else:
                 tip_x, tip_y = cx, cy
 
