@@ -891,6 +891,14 @@ export function CameraDetectionInput({
             </div>
 
             <div className="absolute top-3 right-3 flex gap-1.5">
+              <button
+                onClick={stopCamera}
+                className="p-2 rounded-lg bg-red-500/80 hover:bg-red-500 backdrop-blur-sm border border-red-400/50 text-white transition-all shadow-lg hover:shadow-red-500/50"
+                title="Kamera leallitas"
+              >
+                <CameraOff className="w-4 h-4" />
+              </button>
+
               {availableCameras.length > 0 && (
                 <button
                   onClick={() => setShowCameraSettings(true)}
@@ -969,14 +977,6 @@ export function CameraDetectionInput({
                     <span>Dobas</span>
                   </button>
                 )}
-
-                <button
-                  onClick={stopCamera}
-                  className="p-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 backdrop-blur-sm border border-red-500/40 text-red-400 hover:text-red-300 transition-colors"
-                  title="Kamera leallitas"
-                >
-                  <CameraOff className="w-5 h-5" />
-                </button>
               </div>
             </div>
           </div>
