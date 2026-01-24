@@ -419,7 +419,15 @@ export function CameraDetectionInput({
         }
 
         if (result.tip_original && result.tip_original.length >= 2) {
-          lastDartHitRef.current = { x: result.tip_original[0], y: result.tip_original[1] };
+          const zoom = zoomRegionRef.current;
+          if (zoom) {
+            lastDartHitRef.current = {
+              x: zoom.x + result.tip_original[0],
+              y: zoom.y + result.tip_original[1]
+            };
+          } else {
+            lastDartHitRef.current = { x: result.tip_original[0], y: result.tip_original[1] };
+          }
         }
 
         if (result.decision === 'AUTO' && result.confidence >= AUTO_SUBMIT_CONFIDENCE) {
