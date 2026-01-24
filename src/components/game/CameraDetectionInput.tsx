@@ -29,6 +29,7 @@ import {
   type RemoteCameraSession,
 } from '../../lib/remoteCameraSharing';
 import { useAuthStore } from '../../stores/authStore';
+import { useCameraStore } from '../../stores/cameraStore';
 import {
   checkApiHealth,
   detectBoard,
@@ -59,11 +60,13 @@ export function CameraDetectionInput({
   remainingDarts = 3,
 }: CameraDetectionInputProps) {
   const { user } = useAuthStore();
+  const cameraStore = useCameraStore();
   const [isActive, setIsActive] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isCalibrated, setIsCalibrated] = useState(false);
   const [apiConnected, setApiConnected] = useState(false);
   const apiConnectedRef = useRef(false);
+  const autoStartAttemptedRef = useRef(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -77,14 +80,14 @@ export function CameraDetectionInput({
     mask?: string;
   }>({});
   const [availableCameras, setAvailableCameras] = useState<CameraDevice[]>([]);
-  const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
+  const [currentCameraIndex, setCurrentCameraIndex] = useState(cameraStore.lastCameraIndex);
   const [remoteCameras, setRemoteCameras] = useState<RemoteCameraSession[]>([]);
   const [connectingRemoteId, setConnectingRemoteId] = useState<string | null>(null);
   const [activeRemoteCamera, setActiveRemoteCamera] = useState<string | null>(null);
   const [boardConfidence, setBoardConfidence] = useState<number>(0);
-  const [autoDetectEnabled, setAutoDetectEnabled] = useState(true);
+  const [autoDetectEnabled, setAutoDetectEnabled] = useState(cameraStore.autoDetectEnabled);
   const [showSectorOverlay, setShowSectorOverlay] = useState(false);
-  const [autoZoomEnabled, setAutoZoomEnabled] = useState(true);
+  const [autoZoomEnabled, setAutoZoomEnabled] = useState(cameraStore.autoZoomEnabled);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -111,6 +114,7 @@ export function CameraDetectionInput({
     const loadRemoteCameras = async () => {
       const sessions = await getActiveRemoteCameras();
       setRemoteCameras(sessions);
+      return sessions;
     };
     loadRemoteCameras();
 
@@ -125,6 +129,7 @@ export function CameraDetectionInput({
       channel.unsubscribe();
     };
   }, [user]);
+
 
   const checkConnection = useCallback(async (showStatus = false) => {
     if (showStatus) {
@@ -206,6 +211,10 @@ export function CameraDetectionInput({
         referenceFrameRef.current = frameBlob;
         await setReferenceImage(frameBlob);
 
+        cameraStore.setCalibration(cal);
+        cameraStore.setBoardResult(result);
+        cameraStore.setHomography(result.homography);
+
         if (boardDetectIntervalRef.current) {
           clearInterval(boardDetectIntervalRef.current);
           boardDetectIntervalRef.current = null;
@@ -257,12 +266,15 @@ export function CameraDetectionInput({
 
     setIsActive(true);
     setIsConnecting(false);
+    cameraStore.setWasActive(true);
 
     camera.listDevices().then(cameras => {
       setAvailableCameras(cameras);
       const currentDevice = cameras.find(c => c.deviceId === camera.getSettings().deviceId);
       if (currentDevice) {
-        setCurrentCameraIndex(cameras.indexOf(currentDevice));
+        const idx = cameras.indexOf(currentDevice);
+        setCurrentCameraIndex(idx);
+        cameraStore.setLastCameraIndex(idx);
       }
     });
 
@@ -271,7 +283,7 @@ export function CameraDetectionInput({
     setTimeout(() => {
       startBoardDetectLoop();
     }, 500);
-  }, [checkConnection, startBoardDetectLoop]);
+  }, [checkConnection, startBoardDetectLoop, cameraStore]);
 
   const stopCamera = useCallback(() => {
     if (boardDetectIntervalRef.current) {
@@ -351,6 +363,9 @@ export function CameraDetectionInput({
           setConnectingRemoteId(null);
           setShowCameraSettings(false);
 
+          cameraStore.setWasActive(true);
+          cameraStore.setLastRemoteCameraId(session.id);
+
           checkConnection(false);
           setTimeout(() => {
             startBoardDetectLoop();
@@ -375,7 +390,86 @@ export function CameraDetectionInput({
       setError('Nem sikerult csatlakozni a tavoli kamerahoz');
       setConnectingRemoteId(null);
     }
-  }, [stopCamera, checkConnection, startBoardDetectLoop]);
+  }, [stopCamera, checkConnection, startBoardDetectLoop, cameraStore]);
+
+  const restoreCalibrationRef = useRef(async () => {
+    if (cameraStore.calibration && cameraStore.homography && videoRef.current) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      calibrationRef.current = cameraStore.calibration;
+      homographyRef.current = cameraStore.homography;
+      boardResultRef.current = cameraStore.boardResult;
+
+      const frame = await captureVideoFrame(videoRef.current);
+      referenceFrameRef.current = frame;
+      await setReferenceImage(frame);
+
+      setIsCalibrated(true);
+      setBoardConfidence(cameraStore.boardResult?.confidence || 0);
+    }
+  });
+
+  useEffect(() => {
+    restoreCalibrationRef.current = async () => {
+      if (cameraStore.calibration && cameraStore.homography && videoRef.current) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        calibrationRef.current = cameraStore.calibration;
+        homographyRef.current = cameraStore.homography;
+        boardResultRef.current = cameraStore.boardResult;
+
+        const frame = await captureVideoFrame(videoRef.current);
+        referenceFrameRef.current = frame;
+        await setReferenceImage(frame);
+
+        setIsCalibrated(true);
+        setBoardConfidence(cameraStore.boardResult?.confidence || 0);
+      }
+    };
+  }, [cameraStore.calibration, cameraStore.homography, cameraStore.boardResult]);
+
+  useEffect(() => {
+    if (!user || autoStartAttemptedRef.current || isActive || isConnecting) return;
+    if (!cameraStore.wasActive) return;
+
+    const autoStart = async () => {
+      const sessions = await getActiveRemoteCameras();
+      setRemoteCameras(sessions);
+
+      if (sessions.length === 0) return;
+
+      autoStartAttemptedRef.current = true;
+
+      if (cameraStore.lastRemoteCameraId) {
+        const remoteSession = sessions.find(s => s.id === cameraStore.lastRemoteCameraId);
+        if (remoteSession) {
+          await connectToRemoteCamera(remoteSession);
+          setTimeout(() => restoreCalibrationRef.current(), 1000);
+          return;
+        }
+      }
+
+      await connectToRemoteCamera(sessions[0]);
+      setTimeout(() => restoreCalibrationRef.current(), 1000);
+    };
+
+    const timer = setTimeout(autoStart, 300);
+    return () => clearTimeout(timer);
+  }, [user, isActive, isConnecting, cameraStore.wasActive, cameraStore.lastRemoteCameraId, connectToRemoteCamera]);
+
+  useEffect(() => {
+    if (!cameraStore.wasActive || isActive || isConnecting || !user) return;
+    if (remoteCameras.length === 0) return;
+    if (autoStartAttemptedRef.current) return;
+
+    const targetCamera = cameraStore.lastRemoteCameraId
+      ? remoteCameras.find(s => s.id === cameraStore.lastRemoteCameraId) || remoteCameras[0]
+      : remoteCameras[0];
+
+    if (targetCamera) {
+      autoStartAttemptedRef.current = true;
+      connectToRemoteCamera(targetCamera);
+      setTimeout(() => restoreCalibrationRef.current(), 1000);
+    }
+  }, [remoteCameras, cameraStore.wasActive, cameraStore.lastRemoteCameraId, isActive, isConnecting, user, connectToRemoteCamera]);
 
   const measureBrightness = useCallback((video: HTMLVideoElement): number => {
     const canvas = document.createElement('canvas');
@@ -497,6 +591,14 @@ export function CameraDetectionInput({
       }
     };
   }, [isActive, isCalibrated, autoDetectEnabled, checkForDartThrow]);
+
+  useEffect(() => {
+    cameraStore.setAutoDetectEnabled(autoDetectEnabled);
+  }, [autoDetectEnabled, cameraStore]);
+
+  useEffect(() => {
+    cameraStore.setAutoZoomEnabled(autoZoomEnabled);
+  }, [autoZoomEnabled, cameraStore]);
 
   const confirmPendingScore = useCallback(async () => {
     if (pendingScore) {
