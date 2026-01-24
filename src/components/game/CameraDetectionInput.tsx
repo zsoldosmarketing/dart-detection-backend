@@ -101,6 +101,8 @@ export function CameraDetectionInput({
   const brightnessStableCountRef = useRef<number>(0);
   const autoDetectIntervalRef = useRef<number | null>(null);
   const throwCooldownRef = useRef<boolean>(false);
+  const zoomRegionRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const lastDartHitRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -153,11 +155,41 @@ export function CameraDetectionInput({
     return () => clearInterval(interval);
   }, [checkConnection]);
 
+  const captureZoomedFrame = useCallback((video: HTMLVideoElement, quality = 0.85): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'));
+        return;
+      }
+
+      const zoom = zoomRegionRef.current;
+      if (zoom) {
+        canvas.width = zoom.w;
+        canvas.height = zoom.h;
+        ctx.drawImage(video, zoom.x, zoom.y, zoom.w, zoom.h, 0, 0, zoom.w, zoom.h);
+      } else {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+      }
+
+      canvas.toBlob(
+        (blob) => blob ? resolve(blob) : reject(new Error('Failed to create blob')),
+        'image/jpeg',
+        quality
+      );
+    });
+  }, []);
+
   const runBoardDetection = useCallback(async () => {
     if (!videoRef.current || !apiConnectedRef.current) return;
 
     try {
-      const frameBlob = await captureVideoFrame(videoRef.current);
+      const frameBlob = zoomRegionRef.current
+        ? await captureZoomedFrame(videoRef.current)
+        : await captureVideoFrame(videoRef.current);
       const result = await detectBoard(frameBlob);
 
       if (result && result.board_found) {
@@ -181,7 +213,7 @@ export function CameraDetectionInput({
     } catch (err) {
       console.error('[Camera] Board detection error:', err);
     }
-  }, [isCalibrated]);
+  }, [isCalibrated, captureZoomedFrame]);
 
   const startBoardDetectLoop = useCallback(() => {
     if (boardDetectIntervalRef.current) {
@@ -386,11 +418,16 @@ export function CameraDetectionInput({
           });
         }
 
+        if (result.tip_original && result.tip_original.length >= 2) {
+          lastDartHitRef.current = { x: result.tip_original[0], y: result.tip_original[1] };
+        }
+
         if (result.decision === 'AUTO' && result.confidence >= AUTO_SUBMIT_CONFIDENCE) {
           const target = parseScoreToTarget(result.label);
           onThrow(target);
           referenceFrameRef.current = afterFrame;
           await setReferenceImage(afterFrame);
+          setTimeout(() => { lastDartHitRef.current = null; }, 3000);
         } else {
           setPendingScore(result);
           pendingAfterFrameRef.current = afterFrame;
@@ -455,6 +492,7 @@ export function CameraDetectionInput({
       const target = parseScoreToTarget(pendingScore.label);
       onThrow(target);
       setPendingScore(null);
+      setTimeout(() => { lastDartHitRef.current = null; }, 2000);
 
       if (pendingAfterFrameRef.current) {
         referenceFrameRef.current = pendingAfterFrameRef.current;
@@ -470,6 +508,7 @@ export function CameraDetectionInput({
 
   const rejectPendingScore = useCallback(async () => {
     setPendingScore(null);
+    lastDartHitRef.current = null;
 
     if (videoRef.current) {
       const frame = await captureVideoFrame(videoRef.current);
@@ -519,7 +558,7 @@ export function CameraDetectionInput({
           if (autoZoomEnabled && boardResult && boardResult.board_found && boardResult.ellipse) {
             const { cx, cy, a, b } = boardResult.ellipse;
             const maxRadius = Math.max(a, b);
-            const padding = 1.15;
+            const padding = 1.05;
             const boardSize = maxRadius * 2 * padding;
 
             srcX = Math.max(0, cx - boardSize / 2);
@@ -544,6 +583,9 @@ export function CameraDetectionInput({
             }
 
             zoomScale = vw / srcW;
+            zoomRegionRef.current = { x: srcX, y: srcY, w: srcW, h: srcH };
+          } else {
+            zoomRegionRef.current = null;
           }
 
           canvas.width = vw;
@@ -559,70 +601,112 @@ export function CameraDetectionInput({
             ctx.translate(offsetX, offsetY);
             ctx.scale(zoomScale, zoomScale);
 
-            const points = boardResult.overlay_points;
-
-            ctx.strokeStyle = 'rgba(34, 197, 94, 0.9)';
-            ctx.lineWidth = 3 / zoomScale;
-            ctx.setLineDash([10 / zoomScale, 5 / zoomScale]);
-
-            ctx.beginPath();
-            if (points.length > 0) {
-              ctx.moveTo(points[0][0], points[0][1]);
-              for (let i = 1; i < points.length; i++) {
-                ctx.lineTo(points[i][0], points[i][1]);
-              }
-              ctx.closePath();
-            }
-            ctx.stroke();
-
-            ctx.setLineDash([]);
-
-            if (boardResult.bull_center) {
-              const [bx, by] = boardResult.bull_center;
-
-              ctx.fillStyle = 'rgba(34, 197, 94, 1)';
-              ctx.shadowColor = 'rgba(34, 197, 94, 0.8)';
-              ctx.shadowBlur = 12 / zoomScale;
-              ctx.beginPath();
-              ctx.arc(bx, by, 8 / zoomScale, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.shadowBlur = 0;
-
-              ctx.fillStyle = '#fff';
-              ctx.beginPath();
-              ctx.arc(bx, by, 3 / zoomScale, 0, Math.PI * 2);
-              ctx.fill();
-
-              ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
-              ctx.lineWidth = 1 / zoomScale;
-              ctx.beginPath();
-              ctx.moveTo(bx - 20 / zoomScale, by);
-              ctx.lineTo(bx + 20 / zoomScale, by);
-              ctx.moveTo(bx, by - 20 / zoomScale);
-              ctx.lineTo(bx, by + 20 / zoomScale);
-              ctx.stroke();
-            }
-
             if (boardResult.ellipse) {
               const { cx, cy, a, b, angle } = boardResult.ellipse;
+              const pulsePhase = (Date.now() % 2000) / 2000;
+              const pulseAlpha = 0.4 + Math.sin(pulsePhase * Math.PI * 2) * 0.3;
 
               ctx.save();
               ctx.translate(cx, cy);
               ctx.rotate((angle * Math.PI) / 180);
 
-              ctx.strokeStyle = 'rgba(34, 197, 94, 0.3)';
+              ctx.shadowColor = 'rgba(0, 255, 255, 0.9)';
+              ctx.shadowBlur = 30 / zoomScale;
+              ctx.strokeStyle = `rgba(0, 255, 255, ${pulseAlpha})`;
+              ctx.lineWidth = 6 / zoomScale;
+              ctx.beginPath();
+              ctx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
+              ctx.stroke();
+
+              ctx.shadowBlur = 20 / zoomScale;
+              ctx.strokeStyle = 'rgba(0, 220, 255, 0.8)';
+              ctx.lineWidth = 3 / zoomScale;
+              ctx.beginPath();
+              ctx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
+              ctx.stroke();
+
+              ctx.shadowBlur = 10 / zoomScale;
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+              ctx.lineWidth = 1.5 / zoomScale;
+              ctx.beginPath();
+              ctx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.shadowBlur = 0;
+
+              const scanAngle = (Date.now() % 3000) / 3000 * Math.PI * 2;
+              const scanX = Math.cos(scanAngle) * a;
+              const scanY = Math.sin(scanAngle) * b;
+              ctx.fillStyle = 'rgba(0, 255, 255, 1)';
+              ctx.shadowColor = 'rgba(0, 255, 255, 1)';
+              ctx.shadowBlur = 20 / zoomScale;
+              ctx.beginPath();
+              ctx.arc(scanX, scanY, 8 / zoomScale, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.shadowBlur = 0;
+
+              ctx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
               ctx.lineWidth = 1 / zoomScale;
-              ctx.setLineDash([5 / zoomScale, 5 / zoomScale]);
+              ctx.setLineDash([5 / zoomScale, 10 / zoomScale]);
               ctx.beginPath();
               ctx.ellipse(0, 0, a * 0.63, b * 0.63, 0, 0, Math.PI * 2);
               ctx.stroke();
-
+              ctx.beginPath();
+              ctx.ellipse(0, 0, a * 0.37, b * 0.37, 0, 0, Math.PI * 2);
+              ctx.stroke();
               ctx.beginPath();
               ctx.ellipse(0, 0, a * 0.08, b * 0.08, 0, 0, Math.PI * 2);
               ctx.stroke();
+              ctx.setLineDash([]);
 
               ctx.restore();
-              ctx.setLineDash([]);
+
+              if (boardResult.bull_center) {
+                const [bx, by] = boardResult.bull_center;
+
+                ctx.fillStyle = 'rgba(0, 255, 255, 1)';
+                ctx.shadowColor = 'rgba(0, 255, 255, 1)';
+                ctx.shadowBlur = 15 / zoomScale;
+                ctx.beginPath();
+                ctx.arc(bx, by, 6 / zoomScale, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(bx, by, 2 / zoomScale, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
+                ctx.lineWidth = 1 / zoomScale;
+                ctx.beginPath();
+                ctx.moveTo(bx - 25 / zoomScale, by);
+                ctx.lineTo(bx + 25 / zoomScale, by);
+                ctx.moveTo(bx, by - 25 / zoomScale);
+                ctx.lineTo(bx, by + 25 / zoomScale);
+                ctx.stroke();
+              }
+
+              const dartHit = lastDartHitRef.current;
+              if (dartHit) {
+                ctx.fillStyle = 'rgba(255, 50, 50, 1)';
+                ctx.shadowColor = 'rgba(255, 50, 50, 1)';
+                ctx.shadowBlur = 20 / zoomScale;
+                ctx.beginPath();
+                ctx.arc(dartHit.x, dartHit.y, 10 / zoomScale, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.lineWidth = 2 / zoomScale;
+                ctx.beginPath();
+                ctx.arc(dartHit.x, dartHit.y, 10 / zoomScale, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(dartHit.x, dartHit.y, 3 / zoomScale, 0, Math.PI * 2);
+                ctx.fill();
+              }
 
               if (showSectorOverlay) {
                 const SEGMENTS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
@@ -636,7 +720,7 @@ export function CameraDetectionInput({
                   const startAngle = ((i * 18 - 9 + rotationOffset) * Math.PI) / 180;
                   const midAngle = ((i * 18 + rotationOffset) * Math.PI) / 180;
 
-                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                  ctx.strokeStyle = 'rgba(0, 255, 255, 0.25)';
                   ctx.lineWidth = 1 / zoomScale;
                   ctx.beginPath();
                   ctx.moveTo(a * 0.08 * Math.sin(startAngle), -b * 0.08 * Math.cos(startAngle));
@@ -647,17 +731,17 @@ export function CameraDetectionInput({
                   const labelX = a * labelDist * Math.sin(midAngle);
                   const labelY = -b * labelDist * Math.cos(midAngle);
 
-                  ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                  ctx.fillStyle = 'rgba(0, 255, 255, 0.9)';
                   ctx.font = `bold ${14 / zoomScale}px sans-serif`;
                   ctx.textAlign = 'center';
                   ctx.textBaseline = 'middle';
-                  ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-                  ctx.shadowBlur = 4 / zoomScale;
+                  ctx.shadowColor = 'rgba(0, 255, 255, 0.5)';
+                  ctx.shadowBlur = 6 / zoomScale;
                   ctx.fillText(String(SEGMENTS[i]), labelX, labelY);
                   ctx.shadowBlur = 0;
                 }
 
-                ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
+                ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
                 ctx.lineWidth = 2 / zoomScale;
                 ctx.beginPath();
                 ctx.ellipse(0, 0, a * 0.58, b * 0.58, 0, 0, Math.PI * 2);
@@ -666,7 +750,7 @@ export function CameraDetectionInput({
                 ctx.ellipse(0, 0, a * 0.63, b * 0.63, 0, 0, Math.PI * 2);
                 ctx.stroke();
 
-                ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
+                ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
                 ctx.beginPath();
                 ctx.ellipse(0, 0, a * 0.95, b * 0.95, 0, 0, Math.PI * 2);
                 ctx.stroke();
@@ -679,6 +763,39 @@ export function CameraDetectionInput({
             }
 
             ctx.restore();
+
+            const cornerSize = 40;
+            const cornerThickness = 3;
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.7)';
+            ctx.shadowColor = 'rgba(0, 255, 255, 0.8)';
+            ctx.shadowBlur = 8;
+            ctx.lineWidth = cornerThickness;
+
+            ctx.beginPath();
+            ctx.moveTo(10, 10 + cornerSize);
+            ctx.lineTo(10, 10);
+            ctx.lineTo(10 + cornerSize, 10);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(vw - 10 - cornerSize, 10);
+            ctx.lineTo(vw - 10, 10);
+            ctx.lineTo(vw - 10, 10 + cornerSize);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(vw - 10, vh - 10 - cornerSize);
+            ctx.lineTo(vw - 10, vh - 10);
+            ctx.lineTo(vw - 10 - cornerSize, vh - 10);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(10 + cornerSize, vh - 10);
+            ctx.lineTo(10, vh - 10);
+            ctx.lineTo(10, vh - 10 - cornerSize);
+            ctx.stroke();
+
+            ctx.shadowBlur = 0;
           }
 
           if (isDetecting) {
