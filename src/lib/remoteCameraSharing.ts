@@ -60,6 +60,7 @@ export class RemoteCameraProvider {
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private channel: RealtimeChannel | null = null;
+  private heartbeatInterval: number | null = null;
   private onStatusChange?: (status: string) => void;
   private onError?: (error: string) => void;
 
@@ -69,6 +70,31 @@ export class RemoteCameraProvider {
   }) {
     this.onStatusChange = callbacks?.onStatusChange;
     this.onError = callbacks?.onError;
+  }
+
+  private startHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+    this.heartbeatInterval = window.setInterval(async () => {
+      if (this.session) {
+        const newExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        await supabase
+          .from('remote_camera_sessions')
+          .update({
+            updated_at: new Date().toISOString(),
+            expires_at: newExpiry
+          })
+          .eq('id', this.session.id);
+      }
+    }, 30000);
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
   }
 
   async startSharing(stream: MediaStream): Promise<string | null> {
@@ -139,6 +165,7 @@ export class RemoteCameraProvider {
         .eq('id', this.session.id);
 
       this.subscribeToSignaling();
+      this.startHeartbeat();
 
       return this.session.id;
     } catch (err) {
@@ -195,6 +222,8 @@ export class RemoteCameraProvider {
   }
 
   async stopSharing() {
+    this.stopHeartbeat();
+
     if (this.channel) {
       await this.channel.unsubscribe();
       this.channel = null;

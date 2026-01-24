@@ -114,11 +114,14 @@ export function CameraDetectionInput({
     };
     loadRemoteCameras();
 
+    const pollInterval = setInterval(loadRemoteCameras, 5000);
+
     const channel = subscribeToRemoteCameras(user.id, (sessions) => {
       setRemoteCameras(sessions);
     });
 
     return () => {
+      clearInterval(pollInterval);
       channel.unsubscribe();
     };
   }, [user]);
