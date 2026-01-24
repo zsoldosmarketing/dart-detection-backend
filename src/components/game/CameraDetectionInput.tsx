@@ -84,6 +84,7 @@ export function CameraDetectionInput({
   const [boardConfidence, setBoardConfidence] = useState<number>(0);
   const [autoDetectEnabled, setAutoDetectEnabled] = useState(true);
   const [showSectorOverlay, setShowSectorOverlay] = useState(false);
+  const [autoZoomEnabled, setAutoZoomEnabled] = useState(true);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -508,18 +509,61 @@ export function CameraDetectionInput({
 
       const draw = () => {
         if (video.readyState >= 2) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-
-          ctx.drawImage(video, 0, 0);
-
+          const vw = video.videoWidth;
+          const vh = video.videoHeight;
           const boardResult = boardResultRef.current;
+
+          let srcX = 0, srcY = 0, srcW = vw, srcH = vh;
+          let zoomScale = 1;
+
+          if (autoZoomEnabled && boardResult && boardResult.board_found && boardResult.ellipse) {
+            const { cx, cy, a, b } = boardResult.ellipse;
+            const maxRadius = Math.max(a, b);
+            const padding = 1.15;
+            const boardSize = maxRadius * 2 * padding;
+
+            srcX = Math.max(0, cx - boardSize / 2);
+            srcY = Math.max(0, cy - boardSize / 2);
+            srcW = Math.min(boardSize, vw - srcX);
+            srcH = Math.min(boardSize, vh - srcY);
+
+            if (srcX + srcW > vw) srcW = vw - srcX;
+            if (srcY + srcH > vh) srcH = vh - srcY;
+
+            const aspect = vw / vh;
+            if (srcW / srcH > aspect) {
+              const newH = srcW / aspect;
+              const diffH = newH - srcH;
+              srcY = Math.max(0, srcY - diffH / 2);
+              srcH = Math.min(newH, vh - srcY);
+            } else {
+              const newW = srcH * aspect;
+              const diffW = newW - srcW;
+              srcX = Math.max(0, srcX - diffW / 2);
+              srcW = Math.min(newW, vw - srcX);
+            }
+
+            zoomScale = vw / srcW;
+          }
+
+          canvas.width = vw;
+          canvas.height = vh;
+
+          ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, vw, vh);
+
           if (boardResult && boardResult.board_found && boardResult.overlay_points) {
+            const offsetX = -srcX * zoomScale;
+            const offsetY = -srcY * zoomScale;
+
+            ctx.save();
+            ctx.translate(offsetX, offsetY);
+            ctx.scale(zoomScale, zoomScale);
+
             const points = boardResult.overlay_points;
 
             ctx.strokeStyle = 'rgba(34, 197, 94, 0.9)';
-            ctx.lineWidth = 3;
-            ctx.setLineDash([10, 5]);
+            ctx.lineWidth = 3 / zoomScale;
+            ctx.setLineDash([10 / zoomScale, 5 / zoomScale]);
 
             ctx.beginPath();
             if (points.length > 0) {
@@ -538,24 +582,24 @@ export function CameraDetectionInput({
 
               ctx.fillStyle = 'rgba(34, 197, 94, 1)';
               ctx.shadowColor = 'rgba(34, 197, 94, 0.8)';
-              ctx.shadowBlur = 12;
+              ctx.shadowBlur = 12 / zoomScale;
               ctx.beginPath();
-              ctx.arc(bx, by, 8, 0, Math.PI * 2);
+              ctx.arc(bx, by, 8 / zoomScale, 0, Math.PI * 2);
               ctx.fill();
               ctx.shadowBlur = 0;
 
               ctx.fillStyle = '#fff';
               ctx.beginPath();
-              ctx.arc(bx, by, 3, 0, Math.PI * 2);
+              ctx.arc(bx, by, 3 / zoomScale, 0, Math.PI * 2);
               ctx.fill();
 
               ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
-              ctx.lineWidth = 1;
+              ctx.lineWidth = 1 / zoomScale;
               ctx.beginPath();
-              ctx.moveTo(bx - 20, by);
-              ctx.lineTo(bx + 20, by);
-              ctx.moveTo(bx, by - 20);
-              ctx.lineTo(bx, by + 20);
+              ctx.moveTo(bx - 20 / zoomScale, by);
+              ctx.lineTo(bx + 20 / zoomScale, by);
+              ctx.moveTo(bx, by - 20 / zoomScale);
+              ctx.lineTo(bx, by + 20 / zoomScale);
               ctx.stroke();
             }
 
@@ -567,8 +611,8 @@ export function CameraDetectionInput({
               ctx.rotate((angle * Math.PI) / 180);
 
               ctx.strokeStyle = 'rgba(34, 197, 94, 0.3)';
-              ctx.lineWidth = 1;
-              ctx.setLineDash([5, 5]);
+              ctx.lineWidth = 1 / zoomScale;
+              ctx.setLineDash([5 / zoomScale, 5 / zoomScale]);
               ctx.beginPath();
               ctx.ellipse(0, 0, a * 0.63, b * 0.63, 0, 0, Math.PI * 2);
               ctx.stroke();
@@ -593,7 +637,7 @@ export function CameraDetectionInput({
                   const midAngle = ((i * 18 + rotationOffset) * Math.PI) / 180;
 
                   ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-                  ctx.lineWidth = 1;
+                  ctx.lineWidth = 1 / zoomScale;
                   ctx.beginPath();
                   ctx.moveTo(a * 0.08 * Math.sin(startAngle), -b * 0.08 * Math.cos(startAngle));
                   ctx.lineTo(a * Math.sin(startAngle), -b * Math.cos(startAngle));
@@ -604,17 +648,17 @@ export function CameraDetectionInput({
                   const labelY = -b * labelDist * Math.cos(midAngle);
 
                   ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-                  ctx.font = 'bold 14px sans-serif';
+                  ctx.font = `bold ${14 / zoomScale}px sans-serif`;
                   ctx.textAlign = 'center';
                   ctx.textBaseline = 'middle';
                   ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-                  ctx.shadowBlur = 4;
+                  ctx.shadowBlur = 4 / zoomScale;
                   ctx.fillText(String(SEGMENTS[i]), labelX, labelY);
                   ctx.shadowBlur = 0;
                 }
 
                 ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 2 / zoomScale;
                 ctx.beginPath();
                 ctx.ellipse(0, 0, a * 0.58, b * 0.58, 0, 0, Math.PI * 2);
                 ctx.stroke();
@@ -633,6 +677,8 @@ export function CameraDetectionInput({
                 ctx.restore();
               }
             }
+
+            ctx.restore();
           }
 
           if (isDetecting) {
@@ -651,7 +697,7 @@ export function CameraDetectionInput({
       draw();
       return () => cancelAnimationFrame(animationId);
     }
-  }, [isActive, isDetecting, showSectorOverlay]);
+  }, [isActive, isDetecting, showSectorOverlay, autoZoomEnabled]);
 
   useEffect(() => {
     return () => {
@@ -994,6 +1040,16 @@ export function CameraDetectionInput({
                       }`}
                     >
                       {autoDetectEnabled ? 'Auto ON' : 'Auto OFF'}
+                    </button>
+                    <button
+                      onClick={() => setAutoZoomEnabled(!autoZoomEnabled)}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                        autoZoomEnabled
+                          ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
+                          : 'bg-dark-600 text-dark-400 hover:bg-dark-500'
+                      }`}
+                    >
+                      {autoZoomEnabled ? 'Zoom ON' : 'Zoom OFF'}
                     </button>
                     <button
                       onClick={() => setShowSectorOverlay(!showSectorOverlay)}
