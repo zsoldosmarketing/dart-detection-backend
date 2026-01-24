@@ -94,7 +94,7 @@ export function GamePlayPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [dartQueue, setDartQueue] = useState<DartTarget[]>([]);
   const [isProcessingQueue, setIsProcessingQueue] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(() => voiceCaller.getSettings().enabled);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(() => {
     const stored = localStorage.getItem('showSuggestions');
     return stored === null ? true : stored === 'true';
