@@ -592,14 +592,6 @@ export function CameraDetectionInput({
     };
   }, [isActive, isCalibrated, autoDetectEnabled, checkForDartThrow]);
 
-  useEffect(() => {
-    cameraStore.setAutoDetectEnabled(autoDetectEnabled);
-  }, [autoDetectEnabled, cameraStore]);
-
-  useEffect(() => {
-    cameraStore.setAutoZoomEnabled(autoZoomEnabled);
-  }, [autoZoomEnabled, cameraStore]);
-
   const confirmPendingScore = useCallback(async () => {
     if (pendingScore) {
       const target = parseScoreToTarget(pendingScore.label);
