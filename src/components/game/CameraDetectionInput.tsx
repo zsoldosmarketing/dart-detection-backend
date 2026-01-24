@@ -187,9 +187,7 @@ export function CameraDetectionInput({
     if (!videoRef.current || !apiConnectedRef.current) return;
 
     try {
-      const frameBlob = zoomRegionRef.current
-        ? await captureZoomedFrame(videoRef.current)
-        : await captureVideoFrame(videoRef.current);
+      const frameBlob = await captureVideoFrame(videoRef.current);
       const result = await detectBoard(frameBlob);
 
       if (result && result.board_found) {
@@ -200,10 +198,13 @@ export function CameraDetectionInput({
         calibrationRef.current = cal;
         setBoardConfidence(result.confidence);
 
-        if (!isCalibrated) {
-          setIsCalibrated(true);
-          referenceFrameRef.current = frameBlob;
-          await setReferenceImage(frameBlob);
+        setIsCalibrated(true);
+        referenceFrameRef.current = frameBlob;
+        await setReferenceImage(frameBlob);
+
+        if (boardDetectIntervalRef.current) {
+          clearInterval(boardDetectIntervalRef.current);
+          boardDetectIntervalRef.current = null;
         }
 
         if (result.canonical_preview) {
@@ -213,7 +214,7 @@ export function CameraDetectionInput({
     } catch (err) {
       console.error('[Camera] Board detection error:', err);
     }
-  }, [isCalibrated, captureZoomedFrame]);
+  }, []);
 
   const startBoardDetectLoop = useCallback(() => {
     if (boardDetectIntervalRef.current) {
@@ -223,11 +224,11 @@ export function CameraDetectionInput({
     runBoardDetection();
 
     boardDetectIntervalRef.current = window.setInterval(() => {
-      if (!pendingScore) {
+      if (!isCalibrated && !pendingScore) {
         runBoardDetection();
       }
     }, BOARD_DETECT_INTERVAL);
-  }, [runBoardDetection, pendingScore]);
+  }, [runBoardDetection, isCalibrated, pendingScore]);
 
   const startCamera = useCallback(async (deviceId?: string) => {
     if (!videoRef.current) return;
@@ -419,15 +420,7 @@ export function CameraDetectionInput({
         }
 
         if (result.tip_original && result.tip_original.length >= 2) {
-          const zoom = zoomRegionRef.current;
-          if (zoom) {
-            lastDartHitRef.current = {
-              x: zoom.x + result.tip_original[0],
-              y: zoom.y + result.tip_original[1]
-            };
-          } else {
-            lastDartHitRef.current = { x: result.tip_original[0], y: result.tip_original[1] };
-          }
+          lastDartHitRef.current = { x: result.tip_original[0], y: result.tip_original[1] };
         }
 
         if (result.decision === 'AUTO' && result.confidence >= AUTO_SUBMIT_CONFIDENCE) {
@@ -1038,6 +1031,8 @@ export function CameraDetectionInput({
                     setIsCalibrated(false);
                     boardResultRef.current = null;
                     calibrationRef.current = null;
+                    homographyRef.current = null;
+                    startBoardDetectLoop();
                   }}
                   className="p-2.5 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
                   title="Tabla ujrafelismerese"
