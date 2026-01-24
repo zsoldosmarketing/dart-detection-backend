@@ -13,7 +13,7 @@ export interface CallerSettings {
 function getDefaultSettings(): CallerSettings {
   const locale = getLocale();
   return {
-    enabled: true,
+    enabled: false,
     voice: 'default',
     volume: 0.85,
     language: locale === 'hu' ? 'hu-HU' : 'en-GB',
@@ -55,7 +55,7 @@ class VoiceCaller {
       voiceSettingsSync.onSettingsChange((settings) => {
         console.log('[VoiceCaller] Beállítások szinkronizálva:', settings);
         this.settings = {
-          enabled: settings.voice_enabled,
+          ...this.settings,
           voice: settings.voice_id,
           voiceName: settings.voice_name,
           voiceLang: settings.voice_lang,
@@ -80,7 +80,7 @@ class VoiceCaller {
     const settings = await voiceSettingsSync.loadSettings();
     if (settings) {
       this.settings = {
-        enabled: settings.voice_enabled,
+        ...this.settings,
         voice: settings.voice_id,
         voiceName: settings.voice_name,
         voiceLang: settings.voice_lang,
