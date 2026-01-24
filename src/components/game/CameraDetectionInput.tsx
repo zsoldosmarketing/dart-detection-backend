@@ -99,6 +99,7 @@ export function CameraDetectionInput({
   const pendingAfterFrameRef = useRef<Blob | null>(null);
   const lastBrightnessRef = useRef<number | null>(null);
   const brightnessStableCountRef = useRef<number>(0);
+  const motionDetectedRef = useRef<boolean>(false);
   const autoDetectIntervalRef = useRef<number | null>(null);
   const throwCooldownRef = useRef<boolean>(false);
   const zoomRegionRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -456,19 +457,25 @@ export function CameraDetectionInput({
     if (lastBrightness !== null) {
       const brightnessDiff = Math.abs(currentBrightness - lastBrightness);
 
-      if (brightnessDiff > 8) {
+      if (brightnessDiff > 15) {
+        motionDetectedRef.current = true;
         brightnessStableCountRef.current = 0;
-      } else {
-        brightnessStableCountRef.current++;
-      }
+      } else if (motionDetectedRef.current) {
+        if (brightnessDiff < 5) {
+          brightnessStableCountRef.current++;
+        } else {
+          brightnessStableCountRef.current = 0;
+        }
 
-      if (brightnessStableCountRef.current >= 3 && brightnessDiff < 3) {
-        throwCooldownRef.current = true;
-        brightnessStableCountRef.current = 0;
-        setTimeout(() => {
-          throwCooldownRef.current = false;
-        }, 2000);
-        triggerThrowDetectionRef.current();
+        if (brightnessStableCountRef.current >= 4) {
+          throwCooldownRef.current = true;
+          brightnessStableCountRef.current = 0;
+          motionDetectedRef.current = false;
+          setTimeout(() => {
+            throwCooldownRef.current = false;
+          }, 2500);
+          triggerThrowDetectionRef.current();
+        }
       }
     }
 
