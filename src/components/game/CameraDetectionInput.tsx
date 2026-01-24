@@ -63,7 +63,6 @@ export function CameraDetectionInput({
   const [isConnecting, setIsConnecting] = useState(false);
   const [isCalibrated, setIsCalibrated] = useState(false);
   const [apiConnected, setApiConnected] = useState(false);
-  const apiConnectedRef = useRef(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -126,7 +125,6 @@ export function CameraDetectionInput({
     try {
       const health = await checkApiHealth(3);
       if (health) {
-        apiConnectedRef.current = true;
         setApiConnected(true);
         if (showStatus) {
           setStatusMessage('Szerver kapcsolat aktiv!');
@@ -137,7 +135,6 @@ export function CameraDetectionInput({
     } catch (err) {
       console.error('[Camera] Connection error:', err);
     }
-    apiConnectedRef.current = false;
     setApiConnected(false);
     if (showStatus) {
       setStatusMessage('Szerver nem elerheto - varj 1-2 percet (Render free tier)');
@@ -153,7 +150,7 @@ export function CameraDetectionInput({
   }, [checkConnection]);
 
   const runBoardDetection = useCallback(async () => {
-    if (!videoRef.current || !apiConnectedRef.current) return;
+    if (!videoRef.current || !apiConnected) return;
 
     try {
       const frameBlob = await captureVideoFrame(videoRef.current);
@@ -180,7 +177,7 @@ export function CameraDetectionInput({
     } catch (err) {
       console.error('[Camera] Board detection error:', err);
     }
-  }, [isCalibrated]);
+  }, [apiConnected, isCalibrated]);
 
   const startBoardDetectLoop = useCallback(() => {
     if (boardDetectIntervalRef.current) {
