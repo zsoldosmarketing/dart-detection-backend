@@ -148,8 +148,8 @@ export class RemoteCameraProvider {
           this.onStatusChange?.('connected');
           this.updateSessionStatus('connected');
         } else if (state === 'disconnected' || state === 'failed') {
-          this.onStatusChange?.('disconnected');
-          this.updateSessionStatus('disconnected');
+          this.onStatusChange?.('waiting');
+          this.restartConnection();
         }
       };
 
@@ -189,9 +189,16 @@ export class RemoteCameraProvider {
         },
         async (payload) => {
           const updated = payload.new as RemoteCameraSession;
-          if (updated.sdp_answer && !this.peerConnection?.remoteDescription) {
-            const answer = JSON.parse(updated.sdp_answer);
-            await this.peerConnection?.setRemoteDescription(new RTCSessionDescription(answer));
+          if (updated.sdp_answer) {
+            const state = this.peerConnection?.signalingState;
+            if (state === 'have-local-offer' || !this.peerConnection?.remoteDescription) {
+              try {
+                const answer = JSON.parse(updated.sdp_answer);
+                await this.peerConnection?.setRemoteDescription(new RTCSessionDescription(answer));
+              } catch (err) {
+                console.error('[RemoteCameraProvider] Failed to set answer:', err);
+              }
+            }
           }
         }
       )
@@ -219,6 +226,67 @@ export class RemoteCameraProvider {
       .from('remote_camera_sessions')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', this.session.id);
+  }
+
+  private async restartConnection() {
+    if (!this.session || !this.localStream) return;
+
+    try {
+      if (this.peerConnection) {
+        this.peerConnection.close();
+      }
+
+      this.peerConnection = new RTCPeerConnection(ICE_SERVERS);
+
+      this.localStream.getTracks().forEach(track => {
+        this.peerConnection!.addTrack(track, this.localStream!);
+      });
+
+      this.peerConnection.onicecandidate = async (event) => {
+        if (event.candidate && this.session) {
+          await supabase.from('remote_camera_ice_candidates').insert({
+            session_id: this.session.id,
+            candidate: event.candidate.toJSON(),
+            from_device: 'camera',
+          });
+        }
+      };
+
+      this.peerConnection.onconnectionstatechange = () => {
+        const state = this.peerConnection?.connectionState;
+        if (state === 'connected') {
+          this.onStatusChange?.('connected');
+          this.updateSessionStatus('connected');
+        } else if (state === 'disconnected' || state === 'failed') {
+          this.onStatusChange?.('waiting');
+          setTimeout(() => this.restartConnection(), 2000);
+        }
+      };
+
+      const offer = await this.peerConnection.createOffer({
+        offerToReceiveAudio: false,
+        offerToReceiveVideo: false,
+      });
+      await this.peerConnection.setLocalDescription(offer);
+
+      await supabase
+        .from('remote_camera_sessions')
+        .update({
+          sdp_offer: JSON.stringify(offer),
+          sdp_answer: null,
+          status: 'waiting',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', this.session.id);
+
+      await supabase
+        .from('remote_camera_ice_candidates')
+        .delete()
+        .eq('session_id', this.session.id);
+
+    } catch (err) {
+      this.onError?.(`Failed to restart connection: ${err}`);
+    }
   }
 
   async stopSharing() {
@@ -316,7 +384,12 @@ export class RemoteCameraViewer {
         if (state === 'connected') {
           this.onStatusChange?.('connected');
         } else if (state === 'disconnected' || state === 'failed') {
-          this.onStatusChange?.('disconnected');
+          this.onStatusChange?.('reconnecting');
+          setTimeout(() => {
+            if (this.sessionId) {
+              this.reconnect(this.sessionId);
+            }
+          }, 2000);
         }
       };
 
@@ -386,6 +459,86 @@ export class RemoteCameraViewer {
       .subscribe();
   }
 
+  private async reconnect(sessionId: string) {
+    try {
+      if (this.peerConnection) {
+        this.peerConnection.close();
+        this.peerConnection = null;
+      }
+
+      const { data: session } = await supabase
+        .from('remote_camera_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .single();
+
+      if (!session || !session.sdp_offer) {
+        this.onStatusChange?.('disconnected');
+        return;
+      }
+
+      this.peerConnection = new RTCPeerConnection(ICE_SERVERS);
+
+      this.peerConnection.ontrack = (event) => {
+        this.remoteStream = event.streams[0];
+        this.onStream?.(this.remoteStream);
+      };
+
+      this.peerConnection.onicecandidate = async (event) => {
+        if (event.candidate) {
+          await supabase.from('remote_camera_ice_candidates').insert({
+            session_id: sessionId,
+            candidate: event.candidate.toJSON(),
+            from_device: 'viewer',
+          });
+        }
+      };
+
+      this.peerConnection.onconnectionstatechange = () => {
+        const state = this.peerConnection?.connectionState;
+        if (state === 'connected') {
+          this.onStatusChange?.('connected');
+        } else if (state === 'disconnected' || state === 'failed') {
+          this.onStatusChange?.('reconnecting');
+          setTimeout(() => {
+            if (this.sessionId) {
+              this.reconnect(this.sessionId);
+            }
+          }, 2000);
+        }
+      };
+
+      const offer = JSON.parse(session.sdp_offer);
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+      const { data: candidates } = await supabase
+        .from('remote_camera_ice_candidates')
+        .select('*')
+        .eq('session_id', sessionId)
+        .eq('from_device', 'camera');
+
+      if (candidates) {
+        for (const c of candidates) {
+          try {
+            await this.peerConnection.addIceCandidate(new RTCIceCandidate(c.candidate));
+          } catch {
+          }
+        }
+      }
+
+      const answer = await this.peerConnection.createAnswer();
+      await this.peerConnection.setLocalDescription(answer);
+
+      await supabase
+        .from('remote_camera_sessions')
+        .update({ sdp_answer: JSON.stringify(answer) })
+        .eq('id', sessionId);
+
+    } catch (err) {
+      this.onStatusChange?.('disconnected');
+    }
+  }
+
   async disconnect() {
     if (this.channel) {
       await this.channel.unsubscribe();
@@ -414,7 +567,7 @@ export async function getActiveRemoteCameras(): Promise<RemoteCameraSession[]> {
     .from('remote_camera_sessions')
     .select('*')
     .eq('user_id', userData.user.id)
-    .in('status', ['waiting', 'connected'])
+    .in('status', ['waiting', 'connected', 'disconnected'])
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false });
 

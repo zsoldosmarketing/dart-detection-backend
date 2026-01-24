@@ -376,6 +376,10 @@ export function CameraDetectionInput({
         if (status === 'disconnected') {
           setIsActive(false);
           setActiveRemoteCamera(null);
+        } else if (status === 'reconnecting') {
+          setStatusMessage('Ujracsatlakozas...');
+        } else if (status === 'connected') {
+          setStatusMessage(null);
         }
       },
       onError: (err) => {

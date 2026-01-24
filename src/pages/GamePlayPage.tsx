@@ -107,7 +107,13 @@ export function GamePlayPage() {
   const [preferredDoubles, setPreferredDoubles] = useState<number[]>([20, 16, 8]);
 
   useEffect(() => {
+    voiceCaller.setSettings({ enabled: false });
+    soundEffects.setEnabled(false);
+  }, []);
+
+  useEffect(() => {
     soundEffects.setEnabled(voiceEnabled);
+    voiceCaller.setSettings({ enabled: voiceEnabled });
   }, [voiceEnabled]);
 
   useEffect(() => {
