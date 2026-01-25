@@ -128,7 +128,7 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
 
   const startRecognition = useCallback(() => {
     const now = Date.now();
-    if (now - lastStartTimeRef.current < 500) {
+    if (now - lastStartTimeRef.current < 150) {
       return;
     }
     lastStartTimeRef.current = now;
@@ -173,7 +173,7 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
   useEffect(() => {
     if (autoStart && voiceEnabled && !paused && isAvailable && !manuallyControlled) {
       if (!isListening) {
-        const startDelay = voiceCaller.isSpeaking() ? 800 : 300;
+        const startDelay = voiceCaller.isSpeaking() ? 200 : 50;
         const timeout = setTimeout(() => {
           if (!isListening && !voiceCaller.isSpeaking()) {
             setIsListening(true);
@@ -247,15 +247,13 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
 
           if (autoStart && voiceEnabled && !pausedRef.current && !disabled && !isRestartingRef.current) {
             isRestartingRef.current = true;
+            setIsListening(true);
+            startRecognition();
             setTimeout(() => {
-              setIsListening(true);
-              startRecognition();
-              setTimeout(() => {
-                isRestartingRef.current = false;
-              }, 200);
+              isRestartingRef.current = false;
             }, 100);
           }
-        }, 250);
+        }, 50);
       }
     });
 
