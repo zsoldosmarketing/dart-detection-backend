@@ -362,8 +362,8 @@ class VoiceRecognitionService {
       : /(?:double|triple|dub|trip|treble)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\d+)/gi;
 
     const simplePattern = locale === 'hu'
-      ? /\b(?:miss|mellé|melle|külső bull|kulso bull|dupla bull|duplabull|nagybull|nagy bull|belső bull|belso bull|szimpla bull|sima bull|bull|kisbull|kis bull|közép|kozep|bika|ötven|otven|huszonöt|huszonot|huszon öt|huszon ot|húsz|husz|egy|kettő|ketto|két|ket|három|harom|négy|negy|öt|ot|hat|hét|het|nyolc|kilenc|tíz|tiz|tizenegy|tizenkettő|tizenketto|tizenhárom|tizenharom|tizennégy|tizennegy|tizenöt|tizenot|tizenhat|tizenhét|tizenhet|tizennyolc|tizenkilenc|\d+)\b/gi
-      : /\b(?:miss|missed|double bull|bullseye|bull|single bull|small bull|outer bull|fifty|twenty five|twentyfive|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\d+)\b/gi;
+      ? /\b(?:miss|mellé|melle|nulla|nula|nolla|nullát|nullat|semmi|zero|külső bull|kulso bull|dupla bull|duplabull|nagybull|nagy bull|belső bull|belso bull|szimpla bull|sima bull|bull|kisbull|kis bull|közép|kozep|bika|ötven|otven|huszonöt|huszonot|huszon öt|huszon ot|húsz|husz|egy|kettő|ketto|két|ket|három|harom|négy|negy|öt|ot|hat|hét|het|nyolc|kilenc|tíz|tiz|tizenegy|tizenkettő|tizenketto|tizenhárom|tizenharom|tizennégy|tizennegy|tizenöt|tizenot|tizenhat|tizenhét|tizenhet|tizennyolc|tizenkilenc|\d+)\b/gi
+      : /\b(?:miss|missed|zero|nought|nothing|double bull|bullseye|bull|single bull|small bull|outer bull|fifty|twenty five|twentyfive|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\d+)\b/gi;
 
     const coveredRanges: Array<[number, number]> = [];
     const results: Array<{ result: VoiceRecognitionResult; index: number }> = [];
