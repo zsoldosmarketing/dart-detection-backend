@@ -4,6 +4,12 @@ import { voiceRecognition } from '../../lib/voiceRecognition';
 import { voiceCaller } from '../../lib/voiceCaller';
 import { getLocale, t } from '../../lib/i18n';
 
+const SUBMIT_HU = /(beküld|bekül|beküldés|beküldöm|küld|kül|küldés|küldöm|send|submit|mehet|mehetek|het|hetek|oké|okay|ok|oke|okés|go|kész|kesz|rendben|rajta|gyerünk|gyerunk|megy|indulhat|következő|kovetkezo|next)/i;
+const SUBMIT_EN = /(send|submit|done|confirm|okay|ok|go|ready|next)/i;
+const UNDO_HU = /\b(vissza|törlés|töröl|törölés|törles|törlöm|undo|delete|back|előző|elozo)\b/i;
+const UNDO_EN = /\b(undo|back|delete|previous)\b/i;
+const CLEAN_REGEX = /[.,!?;:]/g;
+
 interface VoiceInputProps {
   onScoreInput: (score: number, multiplier: number, sector: number | null) => void;
   onUndo?: () => void;
@@ -40,155 +46,106 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
 
   const processTranscript = useCallback((text: string) => {
     const locale = getLocale();
-    const cleanText = text.toLowerCase().trim().replace(/[.,!?;:]/g, '');
+    const isHu = locale === 'hu';
+    const cleanText = text.toLowerCase().trim().replace(CLEAN_REGEX, '');
 
-    const submitPattern = locale === 'hu'
-      ? /(beküld|bekül|beküldés|beküldöm|küld|kül|küldés|küldöm|send|submit|mehet|mehetek|het|hetek|oké|okay|ok|oke|okés|go|kész|kesz|rendben|rajta|gyerünk|gyerunk|megy|indulhat|következő|kovetkezo|next)/i
-      : /(send|submit|done|confirm|okay|ok|go|ready|next)/i;
-
+    const submitPattern = isHu ? SUBMIT_HU : SUBMIT_EN;
     if (submitPattern.test(cleanText) && dartsCountRef.current > 0) {
       setLastRecognized(t('training.submit_darts'));
-      if (onSubmitRef.current) {
-        onSubmitRef.current();
-      }
-      setTimeout(() => setLastRecognized(''), 200);
+      onSubmitRef.current?.();
+      setTimeout(() => setLastRecognized(''), 80);
       return true;
     }
 
-    const undoPattern = locale === 'hu'
-      ? /\b(vissza|törlés|töröl|törölés|törles|törlöm|undo|delete|back|előző|elozo)\b/i
-      : /\b(undo|back|delete|previous)\b/i;
-
+    const undoPattern = isHu ? UNDO_HU : UNDO_EN;
     if (undoPattern.test(cleanText) && dartsCountRef.current > 0) {
       setLastRecognized(t('common.undo'));
-      if (onUndoRef.current) {
-        onUndoRef.current();
-      }
-      setTimeout(() => setLastRecognized(''), 200);
+      onUndoRef.current?.();
+      setTimeout(() => setLastRecognized(''), 80);
       return true;
     }
 
     const results = voiceRecognition.parseMultipleTranscripts(text, locale);
 
     if (results.length > 0) {
-      results.forEach((result) => {
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
         if (result.isUndo) {
           if (dartsCountRef.current > 0) {
             setLastRecognized(t('common.undo'));
-            if (onUndoRef.current) {
-              onUndoRef.current();
-            }
-            setTimeout(() => setLastRecognized(''), 200);
+            onUndoRef.current?.();
           }
         } else {
-          let display = '';
-          if (result.multiplier === 0) {
-            display = 'Miss';
-          } else if (result.sector === 25) {
-            display = result.multiplier === 2 ? 'Bull' : '25';
-          } else {
-            const mult = result.multiplier === 2 ? 'D' : result.multiplier === 3 ? 'T' : 'S';
-            display = `${mult}${result.sector}`;
-          }
+          const display = result.multiplier === 0 ? 'Miss'
+            : result.sector === 25 ? (result.multiplier === 2 ? 'Bull' : '25')
+            : `${result.multiplier === 2 ? 'D' : result.multiplier === 3 ? 'T' : 'S'}${result.sector}`;
 
           setLastRecognized(display);
           onScoreInputRef.current(result.score, result.multiplier, result.sector);
-          setTimeout(() => setLastRecognized(''), 200);
         }
-      });
-
+      }
+      setTimeout(() => setLastRecognized(''), 80);
       return true;
     }
     return false;
   }, []);
 
   const startRecognition = useCallback(() => {
-    if (isStartedRef.current) {
-      console.log('[VoiceInput] Already started, skipping');
-      return;
-    }
-
-    console.log('[VoiceInput] Starting continuous recognition (always-on mode)');
+    if (isStartedRef.current) return;
     isStartedRef.current = true;
 
     voiceRecognition.startContinuousListening(
       (transcript, isFinal) => {
         if (isFinal) {
           const text = transcript.toLowerCase().trim();
-
           const locale = getLocale();
-          const cleanText = text.replace(/[.,!?;:]/g, '');
-          const submitPattern = locale === 'hu'
-            ? /(beküld|bekül|beküldés|beküldöm|küld|kül|küldés|küldöm|send|submit|mehet|mehetek|het|hetek|oké|okay|ok|oke|okés|go|kész|kesz|rendben|rajta|gyerünk|gyerunk|megy|indulhat)/i
-            : /(send|submit|done|confirm|okay|ok|go|ready)/i;
-          const undoPattern = locale === 'hu'
-            ? /\b(vissza|törlés|töröl|törölés|törles|törlöm|undo|delete|back|előző|elozo)\b/i
-            : /\b(undo|back|delete|previous)\b/i;
+          const isHu = locale === 'hu';
+          const cleanText = text.replace(CLEAN_REGEX, '');
+
+          const submitPattern = isHu ? SUBMIT_HU : SUBMIT_EN;
+          const undoPattern = isHu ? UNDO_HU : UNDO_EN;
 
           const isSubmitCommand = submitPattern.test(cleanText) && dartsCountRef.current > 0;
           if (isSubmitCommand || undoPattern.test(cleanText) || !pausedRef.current) {
             processTranscript(text);
           }
-        } else {
-          if (!pausedRef.current) {
-            setInterimText(transcript);
-          }
+        } else if (!pausedRef.current) {
+          setInterimText(transcript);
         }
       },
-      (error) => {
-        console.error('[VoiceInput] Voice error:', error);
+      () => {
         isStartedRef.current = false;
       }
     );
   }, [processTranscript]);
 
   useEffect(() => {
-    console.log('[VoiceInput] Main effect triggered', {
-      autoStart,
-      voiceEnabled,
-      isAvailable,
-      isListening,
-      isStarted: isStartedRef.current,
-      soundEnabled,
-      speakerIsSpeaking: voiceCaller.isSpeaking()
-    });
-
     if (autoStart && voiceEnabled && isAvailable) {
-      console.log('[VoiceInput] Should start recognition...');
-
-      // Először teljesen leállítjuk ha futna
       voiceRecognition.stopListening();
       isStartedRef.current = false;
       setIsListening(false);
 
       const startNow = () => {
-        console.log('[VoiceInput] Starting recognition now');
         setIsListening(true);
         setLastRecognized('');
         setInterimText('');
         startRecognition();
       };
 
-      // Ha a speaker beszél ÉS a soundEnabled = true, várunk amíg befejezi
-      // Ha soundEnabled = false, akkor nincs speaker beszéd, azonnal indítunk
       if (soundEnabled && voiceCaller.isSpeaking()) {
-        console.log('[VoiceInput] Speaker is speaking, waiting for finish...');
         const unsubscribe = voiceCaller.onSpeakingChange((isSpeaking) => {
           if (!isSpeaking) {
-            console.log('[VoiceInput] Speaker finished, now starting recognition');
             unsubscribe();
-            setTimeout(startNow, 200);
+            setTimeout(startNow, 50);
           }
         });
         return () => unsubscribe();
       }
 
-      // Kis késleltetés hogy a stop biztosan lefusson
-      const timer = setTimeout(startNow, 100);
+      const timer = setTimeout(startNow, 30);
       return () => clearTimeout(timer);
 
     } else if ((!autoStart || !voiceEnabled) && isListening) {
-      console.log('[VoiceInput] Stopping recognition (disabled or not my turn)');
       voiceRecognition.stopListening();
       setIsListening(false);
       setInterimText('');
@@ -198,7 +155,6 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
 
   useEffect(() => {
     return () => {
-      console.log('[VoiceInput] Unmounting - stopping recognition');
       voiceRecognition.stopListening();
       isStartedRef.current = false;
     };

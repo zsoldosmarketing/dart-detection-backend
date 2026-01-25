@@ -11,6 +11,20 @@ export interface VoiceRecognitionResult {
 
 export type RecognitionMode = 'fast' | 'balanced' | 'accurate';
 
+const PATTERNS = {
+  undoHu: /^(vissza|törlés|töröl|törölés|törles|undo|delete|back)$/i,
+  undoEn: /^(undo|back|delete)$/i,
+  bullHu: /\b(bull|közép|kozep|bika|ötven|otven|huszonöt|huszonot|huszon öt|huszon ot|kisbull|kis bull|külső bull|kulso bull|nagybull|nagy bull|dupla bull|duplabull|belső bull|belso bull|szimpla bull|sima bull|50|25)\b/i,
+  bullEn: /\b(bull|bullseye|double bull|single bull|small bull|outer bull|fifty|twenty.?five|50|25)\b/i,
+  compoundHu: /(?:dupla|tripla)\s+(?:egy|kettő|ketto|két|ket|három|harom|négy|negy|öt|ot|hat|hét|het|nyolc|kilenc|tíz|tiz|tizenegy|tizenkettő|tizenketto|tizenhárom|tizenharom|tizennégy|tizennegy|tizenöt|tizenot|tizenhat|tizenhét|tizenhet|tizennyolc|tizenkilenc|húsz|husz|20|\d+)/gi,
+  compoundEn: /(?:double|triple|dub|trip|treble)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\d+)/gi,
+  simpleHu: /(?:miss|mellé|melle|nulla|nula|nolla|nullát|nullat|semmi|zero|külső bull|kulso bull|dupla bull|duplabull|nagybull|nagy bull|belső bull|belso bull|szimpla bull|sima bull|bull|kisbull|kis bull|közép|kozep|bika|ötven|otven|huszonöt|huszonot|huszon öt|huszon ot|húsz|husz|tizenkilenc|tizennyolc|tizenhét|tizenhet|tizenhat|tizenöt|tizenot|tizennégy|tizennegy|tizenhárom|tizenharom|tizenkettő|tizenketto|tizenegy|egy|kettő|ketto|két|ket|három|harom|négy|negy|ötös|otos|öt|ot|hat|hét|het|nyolc|kilenc|tíz|tiz|\d+)/gi,
+  simpleEn: /(?:miss|missed|zero|nought|nothing|double bull|bullseye|bull|single bull|small bull|outer bull|fifty|twenty five|twentyfive|nineteen|eighteen|seventeen|sixteen|fifteen|fourteen|thirteen|twelve|eleven|ones|twos|threes|fours|fives|sixes|sevens|eights|nines|tens|one|two|three|four|five|six|seven|eight|nine|ten|twenty|\d+)/gi,
+  invalidNum: /\b(\d{2,})\b/g,
+};
+
+const IS_MOBILE = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
 class VoiceRecognitionService {
   private recognition: any = null;
   private isListening = false;
@@ -21,6 +35,7 @@ class VoiceRecognitionService {
   private restartAttempts = 0;
   private maxRestartAttempts = 10;
   private restartTimeout: ReturnType<typeof setTimeout> | null = null;
+  private cachedLang: string = 'hu-HU';
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -29,13 +44,11 @@ class VoiceRecognitionService {
         this.recognition = new SpeechRecognition();
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
-        this.recognition.maxAlternatives = 3;
+        this.recognition.maxAlternatives = 1;
 
         const locale = getLocale();
-        const lang = locale === 'hu' ? 'hu-HU' : 'en-GB';
-        this.recognition.lang = lang;
-
-        console.log('[VoiceRecognition] Inicializálva:', { locale, lang, userAgent: navigator.userAgent.substring(0, 80) });
+        this.cachedLang = locale === 'hu' ? 'hu-HU' : 'en-GB';
+        this.recognition.lang = this.cachedLang;
 
         this.initializeSettings();
 
@@ -44,7 +57,6 @@ class VoiceRecognitionService {
         });
 
         voiceSettingsSync.onSettingsChange((settings) => {
-          console.log('[VoiceRecognition] Beállítások szinkronizálva:', settings);
           this.mode = settings.recognition_mode;
           this.updateLanguage();
         });
@@ -71,19 +83,13 @@ class VoiceRecognitionService {
     onResult: (result: VoiceRecognitionResult) => void,
     onError?: (error: string) => void
   ): void {
-    if (!this.recognition) return;
+    if (!this.recognition || this.isListening) return;
 
-    if (this.isListening) {
-      return;
-    }
-
-    const locale = getLocale();
-    const lang = locale === 'hu' ? 'hu-HU' : 'en-GB';
-    this.recognition.lang = lang;
+    this.recognition.lang = this.cachedLang;
     this.recognition.continuous = false;
     this.recognition.interimResults = false;
 
-    console.log('[VoiceRecognition] startListening:', { locale, lang });
+    const locale = getLocale();
 
     this.recognition.onresult = (event: any) => {
       this.isListening = false;
@@ -91,16 +97,10 @@ class VoiceRecognitionService {
       if (!lastResult) return;
 
       const confidence = lastResult[0].confidence || 1.0;
-      const minConfidence = this.getMinConfidence();
-
-      if (confidence < minConfidence) {
-        return;
-      }
+      if (confidence < this.getMinConfidence()) return;
 
       const transcript = lastResult[0].transcript.toLowerCase().trim();
-      console.log('[VoiceRecognition] Transcript:', transcript, 'Confidence:', confidence);
       const result = this.parseTranscript(transcript, locale);
-      console.log('[VoiceRecognition] Result:', result);
 
       if (result) {
         onResult(result);
@@ -122,9 +122,7 @@ class VoiceRecognitionService {
 
     try {
       this.recognition.stop();
-    } catch {
-      // ignore
-    }
+    } catch {}
 
     setTimeout(() => {
       try {
@@ -132,11 +130,9 @@ class VoiceRecognitionService {
         this.recognition.start();
       } catch {
         this.isListening = false;
-        if (onError) {
-          onError('Could not start');
-        }
+        if (onError) onError('Could not start');
       }
-    }, 50);
+    }, 20);
   }
 
   startContinuousListening(
@@ -145,13 +141,6 @@ class VoiceRecognitionService {
   ): void {
     if (!this.recognition) return;
 
-    console.log('[VoiceRecognition] startContinuousListening called', {
-      isListening: this.isListening,
-      isPaused: this.isPaused,
-      hasTimeout: !!this.restartTimeout
-    });
-
-    // Always clear any pending timeouts first
     if (this.restartTimeout) {
       clearTimeout(this.restartTimeout);
       this.restartTimeout = null;
@@ -160,138 +149,94 @@ class VoiceRecognitionService {
     this.currentCallback = onTranscript;
     this.isPaused = false;
 
-    if (this.isListening) {
-      console.log('[VoiceRecognition] Already listening, callback updated');
-      return;
-    }
+    if (this.isListening) return;
 
-    console.log('[VoiceRecognition] Starting new continuous listening session');
+    this.recognition.lang = this.cachedLang;
+    this.recognition.continuous = !IS_MOBILE;
+    this.recognition.interimResults = !IS_MOBILE;
 
-    const ensureCorrectLanguage = () => {
-      if (!this.recognition) return;
-      const currentLocale = getLocale();
-      const expectedLang = currentLocale === 'hu' ? 'hu-HU' : 'en-GB';
-      this.recognition.lang = expectedLang;
-    };
-
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-    ensureCorrectLanguage();
-    this.recognition.continuous = !isMobile;
-    this.recognition.interimResults = !isMobile;
+    const minConfidence = this.getMinConfidence();
 
     this.recognition.onresult = (event: any) => {
       this.restartAttempts = 0;
-
-      if (this.isPaused) {
-        return;
-      }
-
-      const minConfidence = this.getMinConfidence();
+      if (this.isPaused || !this.currentCallback) return;
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const confidence = event.results[i][0].confidence || 1.0;
-        const transcript = event.results[i][0].transcript;
-        const isFinal = event.results[i].isFinal;
+        const result = event.results[i];
+        const confidence = result[0].confidence || 1.0;
+        const isFinal = result.isFinal;
 
-        console.log('[VoiceRecognition] onresult:', { transcript, isFinal, confidence, paused: this.isPaused });
+        if (isFinal && confidence < minConfidence) continue;
 
-        if (event.results[i].isFinal && confidence < minConfidence) {
-          continue;
-        }
-
-        if (this.currentCallback && !this.isPaused) {
-          this.currentCallback(transcript, isFinal);
-        }
+        this.currentCallback(result[0].transcript, isFinal);
       }
     };
 
     this.recognition.onerror = (event: any) => {
-      console.log('[VoiceRecognition] onerror:', event.error);
-      if (event.error === 'no-speech' || event.error === 'aborted') {
-        return;
-      }
+      if (event.error === 'no-speech' || event.error === 'aborted') return;
       if (event.error === 'audio-capture' || event.error === 'not-allowed') {
         this.isListening = false;
         if (this.restartTimeout) {
           clearTimeout(this.restartTimeout);
           this.restartTimeout = null;
         }
-        if (onError) {
-          onError(event.error);
-        }
+        if (onError) onError(event.error);
         return;
       }
-      if (event.error === 'network') {
-        this.restartAttempts++;
-      }
+      if (event.error === 'network') this.restartAttempts++;
     };
 
     this.recognition.onend = () => {
-      console.log('[VoiceRecognition] onend, isListening:', this.isListening, 'attempts:', this.restartAttempts);
-
-      if (!this.isListening) {
-        return;
-      }
+      if (!this.isListening) return;
 
       if (this.restartAttempts < this.maxRestartAttempts) {
-        if (this.restartTimeout) {
-          clearTimeout(this.restartTimeout);
-        }
-        const delay = isMobile ? 150 : 50;
+        if (this.restartTimeout) clearTimeout(this.restartTimeout);
         this.restartTimeout = setTimeout(() => {
           if (this.isListening) {
             try {
-              ensureCorrectLanguage();
+              this.recognition.lang = this.cachedLang;
               this.recognition.start();
-              console.log('[VoiceRecognition] Restarted');
             } catch {
               this.restartAttempts++;
             }
           }
-        }, delay);
+        }, IS_MOBILE ? 80 : 20);
       } else {
-        console.log('[VoiceRecognition] Max attempts reached, resetting...');
         this.restartAttempts = 0;
         setTimeout(() => {
           if (this.isListening) {
             try {
-              ensureCorrectLanguage();
+              this.recognition.lang = this.cachedLang;
               this.recognition.start();
             } catch {
               this.isListening = false;
             }
           }
-        }, 500);
+        }, 150);
       }
     };
 
     try {
       this.recognition.stop();
-    } catch {
-      // ignore
-    }
+    } catch {}
 
     setTimeout(() => {
       try {
         this.isListening = true;
         this.restartAttempts = 0;
-        ensureCorrectLanguage();
+        this.recognition.lang = this.cachedLang;
         this.recognition.start();
-        console.log('[VoiceRecognition] Started continuous listening');
       } catch {
         this.isListening = false;
       }
-    }, 100);
+    }, 30);
   }
 
   pauseListening(): void {
-    console.log('[VoiceRecognition] Paused');
     this.isPaused = true;
   }
 
   resumeListening(): void {
-    console.log('[VoiceRecognition] Resumed');
     this.isPaused = false;
   }
 
@@ -300,25 +245,20 @@ class VoiceRecognitionService {
   }
 
   stopListening(): void {
-    console.log('[VoiceRecognition] stopListening called');
     this.isListening = false;
     this.currentCallback = null;
     this.isPaused = false;
     this.restartAttempts = 0;
 
-    // CRITICAL: Clear any pending restart timeouts
     if (this.restartTimeout) {
       clearTimeout(this.restartTimeout);
       this.restartTimeout = null;
-      console.log('[VoiceRecognition] Cleared restart timeout');
     }
 
     if (this.recognition) {
       try {
         this.recognition.stop();
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
   }
 
@@ -330,26 +270,20 @@ class VoiceRecognitionService {
     if (!this.recognition) return;
 
     const locale = getLocale();
-    const lang = locale === 'hu' ? 'hu-HU' : 'en-GB';
-    this.recognition.lang = lang;
-
-    console.log('[VoiceRecognition] Nyelv frissítve:', { locale, lang });
+    this.cachedLang = locale === 'hu' ? 'hu-HU' : 'en-GB';
+    this.recognition.lang = this.cachedLang;
 
     if (this.isListening) {
-      const wasListening = this.isListening;
       this.stopListening();
-
-      if (wasListening) {
-        setTimeout(() => {
-          this.isListening = true;
-          try {
-            this.recognition.lang = lang;
-            this.recognition.start();
-          } catch {
-            this.isListening = false;
-          }
-        }, 100);
-      }
+      setTimeout(() => {
+        this.isListening = true;
+        try {
+          this.recognition.lang = this.cachedLang;
+          this.recognition.start();
+        } catch {
+          this.isListening = false;
+        }
+      }, 30);
     }
   }
 
@@ -415,46 +349,46 @@ class VoiceRecognitionService {
   }
 
   parseMultipleTranscripts(transcript: string, locale: string): VoiceRecognitionResult[] {
-    const undoPattern = locale === 'hu'
-      ? /^(vissza|törlés|töröl|törölés|törles|undo|delete|back)$/i
-      : /^(undo|back|delete)$/i;
+    const isHu = locale === 'hu';
+    const undoPattern = isHu ? PATTERNS.undoHu : PATTERNS.undoEn;
 
     if (undoPattern.test(transcript.trim())) {
       return [{ score: 0, multiplier: 0, sector: null, isUndo: true }];
     }
 
-    const hasBullKeyword = locale === 'hu'
-      ? /\b(bull|közép|kozep|bika|ötven|otven|huszonöt|huszonot|huszon öt|huszon ot|kisbull|kis bull|külső bull|kulso bull|nagybull|nagy bull|dupla bull|duplabull|belső bull|belso bull|szimpla bull|sima bull|50|25)\b/i.test(transcript)
-      : /\b(bull|bullseye|double bull|single bull|small bull|outer bull|fifty|twenty.?five|50|25)\b/i.test(transcript);
+    const bullPattern = isHu ? PATTERNS.bullHu : PATTERNS.bullEn;
+    const hasBullKeyword = bullPattern.test(transcript);
 
     transcript = this.splitInvalidNumbers(transcript, hasBullKeyword);
 
-    const compoundPattern = locale === 'hu'
-      ? /(?:dupla|tripla)\s+(?:egy|kettő|ketto|két|ket|három|harom|négy|negy|öt|ot|hat|hét|het|nyolc|kilenc|tíz|tiz|tizenegy|tizenkettő|tizenketto|tizenhárom|tizenharom|tizennégy|tizennegy|tizenöt|tizenot|tizenhat|tizenhét|tizenhet|tizennyolc|tizenkilenc|húsz|husz|20|\d+)/gi
-      : /(?:double|triple|dub|trip|treble)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\d+)/gi;
+    const compoundPattern = isHu ? PATTERNS.compoundHu : PATTERNS.compoundEn;
+    const simplePattern = isHu ? PATTERNS.simpleHu : PATTERNS.simpleEn;
 
-    const simplePattern = locale === 'hu'
-      ? /(?:miss|mellé|melle|nulla|nula|nolla|nullát|nullat|semmi|zero|külső bull|kulso bull|dupla bull|duplabull|nagybull|nagy bull|belső bull|belso bull|szimpla bull|sima bull|bull|kisbull|kis bull|közép|kozep|bika|ötven|otven|huszonöt|huszonot|huszon öt|huszon ot|húsz|husz|tizenkilenc|tizennyolc|tizenhét|tizenhet|tizenhat|tizenöt|tizenot|tizennégy|tizennegy|tizenhárom|tizenharom|tizenkettő|tizenketto|tizenegy|egy|kettő|ketto|két|ket|három|harom|négy|negy|ötös|otos|öt|ot|hat|hét|het|nyolc|kilenc|tíz|tiz|\d+)/gi
-      : /(?:miss|missed|zero|nought|nothing|double bull|bullseye|bull|single bull|small bull|outer bull|fifty|twenty five|twentyfive|nineteen|eighteen|seventeen|sixteen|fifteen|fourteen|thirteen|twelve|eleven|ones|twos|threes|fours|fives|sixes|sevens|eights|nines|tens|one|two|three|four|five|six|seven|eight|nine|ten|twenty|\d+)/gi;
+    compoundPattern.lastIndex = 0;
+    simplePattern.lastIndex = 0;
 
     const coveredRanges: Array<[number, number]> = [];
     const results: Array<{ result: VoiceRecognitionResult; index: number }> = [];
 
-    const compoundMatches = transcript.matchAll(compoundPattern);
-    for (const match of compoundMatches) {
+    let match: RegExpExecArray | null;
+    while ((match = compoundPattern.exec(transcript)) !== null) {
       const result = this.parseTranscript(match[0], locale);
-      if (result && match.index !== undefined) {
+      if (result) {
         results.push({ result, index: match.index });
         coveredRanges.push([match.index, match.index + match[0].length]);
       }
     }
 
-    const simpleMatches = transcript.matchAll(simplePattern);
-    for (const match of simpleMatches) {
-      if (match.index === undefined) continue;
+    while ((match = simplePattern.exec(transcript)) !== null) {
       const matchStart = match.index;
       const matchEnd = match.index + match[0].length;
-      const isCovered = coveredRanges.some(([start, end]) => matchStart >= start && matchEnd <= end);
+      let isCovered = false;
+      for (let i = 0; i < coveredRanges.length; i++) {
+        if (matchStart >= coveredRanges[i][0] && matchEnd <= coveredRanges[i][1]) {
+          isCovered = true;
+          break;
+        }
+      }
       if (!isCovered) {
         const result = this.parseTranscript(match[0], locale);
         if (result) {
@@ -463,7 +397,9 @@ class VoiceRecognitionService {
       }
     }
 
-    results.sort((a, b) => a.index - b.index);
+    if (results.length > 1) {
+      results.sort((a, b) => a.index - b.index);
+    }
 
     return results.map(r => r.result);
   }
