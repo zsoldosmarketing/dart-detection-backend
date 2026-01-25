@@ -298,6 +298,7 @@ export function DartScoreInput({
           autoStart={autoStart}
           dartsCount={totalDarts}
           voiceEnabled={voiceEnabled}
+          onToggleVoice={toggleVoice}
         />
       </div>
 

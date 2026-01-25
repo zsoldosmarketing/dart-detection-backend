@@ -13,9 +13,10 @@ interface VoiceInputProps {
   autoStart?: boolean;
   dartsCount?: number;
   voiceEnabled?: boolean;
+  onToggleVoice?: () => void;
 }
 
-export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, autoStart, dartsCount = 0, voiceEnabled = false }: VoiceInputProps) {
+export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, autoStart, dartsCount = 0, voiceEnabled = false, onToggleVoice }: VoiceInputProps) {
   const [isListening, setIsListening] = useState(false);
   const [lastRecognized, setLastRecognized] = useState('');
   const [interimText, setInterimText] = useState('');
@@ -198,13 +199,19 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
       voiceRecognition.stopListening();
       setIsListening(false);
       setInterimText('');
+      if (onToggleVoice && voiceEnabled) {
+        onToggleVoice();
+      }
     } else {
       setIsListening(true);
       setLastRecognized('');
       setInterimText('');
       startRecognition();
+      if (onToggleVoice && !voiceEnabled) {
+        onToggleVoice();
+      }
     }
-  }, [isListening, startRecognition]);
+  }, [isListening, startRecognition, onToggleVoice, voiceEnabled]);
 
   useEffect(() => {
     let restartTimeout: NodeJS.Timeout;
