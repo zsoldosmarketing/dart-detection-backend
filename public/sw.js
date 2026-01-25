@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v5-voice-persist-state';
+const CACHE_VERSION = 'v6-voice-restart-fix';
 const CACHE_NAME = 'darts-training-' + CACHE_VERSION;
 
 self.addEventListener('install', (event) => {

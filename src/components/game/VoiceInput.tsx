@@ -238,7 +238,7 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
             }
           }
 
-          if (autoStart && !pausedRef.current && !disabled && !isRestartingRef.current) {
+          if (autoStart && voiceEnabled && !pausedRef.current && !disabled && !isRestartingRef.current) {
             isRestartingRef.current = true;
             setTimeout(() => {
               setIsListening(true);
@@ -256,7 +256,7 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
       clearTimeout(restartTimeout);
       unsubscribe();
     };
-  }, [processTranscript, isListening, autoStart, disabled, startRecognition]);
+  }, [processTranscript, isListening, autoStart, voiceEnabled, disabled, startRecognition]);
 
   if (!isAvailable) {
     return null;
