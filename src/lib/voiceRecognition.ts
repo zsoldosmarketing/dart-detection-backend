@@ -14,8 +14,13 @@ export type RecognitionMode = 'fast' | 'balanced' | 'accurate';
 class VoiceRecognitionService {
   private recognition: any = null;
   private isListening = false;
+  private isPaused = false;
   private mode: RecognitionMode = 'balanced';
   private initialized = false;
+  private currentCallback: ((transcript: string, isFinal: boolean) => void) | null = null;
+  private restartAttempts = 0;
+  private maxRestartAttempts = 10;
+  private restartTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -140,7 +145,11 @@ class VoiceRecognitionService {
   ): void {
     if (!this.recognition) return;
 
+    this.currentCallback = onTranscript;
+    this.isPaused = false;
+
     if (this.isListening) {
+      console.log('[VoiceRecognition] Already listening, just updating callback');
       return;
     }
 
@@ -149,7 +158,6 @@ class VoiceRecognitionService {
       const currentLocale = getLocale();
       const expectedLang = currentLocale === 'hu' ? 'hu-HU' : 'en-GB';
       this.recognition.lang = expectedLang;
-      console.log('[VoiceRecognition] Nyelv beállítva:', expectedLang);
     };
 
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -158,12 +166,13 @@ class VoiceRecognitionService {
     this.recognition.continuous = !isMobile;
     this.recognition.interimResults = !isMobile;
 
-    let restartAttempts = 0;
-    const maxRestartAttempts = 5;
-    let restartTimeout: ReturnType<typeof setTimeout> | null = null;
-
     this.recognition.onresult = (event: any) => {
-      restartAttempts = 0;
+      this.restartAttempts = 0;
+
+      if (this.isPaused) {
+        return;
+      }
+
       const minConfidence = this.getMinConfidence();
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -171,29 +180,28 @@ class VoiceRecognitionService {
         const transcript = event.results[i][0].transcript;
         const isFinal = event.results[i].isFinal;
 
-        console.log('[VoiceRecognition] onresult:', { transcript, isFinal, confidence, minConfidence });
+        console.log('[VoiceRecognition] onresult:', { transcript, isFinal, confidence, paused: this.isPaused });
 
         if (event.results[i].isFinal && confidence < minConfidence) {
-          console.log('[VoiceRecognition] Skipping due to low confidence');
           continue;
         }
 
-        onTranscript(transcript, isFinal);
+        if (this.currentCallback && !this.isPaused) {
+          this.currentCallback(transcript, isFinal);
+        }
       }
     };
 
     this.recognition.onerror = (event: any) => {
-      if (event.error === 'no-speech') {
-        return;
-      }
-      if (event.error === 'aborted') {
+      console.log('[VoiceRecognition] onerror:', event.error);
+      if (event.error === 'no-speech' || event.error === 'aborted') {
         return;
       }
       if (event.error === 'audio-capture' || event.error === 'not-allowed') {
         this.isListening = false;
-        if (restartTimeout) {
-          clearTimeout(restartTimeout);
-          restartTimeout = null;
+        if (this.restartTimeout) {
+          clearTimeout(this.restartTimeout);
+          this.restartTimeout = null;
         }
         if (onError) {
           onError(event.error);
@@ -201,42 +209,46 @@ class VoiceRecognitionService {
         return;
       }
       if (event.error === 'network') {
-        restartAttempts++;
-        return;
+        this.restartAttempts++;
       }
     };
 
     this.recognition.onend = () => {
-      console.log('[VoiceRecognition] onend event, isListening:', this.isListening, 'restartAttempts:', restartAttempts);
-      if (this.isListening && restartAttempts < maxRestartAttempts) {
-        if (restartTimeout) {
-          clearTimeout(restartTimeout);
+      console.log('[VoiceRecognition] onend, isListening:', this.isListening, 'attempts:', this.restartAttempts);
+
+      if (!this.isListening) {
+        return;
+      }
+
+      if (this.restartAttempts < this.maxRestartAttempts) {
+        if (this.restartTimeout) {
+          clearTimeout(this.restartTimeout);
         }
-        const delay = isMobile ? 200 : 100;
-        restartTimeout = setTimeout(() => {
+        const delay = isMobile ? 150 : 50;
+        this.restartTimeout = setTimeout(() => {
           if (this.isListening) {
             try {
               ensureCorrectLanguage();
               this.recognition.start();
-              console.log('[VoiceRecognition] Recognition restarted successfully');
-            } catch (error) {
-              console.error('[VoiceRecognition] Restart failed:', error);
-              restartAttempts++;
-              if (restartAttempts >= maxRestartAttempts) {
-                this.isListening = false;
-                if (onError) {
-                  onError('Too many restart attempts');
-                }
-              }
+              console.log('[VoiceRecognition] Restarted');
+            } catch {
+              this.restartAttempts++;
             }
           }
         }, delay);
-      } else if (restartAttempts >= maxRestartAttempts) {
-        console.log('[VoiceRecognition] Max restart attempts reached');
-        this.isListening = false;
-        if (onError) {
-          onError('Too many restart attempts');
-        }
+      } else {
+        console.log('[VoiceRecognition] Max attempts reached, resetting...');
+        this.restartAttempts = 0;
+        setTimeout(() => {
+          if (this.isListening) {
+            try {
+              ensureCorrectLanguage();
+              this.recognition.start();
+            } catch {
+              this.isListening = false;
+            }
+          }
+        }, 500);
       }
     };
 
@@ -249,12 +261,28 @@ class VoiceRecognitionService {
     setTimeout(() => {
       try {
         this.isListening = true;
+        this.restartAttempts = 0;
         ensureCorrectLanguage();
         this.recognition.start();
+        console.log('[VoiceRecognition] Started continuous listening');
       } catch {
         this.isListening = false;
       }
-    }, 150);
+    }, 100);
+  }
+
+  pauseListening(): void {
+    console.log('[VoiceRecognition] Paused');
+    this.isPaused = true;
+  }
+
+  resumeListening(): void {
+    console.log('[VoiceRecognition] Resumed');
+    this.isPaused = false;
+  }
+
+  isPausedState(): boolean {
+    return this.isPaused;
   }
 
   stopListening(): void {

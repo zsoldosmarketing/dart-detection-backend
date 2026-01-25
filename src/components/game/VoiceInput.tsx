@@ -20,23 +20,14 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
   const [isListening, setIsListening] = useState(false);
   const [lastRecognized, setLastRecognized] = useState('');
   const [interimText, setInterimText] = useState('');
-  const [speakerActive, setSpeakerActive] = useState(false);
-  const [manuallyControlled, setManuallyControlled] = useState(false);
   const isAvailable = voiceRecognition.isAvailable();
+
   const onScoreInputRef = useRef(onScoreInput);
   const onUndoRef = useRef(onUndo);
   const onSubmitRef = useRef(onSubmit);
   const pausedRef = useRef(paused);
   const dartsCountRef = useRef(dartsCount);
-  const speakerActiveRef = useRef(speakerActive);
-  const pendingTranscriptRef = useRef<string | null>(null);
-  const lastInterimRef = useRef<string>('');
-  const isRestartingRef = useRef(false);
-  const lastStartTimeRef = useRef<number>(0);
-  const isListeningRef = useRef(false);
-  const autoStartRef = useRef(autoStart);
-  const voiceEnabledRef = useRef(voiceEnabled);
-  const disabledRef = useRef(disabled);
+  const isStartedRef = useRef(false);
 
   useEffect(() => {
     onScoreInputRef.current = onScoreInput;
@@ -44,30 +35,7 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
     onSubmitRef.current = onSubmit;
     pausedRef.current = paused;
     dartsCountRef.current = dartsCount;
-    speakerActiveRef.current = speakerActive;
-    autoStartRef.current = autoStart;
-    voiceEnabledRef.current = voiceEnabled;
-    disabledRef.current = disabled;
-  }, [onScoreInput, onUndo, onSubmit, paused, dartsCount, speakerActive, autoStart, voiceEnabled, disabled]);
-
-  useEffect(() => {
-    isListeningRef.current = isListening;
-  }, [isListening]);
-
-  useEffect(() => {
-    if (paused && !pausedRef.current && isListening) {
-      setInterimText('');
-    }
-  }, [paused, isListening]);
-
-  useEffect(() => {
-    if (disabled && isListening) {
-      voiceRecognition.stopListening();
-      setIsListening(false);
-      setInterimText('');
-      setManuallyControlled(false);
-    }
-  }, [disabled, isListening]);
+  }, [onScoreInput, onUndo, onSubmit, paused, dartsCount]);
 
   const processTranscript = useCallback((text: string) => {
     const locale = getLocale();
@@ -138,25 +106,18 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
   }, []);
 
   const startRecognition = useCallback(() => {
-    const now = Date.now();
-    if (now - lastStartTimeRef.current < 150) {
-      return;
-    }
-    lastStartTimeRef.current = now;
+    if (isStartedRef.current) return;
+    isStartedRef.current = true;
+
+    console.log('[VoiceInput] Starting continuous recognition (always-on mode)');
 
     voiceRecognition.startContinuousListening(
       (transcript, isFinal) => {
         if (isFinal) {
           const text = transcript.toLowerCase().trim();
-          lastInterimRef.current = '';
-
-          if (speakerActiveRef.current) {
-            pendingTranscriptRef.current = text;
-            return;
-          }
 
           const locale = getLocale();
-          const cleanText = text.toLowerCase().trim().replace(/[.,!?;:]/g, '');
+          const cleanText = text.replace(/[.,!?;:]/g, '');
           const submitPattern = locale === 'hu'
             ? /(beküld|bekül|beküldés|beküldöm|küld|kül|küldés|küldöm|send|submit|mehet|mehetek|het|hetek|oké|okay|ok|oke|okés|go|kész|kesz|rendben|rajta|gyerünk|gyerunk|megy|indulhat)/i
             : /(send|submit|done|confirm|okay|ok|go|ready)/i;
@@ -169,69 +130,71 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
             processTranscript(text);
           }
         } else {
-          if (!speakerActiveRef.current && !pausedRef.current) {
+          if (!pausedRef.current) {
             setInterimText(transcript);
-            lastInterimRef.current = transcript;
           }
         }
       },
       (error) => {
-        console.error('Voice error:', error);
+        console.error('[VoiceInput] Voice error:', error);
+        isStartedRef.current = false;
       }
     );
   }, [processTranscript]);
 
   useEffect(() => {
-    if (autoStart && voiceEnabled && !paused && isAvailable && !manuallyControlled) {
+    if (autoStart && voiceEnabled && isAvailable) {
       if (!isListening) {
-        const startDelay = voiceCaller.isSpeaking() ? 200 : 50;
-        const timeout = setTimeout(() => {
-          if (!isListening && !voiceCaller.isSpeaking()) {
-            console.log('[VoiceInput] Starting recognition (autoStart effect)');
-            setIsListening(true);
-            setLastRecognized('');
-            setInterimText('');
-            startRecognition();
-          }
-        }, startDelay);
-        return () => clearTimeout(timeout);
+        setIsListening(true);
+        setLastRecognized('');
+        setInterimText('');
+        startRecognition();
       }
     }
 
-    if ((!autoStart || !voiceEnabled) && isListening && !manuallyControlled) {
+    if ((!autoStart || !voiceEnabled) && isListening) {
       voiceRecognition.stopListening();
       setIsListening(false);
       setInterimText('');
+      isStartedRef.current = false;
     }
-  }, [autoStart, voiceEnabled, paused, isListening, isAvailable, startRecognition, dartsCount, manuallyControlled]);
+  }, [autoStart, voiceEnabled, isListening, isAvailable, startRecognition]);
 
   useEffect(() => {
-    if (!autoStart || !voiceEnabled || !isAvailable) return;
+    if (disabled) {
+      voiceRecognition.stopListening();
+      setIsListening(false);
+      setInterimText('');
+      isStartedRef.current = false;
+    }
+  }, [disabled]);
 
-    const watchdog = setInterval(() => {
-      const shouldBeListening = autoStartRef.current && voiceEnabledRef.current && !pausedRef.current && !disabledRef.current && !voiceCaller.isSpeaking();
-      const actuallyListening = voiceRecognition.isCurrentlyListening();
-
-      if (shouldBeListening && !actuallyListening && !isRestartingRef.current) {
-        console.log('[VoiceInput] Watchdog: Recognition should be active but is not. Restarting...');
-        isRestartingRef.current = true;
-        setIsListening(true);
-        startRecognition();
-        setTimeout(() => {
-          isRestartingRef.current = false;
-        }, 200);
+  useEffect(() => {
+    const unsubscribe = voiceCaller.onSpeakingChange((isSpeaking) => {
+      console.log('[VoiceInput] Speaker state:', isSpeaking);
+      if (isSpeaking) {
+        voiceRecognition.pauseListening();
+        setInterimText('');
+      } else {
+        voiceRecognition.resumeListening();
       }
-    }, 2000);
+    });
 
-    return () => clearInterval(watchdog);
-  }, [autoStart, voiceEnabled, isAvailable, startRecognition]);
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (paused) {
+      setInterimText('');
+    }
+  }, [paused]);
 
   const toggleListening = useCallback(() => {
-    setManuallyControlled(true);
     if (isListening) {
       voiceRecognition.stopListening();
       setIsListening(false);
       setInterimText('');
+      isStartedRef.current = false;
       if (onToggleVoice && voiceEnabled) {
         onToggleVoice();
       }
@@ -245,67 +208,6 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
       }
     }
   }, [isListening, startRecognition, onToggleVoice, voiceEnabled]);
-
-  useEffect(() => {
-    let restartTimeout: NodeJS.Timeout;
-
-    const unsubscribe = voiceCaller.onSpeakingChange((isSpeaking) => {
-      console.log('[VoiceInput] onSpeakingChange:', isSpeaking, 'isListening:', isListeningRef.current);
-      setSpeakerActive(isSpeaking);
-
-      if (isSpeaking) {
-        if (lastInterimRef.current && !pendingTranscriptRef.current) {
-          pendingTranscriptRef.current = lastInterimRef.current.toLowerCase().trim();
-        }
-        lastInterimRef.current = '';
-        setInterimText('');
-
-        if (isListeningRef.current && !isRestartingRef.current) {
-          console.log('[VoiceInput] Stopping recognition due to speaker');
-          voiceRecognition.stopListening();
-          setIsListening(false);
-        }
-      } else {
-        clearTimeout(restartTimeout);
-        restartTimeout = setTimeout(() => {
-          console.log('[VoiceInput] Speaker finished, checking restart:', {
-            isRestarting: isRestartingRef.current,
-            autoStart: autoStartRef.current,
-            voiceEnabled: voiceEnabledRef.current,
-            paused: pausedRef.current,
-            disabled: disabledRef.current
-          });
-
-          if (isRestartingRef.current) {
-            return;
-          }
-
-          if (pendingTranscriptRef.current) {
-            const pending = pendingTranscriptRef.current;
-            pendingTranscriptRef.current = null;
-            if (!pausedRef.current && dartsCountRef.current < 3) {
-              processTranscript(pending);
-            }
-          }
-
-          if (autoStartRef.current && voiceEnabledRef.current && !pausedRef.current && !disabledRef.current && !isRestartingRef.current) {
-            console.log('[VoiceInput] Restarting recognition after speaker finished');
-            isRestartingRef.current = true;
-            setIsListening(true);
-            startRecognition();
-            setTimeout(() => {
-              isRestartingRef.current = false;
-            }, 100);
-          }
-        }, 100);
-      }
-    });
-
-    return () => {
-      clearTimeout(restartTimeout);
-      unsubscribe();
-    };
-  }, [processTranscript, startRecognition]);
 
   if (!isAvailable) {
     return null;
