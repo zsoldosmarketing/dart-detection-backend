@@ -151,7 +151,8 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
       voiceEnabled,
       isAvailable,
       isListening,
-      isStarted: isStartedRef.current
+      isStarted: isStartedRef.current,
+      speakerIsSpeaking: voiceCaller.isSpeaking()
     });
 
     if (autoStart && voiceEnabled && isAvailable) {
@@ -160,6 +161,24 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
       // Először teljesen leállítjuk ha futna
       voiceRecognition.stopListening();
       isStartedRef.current = false;
+
+      // Ha a speaker beszél, várunk amíg befejezi
+      if (voiceCaller.isSpeaking()) {
+        console.log('[VoiceInput] Speaker is speaking, waiting for finish...');
+        const unsubscribe = voiceCaller.onSpeakingChange((isSpeaking) => {
+          if (!isSpeaking) {
+            console.log('[VoiceInput] Speaker finished, now starting recognition');
+            unsubscribe();
+            setTimeout(() => {
+              setIsListening(true);
+              setLastRecognized('');
+              setInterimText('');
+              startRecognition();
+            }, 200);
+          }
+        });
+        return;
+      }
 
       // Kis késleltetés hogy a stop biztosan lefusson
       setTimeout(() => {

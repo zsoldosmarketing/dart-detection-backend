@@ -94,7 +94,10 @@ export function GamePlayPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [dartQueue, setDartQueue] = useState<DartTarget[]>([]);
   const [isProcessingQueue, setIsProcessingQueue] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(() => {
+    const stored = localStorage.getItem('voiceEnabled');
+    return stored === 'true';
+  });
   const [showSuggestions, setShowSuggestions] = useState(() => {
     const stored = localStorage.getItem('showSuggestions');
     return stored === null ? true : stored === 'true';
@@ -107,13 +110,9 @@ export function GamePlayPage() {
   const [preferredDoubles, setPreferredDoubles] = useState<number[]>([20, 16, 8]);
 
   useEffect(() => {
-    voiceCaller.setEnabled(false);
-    soundEffects.setEnabled(false);
-  }, []);
-
-  useEffect(() => {
     soundEffects.setEnabled(voiceEnabled);
     voiceCaller.setEnabled(voiceEnabled);
+    localStorage.setItem('voiceEnabled', voiceEnabled.toString());
   }, [voiceEnabled]);
 
   useEffect(() => {
