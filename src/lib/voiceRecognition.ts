@@ -93,7 +93,9 @@ class VoiceRecognitionService {
       }
 
       const transcript = lastResult[0].transcript.toLowerCase().trim();
+      console.log('[VoiceRecognition] Transcript:', transcript, 'Confidence:', confidence);
       const result = this.parseTranscript(transcript, locale);
+      console.log('[VoiceRecognition] Result:', result);
 
       if (result) {
         onResult(result);
@@ -362,8 +364,8 @@ class VoiceRecognitionService {
       : /(?:double|triple|dub|trip|treble)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\d+)/gi;
 
     const simplePattern = locale === 'hu'
-      ? /\b(?:miss|mellé|melle|nulla|nula|nolla|nullát|nullat|semmi|zero|külső bull|kulso bull|dupla bull|duplabull|nagybull|nagy bull|belső bull|belso bull|szimpla bull|sima bull|bull|kisbull|kis bull|közép|kozep|bika|ötven|otven|huszonöt|huszonot|huszon öt|huszon ot|húsz|husz|egy|kettő|ketto|két|ket|három|harom|négy|negy|ötös|otos|öt|ot|hat|hét|het|nyolc|kilenc|tíz|tiz|tizenegy|tizenkettő|tizenketto|tizenhárom|tizenharom|tizennégy|tizennegy|tizenöt|tizenot|tizenhat|tizenhét|tizenhet|tizennyolc|tizenkilenc|\d+)\b/gi
-      : /\b(?:miss|missed|zero|nought|nothing|double bull|bullseye|bull|single bull|small bull|outer bull|fifty|twenty five|twentyfive|ones|twos|threes|fours|fives|sixes|sevens|eights|nines|tens|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\d+)\b/gi;
+      ? /(?:miss|mellé|melle|nulla|nula|nolla|nullát|nullat|semmi|zero|külső bull|kulso bull|dupla bull|duplabull|nagybull|nagy bull|belső bull|belso bull|szimpla bull|sima bull|bull|kisbull|kis bull|közép|kozep|bika|ötven|otven|huszonöt|huszonot|huszon öt|huszon ot|húsz|husz|tizenkilenc|tizennyolc|tizenhét|tizenhet|tizenhat|tizenöt|tizenot|tizennégy|tizennegy|tizenhárom|tizenharom|tizenkettő|tizenketto|tizenegy|egy|kettő|ketto|két|ket|három|harom|négy|negy|ötös|otos|öt|ot|hat|hét|het|nyolc|kilenc|tíz|tiz|\d+)/gi
+      : /(?:miss|missed|zero|nought|nothing|double bull|bullseye|bull|single bull|small bull|outer bull|fifty|twenty five|twentyfive|nineteen|eighteen|seventeen|sixteen|fifteen|fourteen|thirteen|twelve|eleven|ones|twos|threes|fours|fives|sixes|sevens|eights|nines|tens|one|two|three|four|five|six|seven|eight|nine|ten|twenty|\d+)/gi;
 
     const coveredRanges: Array<[number, number]> = [];
     const results: Array<{ result: VoiceRecognitionResult; index: number }> = [];
@@ -518,12 +520,15 @@ class VoiceRecognitionService {
 
   private parseHungarian(text: string): VoiceRecognitionResult | null {
     text = text.toLowerCase().replace(/[.,!?]/g, '').trim();
+    console.log('[parseHungarian] Input text:', text);
 
     if (/^(vissza|törlés|töröl|törölés|törles|törlöm|undo|delete|back|előző|elozo)$/.test(text)) {
+      console.log('[parseHungarian] Undo detected');
       return { score: 0, multiplier: 0, sector: null, isUndo: true };
     }
 
-    if (/\b(miss|mellé|melle|nulla|nula|nolla|nullát|nullat|semmi|zero|0)\b/.test(text)) {
+    if (/(miss|mellé|melle|nulla|nula|nolla|nullát|nullat|semmi|zero|^0$)/.test(text)) {
+      console.log('[parseHungarian] Miss/Zero detected');
       return { score: 0, multiplier: 0, sector: null };
     }
 
@@ -551,26 +556,26 @@ class VoiceRecognitionService {
     }
 
     const numberPatterns: Array<[RegExp, number]> = [
-      [/húsz|husz|20/i, 20],
-      [/tizenkilenc|19/i, 19],
-      [/tizennyolc|18/i, 18],
-      [/tizenhét|tizenhet|17/i, 17],
-      [/tizenhat|16/i, 16],
-      [/tizenöt|tizenot|15/i, 15],
-      [/tizennégy|tizennegy|14/i, 14],
-      [/tizenhárom|tizenharom|13/i, 13],
-      [/tizenkettő|tizenketto|tizenkét|tizenket|12/i, 12],
-      [/tizenegy|11/i, 11],
-      [/tíz|tiz|10/i, 10],
-      [/kilenc|9/i, 9],
-      [/nyolc|8/i, 8],
-      [/hét|het|7/i, 7],
-      [/\bhat\b|6/i, 6],
-      [/ötös|otos|öt|ot|5/i, 5],
-      [/\bnégy\b|\bnegy\b|4/i, 4],
-      [/három|harom|3/i, 3],
-      [/kettő|ketto|két|ket|2/i, 2],
-      [/\begy\b|1/i, 1],
+      [/húsz|husz/i, 20],
+      [/tizenkilenc/i, 19],
+      [/tizennyolc/i, 18],
+      [/tizenhét|tizenhet/i, 17],
+      [/tizenhat/i, 16],
+      [/tizenöt|tizenot/i, 15],
+      [/tizennégy|tizennegy/i, 14],
+      [/tizenhárom|tizenharom/i, 13],
+      [/tizenkettő|tizenketto|tizenkét|tizenket/i, 12],
+      [/tizenegy/i, 11],
+      [/tíz|tiz/i, 10],
+      [/kilenc/i, 9],
+      [/nyolc/i, 8],
+      [/hét|het/i, 7],
+      [/hat/i, 6],
+      [/ötös|otos|öt|ot/i, 5],
+      [/négy|negy/i, 4],
+      [/három|harom/i, 3],
+      [/kettő|ketto|két|ket/i, 2],
+      [/egy/i, 1],
     ];
 
     let sector: number | null = null;
@@ -578,6 +583,7 @@ class VoiceRecognitionService {
     for (const [pattern, num] of numberPatterns) {
       if (pattern.test(text)) {
         sector = num;
+        console.log('[parseHungarian] Matched pattern:', pattern, 'Number:', num);
         break;
       }
     }
@@ -586,17 +592,20 @@ class VoiceRecognitionService {
       const digitMatch = text.match(/(\d+)/);
       if (digitMatch) {
         const num = parseInt(digitMatch[1]);
-        if (num >= 1 && num <= 20) {
-          sector = num;
+        if (num >= 0 && num <= 20) {
+          sector = num === 0 ? null : num;
+          console.log('[parseHungarian] Matched digit:', num);
         }
       }
     }
 
     if (sector !== null && sector >= 1 && sector <= 20) {
       const score = sector * multiplier;
+      console.log('[parseHungarian] Final result:', { score, multiplier, sector });
       return { score, multiplier, sector };
     }
 
+    console.log('[parseHungarian] No match found');
     return null;
   }
 }
