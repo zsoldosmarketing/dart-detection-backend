@@ -217,19 +217,8 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
     }
   }, [disabled]);
 
-  useEffect(() => {
-    const unsubscribe = voiceCaller.onSpeakingChange((isSpeaking) => {
-      console.log('[VoiceInput] Speaker state:', isSpeaking);
-      if (isSpeaking) {
-        voiceRecognition.pauseListening();
-        setInterimText('');
-      } else {
-        voiceRecognition.resumeListening();
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
+  // A speaker pause/resume törlése - ne zavarjuk a felhasználó beszédét
+  // amikor a speaker visszamond dobásokat
 
   useEffect(() => {
     if (paused) {
