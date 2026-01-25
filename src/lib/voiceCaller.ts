@@ -34,6 +34,7 @@ class VoiceCaller {
   private speakingListeners: Array<(isSpeaking: boolean) => void> = [];
   private currentlySpeaking = false;
   private settingsInitialized = false;
+  private explicitlyEnabled = false;
 
   constructor() {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -135,7 +136,9 @@ class VoiceCaller {
   }
 
   setEnabled(enabled: boolean) {
+    console.log('[VoiceCaller] setEnabled:', enabled);
     this.settings.enabled = enabled;
+    this.explicitlyEnabled = enabled;
   }
 
   async setSettings(settings: Partial<CallerSettings>) {
@@ -321,7 +324,14 @@ class VoiceCaller {
   }
 
   async speak(text: string, priority: 'high' | 'normal' = 'normal', rate = 0.78) {
-    if (!this.settings.enabled || !this.synth) return;
+    if (!this.settings.enabled || !this.explicitlyEnabled) {
+      console.log('[VoiceCaller] Beszéd blokkolva - hang kikapcsolva', {
+        settingsEnabled: this.settings.enabled,
+        explicitlyEnabled: this.explicitlyEnabled
+      });
+      return;
+    }
+    if (!this.synth) return;
 
     const locale = getLocale();
 

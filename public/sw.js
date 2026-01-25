@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v2-hungarian-fix';
+const CACHE_VERSION = 'v3-voice-disabled-default';
 const CACHE_NAME = 'darts-training-' + CACHE_VERSION;
 
 self.addEventListener('install', (event) => {
