@@ -268,6 +268,10 @@ class VoiceRecognitionService {
     }
   }
 
+  isCurrentlyListening(): boolean {
+    return this.isListening;
+  }
+
   updateLanguage(): void {
     if (!this.recognition) return;
 

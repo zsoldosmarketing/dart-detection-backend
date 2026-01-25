@@ -33,6 +33,10 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
   const lastInterimRef = useRef<string>('');
   const isRestartingRef = useRef(false);
   const lastStartTimeRef = useRef<number>(0);
+  const isListeningRef = useRef(false);
+  const autoStartRef = useRef(autoStart);
+  const voiceEnabledRef = useRef(voiceEnabled);
+  const disabledRef = useRef(disabled);
 
   useEffect(() => {
     onScoreInputRef.current = onScoreInput;
@@ -41,7 +45,14 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
     pausedRef.current = paused;
     dartsCountRef.current = dartsCount;
     speakerActiveRef.current = speakerActive;
-  }, [onScoreInput, onUndo, onSubmit, paused, dartsCount, speakerActive]);
+    autoStartRef.current = autoStart;
+    voiceEnabledRef.current = voiceEnabled;
+    disabledRef.current = disabled;
+  }, [onScoreInput, onUndo, onSubmit, paused, dartsCount, speakerActive, autoStart, voiceEnabled, disabled]);
+
+  useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
 
   useEffect(() => {
     if (paused && !pausedRef.current && isListening) {
@@ -176,6 +187,7 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
         const startDelay = voiceCaller.isSpeaking() ? 200 : 50;
         const timeout = setTimeout(() => {
           if (!isListening && !voiceCaller.isSpeaking()) {
+            console.log('[VoiceInput] Starting recognition (autoStart effect)');
             setIsListening(true);
             setLastRecognized('');
             setInterimText('');
@@ -192,6 +204,27 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
       setInterimText('');
     }
   }, [autoStart, voiceEnabled, paused, isListening, isAvailable, startRecognition, dartsCount, manuallyControlled]);
+
+  useEffect(() => {
+    if (!autoStart || !voiceEnabled || !isAvailable) return;
+
+    const watchdog = setInterval(() => {
+      const shouldBeListening = autoStartRef.current && voiceEnabledRef.current && !pausedRef.current && !disabledRef.current && !voiceCaller.isSpeaking();
+      const actuallyListening = voiceRecognition.isCurrentlyListening();
+
+      if (shouldBeListening && !actuallyListening && !isRestartingRef.current) {
+        console.log('[VoiceInput] Watchdog: Recognition should be active but is not. Restarting...');
+        isRestartingRef.current = true;
+        setIsListening(true);
+        startRecognition();
+        setTimeout(() => {
+          isRestartingRef.current = false;
+        }, 200);
+      }
+    }, 2000);
+
+    return () => clearInterval(watchdog);
+  }, [autoStart, voiceEnabled, isAvailable, startRecognition]);
 
   const toggleListening = useCallback(() => {
     setManuallyControlled(true);
@@ -217,6 +250,7 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
     let restartTimeout: NodeJS.Timeout;
 
     const unsubscribe = voiceCaller.onSpeakingChange((isSpeaking) => {
+      console.log('[VoiceInput] onSpeakingChange:', isSpeaking, 'isListening:', isListeningRef.current);
       setSpeakerActive(isSpeaking);
 
       if (isSpeaking) {
@@ -226,13 +260,22 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
         lastInterimRef.current = '';
         setInterimText('');
 
-        if (isListening && !isRestartingRef.current) {
+        if (isListeningRef.current && !isRestartingRef.current) {
+          console.log('[VoiceInput] Stopping recognition due to speaker');
           voiceRecognition.stopListening();
           setIsListening(false);
         }
       } else {
         clearTimeout(restartTimeout);
         restartTimeout = setTimeout(() => {
+          console.log('[VoiceInput] Speaker finished, checking restart:', {
+            isRestarting: isRestartingRef.current,
+            autoStart: autoStartRef.current,
+            voiceEnabled: voiceEnabledRef.current,
+            paused: pausedRef.current,
+            disabled: disabledRef.current
+          });
+
           if (isRestartingRef.current) {
             return;
           }
@@ -245,7 +288,8 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
             }
           }
 
-          if (autoStart && voiceEnabled && !pausedRef.current && !disabled && !isRestartingRef.current) {
+          if (autoStartRef.current && voiceEnabledRef.current && !pausedRef.current && !disabledRef.current && !isRestartingRef.current) {
+            console.log('[VoiceInput] Restarting recognition after speaker finished');
             isRestartingRef.current = true;
             setIsListening(true);
             startRecognition();
@@ -253,7 +297,7 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
               isRestartingRef.current = false;
             }, 100);
           }
-        }, 50);
+        }, 100);
       }
     });
 
@@ -261,7 +305,7 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
       clearTimeout(restartTimeout);
       unsubscribe();
     };
-  }, [processTranscript, isListening, autoStart, voiceEnabled, disabled, startRecognition]);
+  }, [processTranscript, startRecognition]);
 
   if (!isAvailable) {
     return null;
