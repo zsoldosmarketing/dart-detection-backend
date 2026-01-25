@@ -52,6 +52,8 @@ interface DartScoreInputProps {
   suggestions?: Suggestion[];
   disabled?: boolean;
   autoStart?: boolean;
+  voiceEnabled?: boolean;
+  onToggleVoice?: () => void;
 }
 
 export function DartScoreInput({
@@ -71,12 +73,13 @@ export function DartScoreInput({
   suggestions = [],
   disabled = false,
   autoStart = true,
+  voiceEnabled = false,
+  onToggleVoice,
 }: DartScoreInputProps) {
   const [inputMode, setInputMode] = useState<InputMode>('numberpad');
   const [editingDartIndex, setEditingDartIndex] = useState<number | null>(null);
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   const [showVoiceHelp, setShowVoiceHelp] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [recognitionMode, setRecognitionMode] = useState<RecognitionMode>('balanced');
   const [noiseGateThreshold, setNoiseGateThreshold] = useState(0.01);
 
@@ -96,7 +99,9 @@ export function DartScoreInput({
   };
 
   const toggleVoice = () => {
-    setVoiceEnabled(!voiceEnabled);
+    if (onToggleVoice) {
+      onToggleVoice();
+    }
   };
 
   const totalDarts = currentDarts.length + queuedDarts.length;

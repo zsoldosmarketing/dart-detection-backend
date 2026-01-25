@@ -1386,6 +1386,8 @@ export function GamePlayPage() {
               }))
           }
           autoStart={isMyTurn}
+          voiceEnabled={voiceEnabled}
+          onToggleVoice={toggleVoice}
         />
       )}
 
