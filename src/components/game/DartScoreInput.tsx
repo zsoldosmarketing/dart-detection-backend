@@ -295,7 +295,7 @@ export function DartScoreInput({
           onScoreInput={handleVoiceInput}
           onUndo={onUndo}
           onSubmit={onSubmit}
-          disabled={isProcessing || disabled}
+          disabled={disabled}
           paused={false}
           autoStart={autoStart}
           dartsCount={totalDarts}
