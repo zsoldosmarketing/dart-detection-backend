@@ -8,9 +8,9 @@ const corsHeaders = {
 };
 
 const MODELS: Record<string, { url: string; filename: string }> = {
-  'vosk-hu': {
-    url: 'https://alphacephei.com/vosk/models/vosk-model-small-hu-0.15.zip',
-    filename: 'vosk-model-small-hu-0.15.zip'
+  'vosk-en': {
+    url: 'https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip',
+    filename: 'vosk-model-small-en-us-0.15.zip'
   },
   'piper-hu': {
     url: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/hu/hu_HU/anna/medium/hu_HU-anna-medium.onnx',
@@ -37,7 +37,7 @@ Deno.serve(async (req: Request) => {
 
     if (!modelType || !MODELS[modelType]) {
       return new Response(
-        JSON.stringify({ error: 'Invalid model type. Valid: vosk-hu, piper-hu, piper-hu-config' }),
+        JSON.stringify({ error: 'Invalid model type. Valid: vosk-en, piper-hu, piper-hu-config' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

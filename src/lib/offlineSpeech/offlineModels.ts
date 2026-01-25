@@ -3,13 +3,15 @@ const STORAGE_URL = `${SUPABASE_URL}/storage/v1/object/public/offline-models`;
 
 const PIPER_VOICE_URL = `${STORAGE_URL}/hu_HU-anna-medium.onnx`;
 const PIPER_CONFIG_URL = `${STORAGE_URL}/hu_HU-anna-medium.onnx.json`;
+const VOSK_MODEL_URL = `${STORAGE_URL}/vosk-model-small-en-us-0.15.zip`;
 const PIPER_VOICE_SIZE = 63 * 1024 * 1024;
+const VOSK_MODEL_SIZE = 40 * 1024 * 1024;
 
 const DB_NAME = 'offline-speech-models';
 const DB_VERSION = 1;
 const STORE_NAME = 'models';
 
-export type ModelType = 'piper-hu';
+export type ModelType = 'piper-hu' | 'vosk-en';
 export type DownloadStatus = 'not-downloaded' | 'downloading' | 'ready' | 'error';
 
 export interface ModelInfo {
@@ -31,6 +33,12 @@ class OfflineModelsManager {
       status: 'not-downloaded',
       progress: 0,
       size: PIPER_VOICE_SIZE
+    });
+    this.modelStatus.set('vosk-en', {
+      type: 'vosk-en',
+      status: 'not-downloaded',
+      progress: 0,
+      size: VOSK_MODEL_SIZE
     });
   }
 
@@ -59,22 +67,26 @@ class OfflineModelsManager {
   private async checkExistingModels(): Promise<void> {
     if (!this.db) return;
 
-    const transaction = this.db.transaction(STORE_NAME, 'readonly');
-    const store = transaction.objectStore(STORE_NAME);
+    const modelsToCheck: ModelType[] = ['piper-hu', 'vosk-en'];
 
-    const request = store.get('piper-hu');
-    await new Promise<void>((resolve) => {
-      request.onsuccess = () => {
-        if (request.result?.data) {
-          const info = this.modelStatus.get('piper-hu')!;
-          info.status = 'ready';
-          info.progress = 100;
-          this.modelStatus.set('piper-hu', info);
-        }
-        resolve();
-      };
-      request.onerror = () => resolve();
-    });
+    for (const modelType of modelsToCheck) {
+      const transaction = this.db.transaction(STORE_NAME, 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.get(modelType);
+
+      await new Promise<void>((resolve) => {
+        request.onsuccess = () => {
+          if (request.result?.data) {
+            const info = this.modelStatus.get(modelType)!;
+            info.status = 'ready';
+            info.progress = 100;
+            this.modelStatus.set(modelType, info);
+          }
+          resolve();
+        };
+        request.onerror = () => resolve();
+      });
+    }
   }
 
   getStatus(type: ModelType): ModelInfo {
@@ -91,12 +103,14 @@ class OfflineModelsManager {
   }
 
   areAllReady(): boolean {
-    return this.isReady('piper-hu');
+    return this.isReady('piper-hu') && this.isReady('vosk-en');
   }
 
   getTotalDownloadSize(): number {
-    if (!this.isReady('piper-hu')) return PIPER_VOICE_SIZE;
-    return 0;
+    let total = 0;
+    if (!this.isReady('piper-hu')) total += PIPER_VOICE_SIZE;
+    if (!this.isReady('vosk-en')) total += VOSK_MODEL_SIZE;
+    return total;
   }
 
   onProgress(type: ModelType, callback: (info: ModelInfo) => void): () => void {
@@ -132,15 +146,18 @@ class OfflineModelsManager {
     info.progress = 0;
     this.notifyProgress(type, info);
 
+    const url = type === 'piper-hu' ? PIPER_VOICE_URL : VOSK_MODEL_URL;
+    const defaultSize = type === 'piper-hu' ? PIPER_VOICE_SIZE : VOSK_MODEL_SIZE;
+
     try {
       console.log(`[OfflineModels] Downloading ${type} from storage...`);
-      const response = await fetch(PIPER_VOICE_URL);
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const contentLength = response.headers.get('content-length');
-      const totalSize = contentLength ? parseInt(contentLength) : PIPER_VOICE_SIZE;
+      const totalSize = contentLength ? parseInt(contentLength) : defaultSize;
 
       const reader = response.body?.getReader();
       if (!reader) {
@@ -170,7 +187,10 @@ class OfflineModelsManager {
       }
 
       await this.saveModel(type, data.buffer);
-      await this.downloadPiperConfig();
+
+      if (type === 'piper-hu') {
+        await this.downloadPiperConfig();
+      }
 
       info.status = 'ready';
       info.progress = 100;
@@ -268,6 +288,7 @@ class OfflineModelsManager {
 
   async deleteAllModels(): Promise<void> {
     await this.deleteModel('piper-hu');
+    await this.deleteModel('vosk-en');
     if (this.db) {
       const transaction = this.db.transaction(STORE_NAME, 'readwrite');
       const store = transaction.objectStore(STORE_NAME);

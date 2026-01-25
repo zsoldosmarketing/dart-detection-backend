@@ -1,6 +1,7 @@
 import { voiceRecognition, type VoiceRecognitionResult } from '../voiceRecognition';
 import { voiceCaller } from '../voiceCaller';
 import { piperTTS } from './piperTTS';
+import { voskRecognition } from './voskRecognition';
 import { offlineModels } from './offlineModels';
 
 export type SpeechEngineType = 'web' | 'offline';
@@ -67,7 +68,10 @@ class SpeechEngineService {
 
   private async doInitOffline(): Promise<void> {
     try {
-      await piperTTS.init();
+      await Promise.all([
+        piperTTS.init(),
+        voskRecognition.init()
+      ]);
       this.offlineInitialized = true;
     } catch (error) {
       this.offlineInitPromise = null;
@@ -76,6 +80,9 @@ class SpeechEngineService {
   }
 
   isRecognitionAvailable(): boolean {
+    if (this.engineType === 'offline') {
+      return voskRecognition.isAvailable();
+    }
     return voiceRecognition.isAvailable();
   }
 
@@ -83,29 +90,61 @@ class SpeechEngineService {
     onResult: (result: VoiceRecognitionResult) => void,
     onError?: (error: string) => void
   ): void {
-    voiceRecognition.startListening(onResult, onError);
+    if (this.engineType === 'offline') {
+      voskRecognition.startListening(
+        (text, isFinal) => {
+          if (isFinal) {
+            const parsed = this.parseTranscript(text, 'en');
+            if (parsed) {
+              onResult(parsed);
+            }
+          }
+        },
+        onError
+      );
+    } else {
+      voiceRecognition.startListening(onResult, onError);
+    }
   }
 
   startContinuousListening(
     onTranscript: (transcript: string, isFinal: boolean) => void,
     onError?: (error: string) => void
   ): void {
-    voiceRecognition.startContinuousListening(onTranscript, onError);
+    if (this.engineType === 'offline') {
+      voskRecognition.startListening(onTranscript, onError);
+    } else {
+      voiceRecognition.startContinuousListening(onTranscript, onError);
+    }
   }
 
   stopListening(): void {
-    voiceRecognition.stopListening();
+    if (this.engineType === 'offline') {
+      voskRecognition.stopListening();
+    } else {
+      voiceRecognition.stopListening();
+    }
   }
 
   pauseListening(): void {
-    voiceRecognition.pauseListening();
+    if (this.engineType === 'offline') {
+      voskRecognition.stopListening();
+    } else {
+      voiceRecognition.pauseListening();
+    }
   }
 
   resumeListening(): void {
-    voiceRecognition.resumeListening();
+    if (this.engineType === 'offline') {
+    } else {
+      voiceRecognition.resumeListening();
+    }
   }
 
   isCurrentlyListening(): boolean {
+    if (this.engineType === 'offline') {
+      return voskRecognition.isCurrentlyListening();
+    }
     return voiceRecognition.isCurrentlyListening();
   }
 
@@ -168,22 +207,52 @@ class SpeechEngineService {
   }
 
   async downloadOfflineModels(
-    onProgress?: (piperProgress: number) => void
+    onProgress?: (progress: number, current: string) => void
   ): Promise<void> {
     await offlineModels.init();
 
-    const unsubPiper = offlineModels.onProgress('piper-hu', (info) => {
-      if (onProgress) onProgress(info.progress);
-    });
+    const totalModels = 2;
+    let completedModels = 0;
 
-    try {
-      if (!offlineModels.isReady('piper-hu')) {
-        await offlineModels.downloadModel('piper-hu');
-      }
-      if (onProgress) onProgress(100);
-    } finally {
-      unsubPiper();
+    if (offlineModels.isReady('piper-hu')) completedModels++;
+    if (offlineModels.isReady('vosk-en')) completedModels++;
+
+    if (completedModels === totalModels) {
+      if (onProgress) onProgress(100, 'done');
+      return;
     }
+
+    if (!offlineModels.isReady('piper-hu')) {
+      const unsubPiper = offlineModels.onProgress('piper-hu', (info) => {
+        const baseProgress = (completedModels / totalModels) * 100;
+        const modelProgress = (info.progress / totalModels);
+        if (onProgress) onProgress(baseProgress + modelProgress, 'Piper TTS');
+      });
+
+      try {
+        await offlineModels.downloadModel('piper-hu');
+        completedModels++;
+      } finally {
+        unsubPiper();
+      }
+    }
+
+    if (!offlineModels.isReady('vosk-en')) {
+      const unsubVosk = offlineModels.onProgress('vosk-en', (info) => {
+        const baseProgress = (completedModels / totalModels) * 100;
+        const modelProgress = (info.progress / totalModels);
+        if (onProgress) onProgress(baseProgress + modelProgress, 'Vosk STT');
+      });
+
+      try {
+        await offlineModels.downloadModel('vosk-en');
+        completedModels++;
+      } finally {
+        unsubVosk();
+      }
+    }
+
+    if (onProgress) onProgress(100, 'done');
   }
 
   async deleteOfflineModels(): Promise<void> {

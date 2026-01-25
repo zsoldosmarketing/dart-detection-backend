@@ -7,7 +7,7 @@ declare global {
 }
 
 const VOSK_WASM_URL = 'https://cdn.jsdelivr.net/npm/vosk-browser@0.0.8/dist/vosk.js';
-const VOSK_MODEL_PATH = 'vosk-model-small-hu-0.15';
+const VOSK_MODEL_URL = 'https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip';
 
 export interface VoskResult {
   text: string;
@@ -44,15 +44,18 @@ class VoskRecognitionService {
         await this.loadVoskLibrary();
       }
 
-      const modelData = await offlineModels.getModel('vosk-hu');
-      if (!modelData) {
-        throw new Error('Vosk model not downloaded');
+      console.log('[VoskRecognition] Loading model from URL...');
+
+      const cachedModel = await offlineModels.getModel('vosk-en');
+      if (cachedModel) {
+        console.log('[VoskRecognition] Using cached model');
+        this.model = await window.Vosk.createModel(new Blob([cachedModel], { type: 'application/zip' }));
+      } else {
+        console.log('[VoskRecognition] Downloading model...');
+        this.model = await window.Vosk.createModel(VOSK_MODEL_URL);
       }
 
-      console.log('[VoskRecognition] Loading model...');
-      this.model = await window.Vosk.createModel(modelData, VOSK_MODEL_PATH);
       console.log('[VoskRecognition] Model loaded');
-
       this.isInitialized = true;
     } catch (error) {
       console.error('[VoskRecognition] Init error:', error);
@@ -75,7 +78,7 @@ class VoskRecognitionService {
   }
 
   isAvailable(): boolean {
-    return offlineModels.isReady('vosk-hu');
+    return true;
   }
 
   isReady(): boolean {
@@ -107,15 +110,17 @@ class VoskRecognitionService {
 
       this.recognizer = new this.model.KaldiRecognizer(16000);
 
-      this.recognizer.on('result', (message: VoskResult) => {
-        if (message.text && message.text.trim()) {
-          onResult(message.text.trim(), true);
+      this.recognizer.on('result', (message: any) => {
+        const text = message?.result?.text || message?.text;
+        if (text && text.trim()) {
+          onResult(text.trim(), true);
         }
       });
 
-      this.recognizer.on('partialresult', (message: VoskResult) => {
-        if (message.partial && message.partial.trim()) {
-          onResult(message.partial.trim(), false);
+      this.recognizer.on('partialresult', (message: any) => {
+        const partial = message?.result?.partial || message?.partial;
+        if (partial && partial.trim()) {
+          onResult(partial.trim(), false);
         }
       });
 
@@ -176,6 +181,10 @@ class VoskRecognitionService {
   async destroy(): Promise<void> {
     this.stopListening();
     if (this.model) {
+      try {
+        this.model.terminate();
+      } catch {
+      }
       this.model = null;
     }
     this.isInitialized = false;
