@@ -2,7 +2,7 @@ import { voiceRecognition } from './voiceRecognition';
 
 class SoundEffectsService {
   private audioContext: AudioContext | null = null;
-  private enabled: boolean = true;
+  private enabled: boolean = false;
 
   constructor() {
     if (typeof window !== 'undefined') {

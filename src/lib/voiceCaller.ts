@@ -134,6 +134,10 @@ class VoiceCaller {
     }));
   }
 
+  setEnabled(enabled: boolean) {
+    this.settings.enabled = enabled;
+  }
+
   async setSettings(settings: Partial<CallerSettings>) {
     this.settings = { ...this.settings, ...settings };
 

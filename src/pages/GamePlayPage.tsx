@@ -107,13 +107,13 @@ export function GamePlayPage() {
   const [preferredDoubles, setPreferredDoubles] = useState<number[]>([20, 16, 8]);
 
   useEffect(() => {
-    voiceCaller.setSettings({ enabled: false });
+    voiceCaller.setEnabled(false);
     soundEffects.setEnabled(false);
   }, []);
 
   useEffect(() => {
     soundEffects.setEnabled(voiceEnabled);
-    voiceCaller.setSettings({ enabled: voiceEnabled });
+    voiceCaller.setEnabled(voiceEnabled);
   }, [voiceEnabled]);
 
   useEffect(() => {
@@ -148,7 +148,7 @@ export function GamePlayPage() {
   const toggleVoice = () => {
     const newEnabled = !voiceEnabled;
     setVoiceEnabled(newEnabled);
-    voiceCaller.setSettings({ enabled: newEnabled });
+    voiceCaller.setEnabled(newEnabled);
     soundEffects.setEnabled(newEnabled);
   };
 

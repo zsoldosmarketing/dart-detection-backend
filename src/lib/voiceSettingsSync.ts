@@ -120,9 +120,8 @@ class VoiceSettingsSyncService {
       localStorage.setItem('force-hungarian-locale', 'true');
       localStorage.setItem('app-locale', 'hu');
     }
-    const locale = getLocale();
     return {
-      voice_enabled: true,
+      voice_enabled: false,
       voice_id: 'default',
       volume: 0.85,
       language: 'hu-HU',
