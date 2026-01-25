@@ -94,10 +94,11 @@ export function GamePlayPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [dartQueue, setDartQueue] = useState<DartTarget[]>([]);
   const [isProcessingQueue, setIsProcessingQueue] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(() => {
-    const stored = localStorage.getItem('voiceEnabled');
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    const stored = localStorage.getItem('soundEnabled');
     return stored === 'true';
   });
+  const [voiceRecognitionEnabled, setVoiceRecognitionEnabled] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(() => {
     const stored = localStorage.getItem('showSuggestions');
     return stored === null ? true : stored === 'true';
@@ -110,10 +111,10 @@ export function GamePlayPage() {
   const [preferredDoubles, setPreferredDoubles] = useState<number[]>([20, 16, 8]);
 
   useEffect(() => {
-    soundEffects.setEnabled(voiceEnabled);
-    voiceCaller.setEnabled(voiceEnabled);
-    localStorage.setItem('voiceEnabled', voiceEnabled.toString());
-  }, [voiceEnabled]);
+    soundEffects.setEnabled(soundEnabled);
+    voiceCaller.setEnabled(soundEnabled);
+    localStorage.setItem('soundEnabled', soundEnabled.toString());
+  }, [soundEnabled]);
 
   useEffect(() => {
     return () => {
@@ -144,11 +145,12 @@ export function GamePlayPage() {
     localStorage.setItem('showSuggestions', newValue.toString());
   };
 
-  const toggleVoice = () => {
-    const newEnabled = !voiceEnabled;
-    setVoiceEnabled(newEnabled);
-    voiceCaller.setEnabled(newEnabled);
-    soundEffects.setEnabled(newEnabled);
+  const toggleSound = () => {
+    setSoundEnabled(!soundEnabled);
+  };
+
+  const toggleVoiceRecognition = () => {
+    setVoiceRecognitionEnabled(!voiceRecognitionEnabled);
   };
 
   useEffect(() => {
@@ -261,7 +263,7 @@ export function GamePlayPage() {
 
   useEffect(() => {
     const initializeGameAnnouncement = async () => {
-      if (room && gameState && players.length > 0 && !gameStartedRef.current && voiceEnabled) {
+      if (room && gameState && players.length > 0 && !gameStartedRef.current && soundEnabled) {
         if (room.status === 'completed' || room.status === 'abandoned' || room.status === 'forfeited') {
           return;
         }
@@ -289,7 +291,7 @@ export function GamePlayPage() {
     };
 
     initializeGameAnnouncement();
-  }, [room, gameState, players, voiceEnabled]);
+  }, [room, gameState, players, soundEnabled]);
 
   useEffect(() => {
     if (room && players.length > 0 && !gameCompletionHandledRef.current) {
@@ -301,7 +303,7 @@ export function GamePlayPage() {
           const winnerName = getPlayerName(winnerPlayer);
           const isWinner = winnerPlayer.user_id === user?.id;
 
-          if (voiceEnabled && room.status === 'completed') {
+          if (soundEnabled && room.status === 'completed') {
             voiceCaller.callGameShot(winnerName);
           }
 
@@ -326,7 +328,7 @@ export function GamePlayPage() {
         }
       }
     }
-  }, [room?.status, room?.winner_id, players, user, voiceEnabled, navigate]);
+  }, [room?.status, room?.winner_id, players, user, soundEnabled, navigate]);
 
   const handleCheckout = useCallback(async () => {
     if (!room || !gameState || !currentPlayer) return;
@@ -720,7 +722,7 @@ export function GamePlayPage() {
     await loadGame();
     setIsProcessing(false);
 
-    if (nextPlayer && voiceEnabled) {
+    if (nextPlayer && soundEnabled) {
       const nextPlayerName = getPlayerName(nextPlayer);
       voiceCaller.callTurnChange(nextPlayerName, nextPlayer.current_score);
     }
@@ -1023,15 +1025,15 @@ export function GamePlayPage() {
             </>
           )}
           <button
-            onClick={toggleVoice}
+            onClick={toggleSound}
             className={`p-2 rounded-lg transition-colors ${
-              voiceEnabled
+              soundEnabled
                 ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
                 : 'bg-dark-100 dark:bg-dark-700 text-dark-400'
             }`}
-            title={voiceEnabled ? 'Hang kikapcsolasa' : 'Hang bekapcsolasa'}
+            title={soundEnabled ? 'Hang kikapcsolasa' : 'Hang bekapcsolasa'}
           >
-            {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+            {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
           </button>
           <Badge variant="primary">Leg {gameState.current_leg}</Badge>
           <Badge variant="secondary">{room.starting_score}</Badge>
@@ -1076,7 +1078,7 @@ export function GamePlayPage() {
                   A hangvezérlés lehetővé teszi, hogy hangparancsokkal rögzítsd a dobásaidat. Nincs szükség gomb megnyomására - csak mondd ki a dobásod!
                 </p>
                 <p className="text-sm text-dark-700 dark:text-dark-300">
-                  A mikrofon ikon {voiceEnabled ? 'zöld színnel jelzi, hogy a hangvezérlés aktív' : 'szürkével jelzi, hogy a hangvezérlés kikapcsolt állapotban van'}.
+                  A mikrofon ikon {voiceRecognitionEnabled ? 'zöld színnel jelzi, hogy a hangvezérlés aktív' : 'szürkével jelzi, hogy a hangvezérlés kikapcsolt állapotban van'}.
                 </p>
               </div>
 
@@ -1385,8 +1387,8 @@ export function GamePlayPage() {
               }))
           }
           autoStart={isMyTurn}
-          voiceEnabled={voiceEnabled}
-          onToggleVoice={toggleVoice}
+          voiceEnabled={voiceRecognitionEnabled}
+          onToggleVoice={toggleVoiceRecognition}
         />
       )}
 
