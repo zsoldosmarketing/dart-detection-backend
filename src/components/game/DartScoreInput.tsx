@@ -54,6 +54,7 @@ interface DartScoreInputProps {
   autoStart?: boolean;
   voiceEnabled?: boolean;
   onToggleVoice?: () => void;
+  soundEnabled?: boolean;
 }
 
 export function DartScoreInput({
@@ -75,6 +76,7 @@ export function DartScoreInput({
   autoStart = true,
   voiceEnabled = false,
   onToggleVoice,
+  soundEnabled = true,
 }: DartScoreInputProps) {
   const [inputMode, setInputMode] = useState<InputMode>('numberpad');
   const [editingDartIndex, setEditingDartIndex] = useState<number | null>(null);
@@ -299,6 +301,7 @@ export function DartScoreInput({
           dartsCount={totalDarts}
           voiceEnabled={voiceEnabled}
           onToggleVoice={toggleVoice}
+          soundEnabled={soundEnabled}
         />
       </div>
 

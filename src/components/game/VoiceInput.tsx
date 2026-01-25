@@ -14,9 +14,10 @@ interface VoiceInputProps {
   dartsCount?: number;
   voiceEnabled?: boolean;
   onToggleVoice?: () => void;
+  soundEnabled?: boolean;
 }
 
-export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, autoStart, dartsCount = 0, voiceEnabled = false, onToggleVoice }: VoiceInputProps) {
+export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, autoStart, dartsCount = 0, voiceEnabled = false, onToggleVoice, soundEnabled = true }: VoiceInputProps) {
   const [isListening, setIsListening] = useState(false);
   const [lastRecognized, setLastRecognized] = useState('');
   const [interimText, setInterimText] = useState('');
@@ -152,42 +153,44 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
       isAvailable,
       isListening,
       isStarted: isStartedRef.current,
+      soundEnabled,
       speakerIsSpeaking: voiceCaller.isSpeaking()
     });
 
     if (autoStart && voiceEnabled && isAvailable) {
-      console.log('[VoiceInput] Starting recognition...');
+      console.log('[VoiceInput] Should start recognition...');
 
       // Először teljesen leállítjuk ha futna
       voiceRecognition.stopListening();
       isStartedRef.current = false;
+      setIsListening(false);
 
-      // Ha a speaker beszél, várunk amíg befejezi
-      if (voiceCaller.isSpeaking()) {
+      const startNow = () => {
+        console.log('[VoiceInput] Starting recognition now');
+        setIsListening(true);
+        setLastRecognized('');
+        setInterimText('');
+        startRecognition();
+      };
+
+      // Ha a speaker beszél ÉS a soundEnabled = true, várunk amíg befejezi
+      // Ha soundEnabled = false, akkor nincs speaker beszéd, azonnal indítunk
+      if (soundEnabled && voiceCaller.isSpeaking()) {
         console.log('[VoiceInput] Speaker is speaking, waiting for finish...');
         const unsubscribe = voiceCaller.onSpeakingChange((isSpeaking) => {
           if (!isSpeaking) {
             console.log('[VoiceInput] Speaker finished, now starting recognition');
             unsubscribe();
-            setTimeout(() => {
-              setIsListening(true);
-              setLastRecognized('');
-              setInterimText('');
-              startRecognition();
-            }, 200);
+            setTimeout(startNow, 200);
           }
         });
-        return;
+        return () => unsubscribe();
       }
 
       // Kis késleltetés hogy a stop biztosan lefusson
-      setTimeout(() => {
-        console.log('[VoiceInput] Now starting fresh recognition');
-        setIsListening(true);
-        setLastRecognized('');
-        setInterimText('');
-        startRecognition();
-      }, 100);
+      const timer = setTimeout(startNow, 100);
+      return () => clearTimeout(timer);
+
     } else if ((!autoStart || !voiceEnabled) && isListening) {
       console.log('[VoiceInput] Stopping recognition (disabled or not my turn)');
       voiceRecognition.stopListening();
@@ -195,7 +198,7 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
       setInterimText('');
       isStartedRef.current = false;
     }
-  }, [autoStart, voiceEnabled, isAvailable, startRecognition, isListening]);
+  }, [autoStart, voiceEnabled, isAvailable, startRecognition, soundEnabled]);
 
   useEffect(() => {
     return () => {

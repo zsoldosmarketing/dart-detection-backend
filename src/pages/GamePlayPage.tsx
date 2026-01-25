@@ -98,7 +98,10 @@ export function GamePlayPage() {
     const stored = localStorage.getItem('soundEnabled');
     return stored === 'true';
   });
-  const [voiceRecognitionEnabled, setVoiceRecognitionEnabled] = useState(false);
+  const [voiceRecognitionEnabled, setVoiceRecognitionEnabled] = useState(() => {
+    const stored = localStorage.getItem('voiceRecognitionEnabled');
+    return stored === 'true';
+  });
   const [showSuggestions, setShowSuggestions] = useState(() => {
     const stored = localStorage.getItem('showSuggestions');
     return stored === null ? true : stored === 'true';
@@ -115,6 +118,10 @@ export function GamePlayPage() {
     voiceCaller.setEnabled(soundEnabled);
     localStorage.setItem('soundEnabled', soundEnabled.toString());
   }, [soundEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('voiceRecognitionEnabled', voiceRecognitionEnabled.toString());
+  }, [voiceRecognitionEnabled]);
 
   useEffect(() => {
     return () => {
@@ -1389,6 +1396,7 @@ export function GamePlayPage() {
           autoStart={isMyTurn}
           voiceEnabled={voiceRecognitionEnabled}
           onToggleVoice={toggleVoiceRecognition}
+          soundEnabled={soundEnabled}
         />
       )}
 
