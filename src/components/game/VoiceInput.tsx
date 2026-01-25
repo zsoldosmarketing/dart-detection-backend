@@ -81,10 +81,6 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
             setTimeout(() => setLastRecognized(''), 200);
           }
         } else {
-          if (dartsCountRef.current >= 3) {
-            return;
-          }
-
           let display = '';
           if (result.multiplier === 0) {
             display = 'Miss';
