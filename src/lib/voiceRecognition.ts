@@ -200,7 +200,7 @@ class VoiceRecognitionService {
               this.restartAttempts++;
             }
           }
-        }, IS_MOBILE ? 80 : 20);
+        }, IS_MOBILE ? 100 : 50);
       } else {
         this.restartAttempts = 0;
         setTimeout(() => {
@@ -212,7 +212,7 @@ class VoiceRecognitionService {
               this.isListening = false;
             }
           }
-        }, 150);
+        }, 300);
       }
     };
 
@@ -229,7 +229,7 @@ class VoiceRecognitionService {
       } catch {
         this.isListening = false;
       }
-    }, 30);
+    }, 50);
   }
 
   pauseListening(): void {

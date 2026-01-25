@@ -53,7 +53,7 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
     if (submitPattern.test(cleanText) && dartsCountRef.current > 0) {
       setLastRecognized(t('training.submit_darts'));
       onSubmitRef.current?.();
-      setTimeout(() => setLastRecognized(''), 80);
+      setTimeout(() => setLastRecognized(''), 150);
       return true;
     }
 
@@ -61,13 +61,16 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
     if (undoPattern.test(cleanText) && dartsCountRef.current > 0) {
       setLastRecognized(t('common.undo'));
       onUndoRef.current?.();
-      setTimeout(() => setLastRecognized(''), 80);
+      setTimeout(() => setLastRecognized(''), 150);
       return true;
     }
 
     const results = voiceRecognition.parseMultipleTranscripts(text, locale);
 
     if (results.length > 0) {
+      let dartsAdded = 0;
+      const maxToAdd = 3 - dartsCountRef.current;
+
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
         if (result.isUndo) {
@@ -76,15 +79,18 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
             onUndoRef.current?.();
           }
         } else {
+          if (dartsAdded >= maxToAdd) break;
+
           const display = result.multiplier === 0 ? 'Miss'
             : result.sector === 25 ? (result.multiplier === 2 ? 'Bull' : '25')
             : `${result.multiplier === 2 ? 'D' : result.multiplier === 3 ? 'T' : 'S'}${result.sector}`;
 
           setLastRecognized(display);
           onScoreInputRef.current(result.score, result.multiplier, result.sector);
+          dartsAdded++;
         }
       }
-      setTimeout(() => setLastRecognized(''), 80);
+      setTimeout(() => setLastRecognized(''), 150);
       return true;
     }
     return false;
@@ -136,13 +142,13 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
         const unsubscribe = voiceCaller.onSpeakingChange((isSpeaking) => {
           if (!isSpeaking) {
             unsubscribe();
-            setTimeout(startNow, 50);
+            setTimeout(startNow, 100);
           }
         });
         return () => unsubscribe();
       }
 
-      const timer = setTimeout(startNow, 30);
+      const timer = setTimeout(startNow, 50);
       return () => clearTimeout(timer);
 
     } else if ((!autoStart || !voiceEnabled) && isListening) {
