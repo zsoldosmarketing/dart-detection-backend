@@ -407,7 +407,7 @@ class VoiceCaller {
           setTimeout(() => {
             this.currentlySpeaking = false;
             this.notifySpeaking(false);
-          }, 1500);
+          }, 150);
         }
       };
       checkSpeaking();
@@ -752,14 +752,10 @@ class VoiceCaller {
     const name = playerName ? this.formatNameForSpeech(playerName) : (locale === 'hu' ? 'Te' : 'You');
 
     if (locale === 'hu') {
-      setTimeout(() => {
-        const suffix = this.getHungarianDativeSuffix(name);
-        this.speak(`${name}${suffix} maradt ${scoreWord}`, 'normal', 0.8);
-      }, 800);
+      const suffix = this.getHungarianDativeSuffix(name);
+      this.speak(`${name}${suffix} maradt ${scoreWord}`, 'normal', 0.8);
     } else {
-      setTimeout(() => {
-        this.speak(`${name}, you require ${scoreWord}`, 'normal', 0.82);
-      }, 800);
+      this.speak(`${name}, you require ${scoreWord}`, 'normal', 0.82);
     }
   }
 
