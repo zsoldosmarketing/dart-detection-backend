@@ -149,9 +149,11 @@ class VoiceRecognitionService {
     this.isPaused = false;
 
     if (this.isListening) {
-      console.log('[VoiceRecognition] Already listening, just updating callback');
+      console.log('[VoiceRecognition] Already listening, callback updated, resuming');
       return;
     }
+
+    console.log('[VoiceRecognition] Starting new continuous listening session');
 
     const ensureCorrectLanguage = () => {
       if (!this.recognition) return;

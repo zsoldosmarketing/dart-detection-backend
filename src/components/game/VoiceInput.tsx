@@ -106,10 +106,8 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
   }, []);
 
   const startRecognition = useCallback(() => {
-    if (isStartedRef.current) return;
+    console.log('[VoiceInput] Starting continuous recognition (always-on mode)', { alreadyStarted: isStartedRef.current });
     isStartedRef.current = true;
-
-    console.log('[VoiceInput] Starting continuous recognition (always-on mode)');
 
     voiceRecognition.startContinuousListening(
       (transcript, isFinal) => {
@@ -144,12 +142,11 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
 
   useEffect(() => {
     if (autoStart && voiceEnabled && isAvailable) {
-      if (!isListening) {
-        setIsListening(true);
-        setLastRecognized('');
-        setInterimText('');
-        startRecognition();
-      }
+      console.log('[VoiceInput] autoStart effect - starting recognition');
+      setIsListening(true);
+      setLastRecognized('');
+      setInterimText('');
+      startRecognition();
     }
 
     if ((!autoStart || !voiceEnabled) && isListening) {
@@ -158,7 +155,15 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
       setInterimText('');
       isStartedRef.current = false;
     }
-  }, [autoStart, voiceEnabled, isListening, isAvailable, startRecognition]);
+  }, [autoStart, voiceEnabled, isAvailable, startRecognition]);
+
+  useEffect(() => {
+    return () => {
+      console.log('[VoiceInput] Unmounting - stopping recognition');
+      voiceRecognition.stopListening();
+      isStartedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (disabled) {
