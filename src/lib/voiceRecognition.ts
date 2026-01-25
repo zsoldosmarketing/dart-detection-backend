@@ -362,8 +362,8 @@ class VoiceRecognitionService {
       : /(?:double|triple|dub|trip|treble)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\d+)/gi;
 
     const simplePattern = locale === 'hu'
-      ? /\b(?:miss|mellé|melle|nulla|nula|nolla|nullát|nullat|semmi|zero|külső bull|kulso bull|dupla bull|duplabull|nagybull|nagy bull|belső bull|belso bull|szimpla bull|sima bull|bull|kisbull|kis bull|közép|kozep|bika|ötven|otven|huszonöt|huszonot|huszon öt|huszon ot|húsz|husz|egy|kettő|ketto|két|ket|három|harom|négy|negy|öt|ot|hat|hét|het|nyolc|kilenc|tíz|tiz|tizenegy|tizenkettő|tizenketto|tizenhárom|tizenharom|tizennégy|tizennegy|tizenöt|tizenot|tizenhat|tizenhét|tizenhet|tizennyolc|tizenkilenc|\d+)\b/gi
-      : /\b(?:miss|missed|zero|nought|nothing|double bull|bullseye|bull|single bull|small bull|outer bull|fifty|twenty five|twentyfive|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\d+)\b/gi;
+      ? /\b(?:miss|mellé|melle|nulla|nula|nolla|nullát|nullat|semmi|zero|külső bull|kulso bull|dupla bull|duplabull|nagybull|nagy bull|belső bull|belso bull|szimpla bull|sima bull|bull|kisbull|kis bull|közép|kozep|bika|ötven|otven|huszonöt|huszonot|huszon öt|huszon ot|húsz|husz|egy|kettő|ketto|két|ket|három|harom|négy|negy|ötös|otos)\b|\b(?:öt|ot)\b|\b(?:hat|hét|het|nyolc|kilenc|tíz|tiz|tizenegy|tizenkettő|tizenketto|tizenhárom|tizenharom|tizennégy|tizennegy|tizenöt|tizenot|tizenhat|tizenhét|tizenhet|tizennyolc|tizenkilenc|\d+)\b/gi
+      : /\b(?:miss|missed|zero|nought|nothing|double bull|bullseye|bull|single bull|small bull|outer bull|fifty|twenty five|twentyfive|ones|twos|threes|fours|fives|sixes|sevens|eights|nines|tens|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|\d+)\b/gi;
 
     const coveredRanges: Array<[number, number]> = [];
     const results: Array<{ result: VoiceRecognitionResult; index: number }> = [];
@@ -487,11 +487,12 @@ class VoiceRecognitionService {
     }
 
     const numberMap: Record<string, number> = {
-      'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-      'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
-      'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14,
-      'fifteen': 15, 'sixteen': 16, 'seventeen': 17, 'eighteen': 18,
-      'nineteen': 19, 'twenty': 20,
+      'zero': 0, 'one': 1, 'ones': 1, 'two': 2, 'twos': 2, 'three': 3, 'threes': 3,
+      'four': 4, 'fours': 4, 'five': 5, 'fives': 5, 'six': 6, 'sixes': 6,
+      'seven': 7, 'sevens': 7, 'eight': 8, 'eights': 8, 'nine': 9, 'nines': 9,
+      'ten': 10, 'tens': 10, 'eleven': 11, 'twelve': 12, 'thirteen': 13,
+      'fourteen': 14, 'fifteen': 15, 'sixteen': 16, 'seventeen': 17,
+      'eighteen': 18, 'nineteen': 19, 'twenty': 20,
     };
 
     let sector: number | null = null;
@@ -565,7 +566,7 @@ class VoiceRecognitionService {
       [/nyolc|8/i, 8],
       [/hét|het|7/i, 7],
       [/\bhat\b|6/i, 6],
-      [/\böt\b|\bot\b|5/i, 5],
+      [/\böt\b|\bot\b|ötös|otos|5/i, 5],
       [/\bnégy\b|\bnegy\b|4/i, 4],
       [/három|harom|3/i, 3],
       [/kettő|ketto|két|ket|2/i, 2],
