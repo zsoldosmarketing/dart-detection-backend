@@ -168,13 +168,16 @@ class VoiceRecognitionService {
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const confidence = event.results[i][0].confidence || 1.0;
+        const transcript = event.results[i][0].transcript;
+        const isFinal = event.results[i].isFinal;
+
+        console.log('[VoiceRecognition] onresult:', { transcript, isFinal, confidence, minConfidence });
 
         if (event.results[i].isFinal && confidence < minConfidence) {
+          console.log('[VoiceRecognition] Skipping due to low confidence');
           continue;
         }
 
-        const transcript = event.results[i][0].transcript;
-        const isFinal = event.results[i].isFinal;
         onTranscript(transcript, isFinal);
       }
     };
@@ -204,23 +207,32 @@ class VoiceRecognitionService {
     };
 
     this.recognition.onend = () => {
+      console.log('[VoiceRecognition] onend event, isListening:', this.isListening, 'restartAttempts:', restartAttempts);
       if (this.isListening && restartAttempts < maxRestartAttempts) {
         if (restartTimeout) {
           clearTimeout(restartTimeout);
         }
-        const delay = isMobile ? 300 : Math.min(100 * Math.pow(2, restartAttempts), 2000);
+        const delay = isMobile ? 200 : 100;
         restartTimeout = setTimeout(() => {
           if (this.isListening) {
             try {
               ensureCorrectLanguage();
               this.recognition.start();
+              console.log('[VoiceRecognition] Recognition restarted successfully');
+            } catch (error) {
+              console.error('[VoiceRecognition] Restart failed:', error);
               restartAttempts++;
-            } catch {
-              restartAttempts++;
+              if (restartAttempts >= maxRestartAttempts) {
+                this.isListening = false;
+                if (onError) {
+                  onError('Too many restart attempts');
+                }
+              }
             }
           }
         }, delay);
       } else if (restartAttempts >= maxRestartAttempts) {
+        console.log('[VoiceRecognition] Max restart attempts reached');
         this.isListening = false;
         if (onError) {
           onError('Too many restart attempts');
@@ -461,7 +473,7 @@ class VoiceRecognitionService {
       return { score: 0, multiplier: 0, sector: null, isUndo: true };
     }
 
-    if (/^(miss|missed|zero|0)$/.test(text)) {
+    if (/(miss|missed|zero)/.test(text) || text === '0') {
       return { score: 0, multiplier: 0, sector: null };
     }
 
@@ -527,7 +539,7 @@ class VoiceRecognitionService {
       return { score: 0, multiplier: 0, sector: null, isUndo: true };
     }
 
-    if (/(miss|mellé|melle|nulla|nula|nolla|nullát|nullat|semmi|zero|^0$)/.test(text)) {
+    if (/(miss|mellé|melle|nulla|nula|nolla|nullát|nullat|semmi|zero)/.test(text) || text === '0') {
       console.log('[parseHungarian] Miss/Zero detected');
       return { score: 0, multiplier: 0, sector: null };
     }
