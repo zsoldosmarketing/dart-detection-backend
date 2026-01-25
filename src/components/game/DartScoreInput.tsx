@@ -76,7 +76,7 @@ export function DartScoreInput({
   const [editingDartIndex, setEditingDartIndex] = useState<number | null>(null);
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   const [showVoiceHelp, setShowVoiceHelp] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [recognitionMode, setRecognitionMode] = useState<RecognitionMode>('balanced');
   const [noiseGateThreshold, setNoiseGateThreshold] = useState(0.01);
 
