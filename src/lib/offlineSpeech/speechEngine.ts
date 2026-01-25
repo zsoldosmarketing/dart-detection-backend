@@ -1,9 +1,7 @@
 import { voiceRecognition, type VoiceRecognitionResult } from '../voiceRecognition';
 import { voiceCaller } from '../voiceCaller';
-import { voskRecognition } from './voskRecognition';
 import { piperTTS } from './piperTTS';
 import { offlineModels } from './offlineModels';
-import { getLocale } from '../i18n';
 
 export type SpeechEngineType = 'web' | 'offline';
 
@@ -69,7 +67,6 @@ class SpeechEngineService {
 
   private async doInitOffline(): Promise<void> {
     try {
-      await voskRecognition.init();
       await piperTTS.init();
       this.offlineInitialized = true;
     } catch (error) {
@@ -79,9 +76,6 @@ class SpeechEngineService {
   }
 
   isRecognitionAvailable(): boolean {
-    if (this.engineType === 'offline') {
-      return voskRecognition.isAvailable();
-    }
     return voiceRecognition.isAvailable();
   }
 
@@ -89,95 +83,29 @@ class SpeechEngineService {
     onResult: (result: VoiceRecognitionResult) => void,
     onError?: (error: string) => void
   ): void {
-    if (this.engineType === 'offline') {
-      this.startOfflineListening(onResult, onError);
-    } else {
-      voiceRecognition.startListening(onResult, onError);
-    }
-  }
-
-  private async startOfflineListening(
-    onResult: (result: VoiceRecognitionResult) => void,
-    onError?: (error: string) => void
-  ): Promise<void> {
-    try {
-      if (!voskRecognition.isReady()) {
-        await voskRecognition.init();
-      }
-
-      const locale = getLocale();
-      await voskRecognition.startListening(
-        (text, isFinal) => {
-          if (isFinal && text) {
-            const parsed = voiceRecognition.parseTranscript(text, locale);
-            if (parsed) {
-              onResult(parsed);
-            } else if (onError) {
-              onError('Not recognized');
-            }
-          }
-        },
-        onError
-      );
-    } catch (error) {
-      if (onError) {
-        onError(error instanceof Error ? error.message : 'Failed to start');
-      }
-    }
+    voiceRecognition.startListening(onResult, onError);
   }
 
   startContinuousListening(
     onTranscript: (transcript: string, isFinal: boolean) => void,
     onError?: (error: string) => void
   ): void {
-    if (this.engineType === 'offline') {
-      this.startOfflineContinuousListening(onTranscript, onError);
-    } else {
-      voiceRecognition.startContinuousListening(onTranscript, onError);
-    }
-  }
-
-  private async startOfflineContinuousListening(
-    onTranscript: (transcript: string, isFinal: boolean) => void,
-    onError?: (error: string) => void
-  ): Promise<void> {
-    try {
-      if (!voskRecognition.isReady()) {
-        await voskRecognition.init();
-      }
-
-      await voskRecognition.startListening(onTranscript, onError);
-    } catch (error) {
-      if (onError) {
-        onError(error instanceof Error ? error.message : 'Failed to start');
-      }
-    }
+    voiceRecognition.startContinuousListening(onTranscript, onError);
   }
 
   stopListening(): void {
-    if (this.engineType === 'offline') {
-      voskRecognition.stopListening();
-    } else {
-      voiceRecognition.stopListening();
-    }
+    voiceRecognition.stopListening();
   }
 
   pauseListening(): void {
-    if (this.engineType === 'web') {
-      voiceRecognition.pauseListening();
-    }
+    voiceRecognition.pauseListening();
   }
 
   resumeListening(): void {
-    if (this.engineType === 'web') {
-      voiceRecognition.resumeListening();
-    }
+    voiceRecognition.resumeListening();
   }
 
   isCurrentlyListening(): boolean {
-    if (this.engineType === 'offline') {
-      return voskRecognition.isCurrentlyListening();
-    }
     return voiceRecognition.isCurrentlyListening();
   }
 
@@ -205,6 +133,7 @@ class SpeechEngineService {
       await piperTTS.speak(text);
     } catch (error) {
       console.error('[SpeechEngine] Offline speak error:', error);
+      await voiceCaller.speak(text, 'normal');
     }
   }
 
@@ -239,32 +168,20 @@ class SpeechEngineService {
   }
 
   async downloadOfflineModels(
-    onProgress?: (voskProgress: number, piperProgress: number) => void
+    onProgress?: (piperProgress: number) => void
   ): Promise<void> {
     await offlineModels.init();
 
-    let voskProgress = offlineModels.isReady('vosk-hu') ? 100 : 0;
-    let piperProgress = offlineModels.isReady('piper-hu') ? 100 : 0;
-
-    const unsubVosk = offlineModels.onProgress('vosk-hu', (info) => {
-      voskProgress = info.progress;
-      if (onProgress) onProgress(voskProgress, piperProgress);
-    });
-
     const unsubPiper = offlineModels.onProgress('piper-hu', (info) => {
-      piperProgress = info.progress;
-      if (onProgress) onProgress(voskProgress, piperProgress);
+      if (onProgress) onProgress(info.progress);
     });
 
     try {
-      if (!offlineModels.isReady('vosk-hu')) {
-        await offlineModels.downloadModel('vosk-hu');
-      }
       if (!offlineModels.isReady('piper-hu')) {
         await offlineModels.downloadModel('piper-hu');
       }
+      if (onProgress) onProgress(100);
     } finally {
-      unsubVosk();
       unsubPiper();
     }
   }

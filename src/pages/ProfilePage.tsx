@@ -76,7 +76,7 @@ export function ProfilePage() {
   const [speechEngineType, setSpeechEngineType] = useState<SpeechEngineType>('web');
   const [offlineModelsReady, setOfflineModelsReady] = useState(false);
   const [isDownloadingModels, setIsDownloadingModels] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState({ vosk: 0, piper: 0 });
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDeletingModels, setIsDeletingModels] = useState(false);
 
   useEffect(() => {
@@ -94,22 +94,22 @@ export function ProfilePage() {
 
   const handleDownloadOfflineModels = async () => {
     setIsDownloadingModels(true);
-    setDownloadProgress({ vosk: 0, piper: 0 });
+    setDownloadProgress(0);
     try {
-      await speechEngine.downloadOfflineModels((vosk, piper) => {
-        setDownloadProgress({ vosk, piper });
+      await speechEngine.downloadOfflineModels((progress) => {
+        setDownloadProgress(progress);
       });
       setOfflineModelsReady(true);
     } catch (error) {
       console.error('Download error:', error);
-      alert('Hiba a modellek letoltese soran');
+      alert('Hiba a modell letoltese soran');
     } finally {
       setIsDownloadingModels(false);
     }
   };
 
   const handleDeleteOfflineModels = async () => {
-    if (!confirm('Biztosan torolod az offline modelleket? (kb. 100MB tarol fog felszabadulni)')) return;
+    if (!confirm('Biztosan torolod az offline beszed modellt? (kb. 63MB tarol fog felszabadulni)')) return;
     setIsDeletingModels(true);
     try {
       await speechEngine.deleteOfflineModels();
@@ -652,7 +652,7 @@ export function ProfilePage() {
                 <span className={`text-sm font-medium ${speechEngineType === 'offline' ? 'text-primary-600 dark:text-primary-400' : 'text-dark-600 dark:text-dark-400'}`}>
                   Offline
                 </span>
-                <span className="text-xs text-dark-400">Vosk + Piper</span>
+                <span className="text-xs text-dark-400">Piper TTS</span>
               </button>
             </div>
 
@@ -672,25 +672,13 @@ export function ProfilePage() {
                 <div className="space-y-2 mb-3">
                   <div>
                     <div className="flex justify-between text-xs text-dark-500 mb-1">
-                      <span>Vosk (hangfelismerés)</span>
-                      <span>{downloadProgress.vosk}%</span>
+                      <span>Piper (beszedszintezis)</span>
+                      <span>{downloadProgress}%</span>
                     </div>
                     <div className="h-2 bg-dark-200 dark:bg-dark-700 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-primary-500 transition-all duration-300"
-                        style={{ width: `${downloadProgress.vosk}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-xs text-dark-500 mb-1">
-                      <span>Piper (beszéd)</span>
-                      <span>{downloadProgress.piper}%</span>
-                    </div>
-                    <div className="h-2 bg-dark-200 dark:bg-dark-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-secondary-500 transition-all duration-300"
-                        style={{ width: `${downloadProgress.piper}%` }}
+                        style={{ width: `${downloadProgress}%` }}
                       />
                     </div>
                   </div>
@@ -699,8 +687,8 @@ export function ProfilePage() {
 
               {!offlineModelsReady && !isDownloadingModels && (
                 <div className="text-xs text-dark-500 dark:text-dark-400 mb-3">
-                  <p>Letöltés mérete: ~100 MB</p>
-                  <p className="mt-1">Az offline mód internet nélkül is működik, de a felismerés pontossága alacsonyabb lehet.</p>
+                  <p>Letoltes merete: ~63 MB</p>
+                  <p className="mt-1">Offline beszedszintezis magyar Piper hanggal. A hangfelismeres tovabbra is Web Speech API-t hasznalja.</p>
                 </div>
               )}
 
@@ -735,7 +723,7 @@ export function ProfilePage() {
             )}
             {speechEngineType === 'offline' && (
               <p className="mt-3 text-xs text-dark-400 dark:text-dark-500">
-                Az offline mód helyi modelleket használ. Nem igényel internetet, de a felismerés pontossága alacsonyabb lehet.
+                Az offline mod helyi Piper modellt hasznal a beszedszintezishez. A hangfelismeres Web Speech API-val mukodik.
               </p>
             )}
           </Card>
