@@ -145,11 +145,23 @@ class VoiceRecognitionService {
   ): void {
     if (!this.recognition) return;
 
+    console.log('[VoiceRecognition] startContinuousListening called', {
+      isListening: this.isListening,
+      isPaused: this.isPaused,
+      hasTimeout: !!this.restartTimeout
+    });
+
+    // Always clear any pending timeouts first
+    if (this.restartTimeout) {
+      clearTimeout(this.restartTimeout);
+      this.restartTimeout = null;
+    }
+
     this.currentCallback = onTranscript;
     this.isPaused = false;
 
     if (this.isListening) {
-      console.log('[VoiceRecognition] Already listening, callback updated, resuming');
+      console.log('[VoiceRecognition] Already listening, callback updated');
       return;
     }
 
@@ -288,7 +300,19 @@ class VoiceRecognitionService {
   }
 
   stopListening(): void {
+    console.log('[VoiceRecognition] stopListening called');
     this.isListening = false;
+    this.currentCallback = null;
+    this.isPaused = false;
+    this.restartAttempts = 0;
+
+    // CRITICAL: Clear any pending restart timeouts
+    if (this.restartTimeout) {
+      clearTimeout(this.restartTimeout);
+      this.restartTimeout = null;
+      console.log('[VoiceRecognition] Cleared restart timeout');
+    }
+
     if (this.recognition) {
       try {
         this.recognition.stop();

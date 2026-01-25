@@ -106,7 +106,12 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
   }, []);
 
   const startRecognition = useCallback(() => {
-    console.log('[VoiceInput] Starting continuous recognition (always-on mode)', { alreadyStarted: isStartedRef.current });
+    if (isStartedRef.current) {
+      console.log('[VoiceInput] Already started, skipping');
+      return;
+    }
+
+    console.log('[VoiceInput] Starting continuous recognition (always-on mode)');
     isStartedRef.current = true;
 
     voiceRecognition.startContinuousListening(
@@ -141,21 +146,37 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
   }, [processTranscript]);
 
   useEffect(() => {
-    if (autoStart && voiceEnabled && isAvailable) {
-      console.log('[VoiceInput] autoStart effect - starting recognition');
-      setIsListening(true);
-      setLastRecognized('');
-      setInterimText('');
-      startRecognition();
-    }
+    console.log('[VoiceInput] Main effect triggered', {
+      autoStart,
+      voiceEnabled,
+      isAvailable,
+      isListening,
+      isStarted: isStartedRef.current
+    });
 
-    if ((!autoStart || !voiceEnabled) && isListening) {
+    if (autoStart && voiceEnabled && isAvailable) {
+      console.log('[VoiceInput] Starting recognition...');
+
+      // Először teljesen leállítjuk ha futna
+      voiceRecognition.stopListening();
+      isStartedRef.current = false;
+
+      // Kis késleltetés hogy a stop biztosan lefusson
+      setTimeout(() => {
+        console.log('[VoiceInput] Now starting fresh recognition');
+        setIsListening(true);
+        setLastRecognized('');
+        setInterimText('');
+        startRecognition();
+      }, 100);
+    } else if ((!autoStart || !voiceEnabled) && isListening) {
+      console.log('[VoiceInput] Stopping recognition (disabled or not my turn)');
       voiceRecognition.stopListening();
       setIsListening(false);
       setInterimText('');
       isStartedRef.current = false;
     }
-  }, [autoStart, voiceEnabled, isAvailable, startRecognition]);
+  }, [autoStart, voiceEnabled, isAvailable, startRecognition, isListening]);
 
   useEffect(() => {
     return () => {
