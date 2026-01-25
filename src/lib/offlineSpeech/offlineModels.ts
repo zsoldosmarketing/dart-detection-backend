@@ -1,7 +1,7 @@
-const VOSK_MODEL_URL = 'https://alphacephei.com/vosk/models/vosk-model-small-hu-0.15.zip';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const PROXY_BASE_URL = `${SUPABASE_URL}/functions/v1/model-proxy`;
+
 const VOSK_MODEL_SIZE = 42 * 1024 * 1024;
-const PIPER_VOICE_URL = 'https://huggingface.co/rhasspy/piper-voices/resolve/main/hu/hu_HU/anna/medium/hu_HU-anna-medium.onnx';
-const PIPER_VOICE_CONFIG_URL = 'https://huggingface.co/rhasspy/piper-voices/resolve/main/hu/hu_HU/anna/medium/hu_HU-anna-medium.onnx.json';
 const PIPER_VOICE_SIZE = 63 * 1024 * 1024;
 
 const DB_NAME = 'offline-speech-models';
@@ -142,17 +142,10 @@ class OfflineModelsManager {
     this.notifyProgress(type, info);
 
     try {
-      let url: string;
-      let expectedSize: number;
+      const expectedSize = type === 'vosk-hu' ? VOSK_MODEL_SIZE : PIPER_VOICE_SIZE;
+      const url = `${PROXY_BASE_URL}?model=${type}`;
 
-      if (type === 'vosk-hu') {
-        url = VOSK_MODEL_URL;
-        expectedSize = VOSK_MODEL_SIZE;
-      } else {
-        url = PIPER_VOICE_URL;
-        expectedSize = PIPER_VOICE_SIZE;
-      }
-
+      console.log(`[OfflineModels] Downloading ${type} via proxy...`);
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -209,7 +202,8 @@ class OfflineModelsManager {
 
   private async downloadPiperConfig(): Promise<void> {
     try {
-      const response = await fetch(PIPER_VOICE_CONFIG_URL);
+      const url = `${PROXY_BASE_URL}?model=piper-hu-config`;
+      const response = await fetch(url);
       if (!response.ok) return;
 
       const config = await response.json();
