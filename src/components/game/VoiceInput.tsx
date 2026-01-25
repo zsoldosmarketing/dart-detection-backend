@@ -173,7 +173,7 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
   useEffect(() => {
     if (autoStart && voiceEnabled && !paused && isAvailable && !manuallyControlled) {
       if (!isListening) {
-        const startDelay = voiceCaller.isSpeaking() ? 2500 : 1200;
+        const startDelay = voiceCaller.isSpeaking() ? 800 : 300;
         const timeout = setTimeout(() => {
           if (!isListening && !voiceCaller.isSpeaking()) {
             setIsListening(true);
@@ -252,10 +252,10 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
               startRecognition();
               setTimeout(() => {
                 isRestartingRef.current = false;
-              }, 500);
-            }, 300);
+              }, 200);
+            }, 100);
           }
-        }, 900);
+        }, 250);
       }
     });
 
