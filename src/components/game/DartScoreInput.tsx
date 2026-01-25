@@ -292,6 +292,7 @@ export function DartScoreInput({
           paused={false}
           autoStart={autoStart}
           dartsCount={totalDarts}
+          voiceEnabled={voiceEnabled}
         />
       </div>
 

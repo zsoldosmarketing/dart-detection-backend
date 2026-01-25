@@ -12,9 +12,10 @@ interface VoiceInputProps {
   paused?: boolean;
   autoStart?: boolean;
   dartsCount?: number;
+  voiceEnabled?: boolean;
 }
 
-export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, autoStart, dartsCount = 0 }: VoiceInputProps) {
+export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, autoStart, dartsCount = 0, voiceEnabled = false }: VoiceInputProps) {
   const [isListening, setIsListening] = useState(false);
   const [lastRecognized, setLastRecognized] = useState('');
   const [interimText, setInterimText] = useState('');
@@ -169,7 +170,7 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
   }, [processTranscript]);
 
   useEffect(() => {
-    if (autoStart && !paused && isAvailable && !manuallyControlled) {
+    if (autoStart && voiceEnabled && !paused && isAvailable && !manuallyControlled) {
       if (!isListening) {
         const startDelay = voiceCaller.isSpeaking() ? 2500 : 1200;
         const timeout = setTimeout(() => {
@@ -184,12 +185,12 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
       }
     }
 
-    if (!autoStart && isListening && !manuallyControlled) {
+    if ((!autoStart || !voiceEnabled) && isListening && !manuallyControlled) {
       voiceRecognition.stopListening();
       setIsListening(false);
       setInterimText('');
     }
-  }, [autoStart, paused, isListening, isAvailable, startRecognition, dartsCount, manuallyControlled]);
+  }, [autoStart, voiceEnabled, paused, isListening, isAvailable, startRecognition, dartsCount, manuallyControlled]);
 
   const toggleListening = useCallback(() => {
     setManuallyControlled(true);
