@@ -1001,7 +1001,7 @@ export function GamePlayPage() {
   };
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="flex flex-col gap-2 h-[calc(100dvh-11rem)] md:h-[calc(100dvh-8.5rem)] overflow-hidden animate-fade-in">
       <GameHeader
         mode={room.mode}
         currentLeg={gameState.current_leg}
@@ -1044,6 +1044,7 @@ export function GamePlayPage() {
       />
 
       {isMyTurn && (
+        <div className="flex-1 min-h-0">
         <DartScoreInput
           onThrow={addToQueue}
           onUndo={handleUndo}
@@ -1071,10 +1072,11 @@ export function GamePlayPage() {
           onToggleVoice={toggleVoiceRecognition}
           soundEnabled={soundEnabled}
         />
+        </div>
       )}
 
       {!isMyTurn && currentPlayer?.is_bot && (
-        <Card className="p-3">
+        <Card className="p-3 shrink-0">
           {currentTurnDarts.length > 0 ? (
             <>
               <div className="flex items-center justify-center gap-2 mb-3">

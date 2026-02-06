@@ -47,14 +47,14 @@ export function NumberPadInput({ onThrow, onScoreSelect, disabled }: NumberPadIn
   const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 25, 0];
 
   return (
-    <div className="w-full mx-auto space-y-2" style={{ maxWidth: 'min(100vw - 16px, 520px)' }}>
-      <div className="grid grid-cols-2 gap-2">
+    <div className="w-full h-full mx-auto flex flex-col gap-1.5" style={{ maxWidth: 'min(100vw - 16px, 520px)' }}>
+      <div className="shrink-0 grid grid-cols-2 gap-1.5">
         {multiplierButtons.map((btn) => (
           <button
             key={btn.value}
             onClick={() => setMultiplier(prev => prev === btn.value ? 'S' : btn.value)}
             disabled={disabled}
-            className={`py-3 rounded-xl font-extrabold text-white transition-all text-base tracking-wide active:scale-[0.97] ${
+            className={`py-2.5 rounded-xl font-extrabold text-white transition-all text-base tracking-wide active:scale-[0.97] ${
               multiplier === btn.value
                 ? `${btn.activeBg} ring-2 ${btn.activeRing} shadow-lg`
                 : 'bg-dark-700 hover:bg-dark-600'
@@ -65,7 +65,7 @@ export function NumberPadInput({ onThrow, onScoreSelect, disabled }: NumberPadIn
         ))}
       </div>
 
-      <div className="grid grid-cols-6 gap-1.5">
+      <div className="flex-1 min-h-0 grid grid-cols-6 gap-1.5 auto-rows-fr">
         {numbers.map((num) => {
           const isDisabled = disabled || (multiplier === 'T' && num === 25);
           const isMiss = num === 0;
@@ -75,7 +75,7 @@ export function NumberPadInput({ onThrow, onScoreSelect, disabled }: NumberPadIn
               key={num}
               onClick={() => handleNumberClick(num)}
               disabled={isDisabled}
-              className={`rounded-xl font-bold transition-all active:scale-[0.93] min-h-[3rem] sm:min-h-[3.25rem] text-base sm:text-lg ${
+              className={`rounded-xl font-bold transition-all active:scale-[0.93] text-base sm:text-lg ${
                 isDisabled
                   ? 'bg-dark-800 text-dark-600 cursor-not-allowed opacity-30'
                   : isMiss

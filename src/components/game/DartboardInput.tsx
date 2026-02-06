@@ -104,15 +104,13 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
   });
 
   return (
-    <div className="flex flex-col items-center w-full">
-      <div className="w-full mx-auto aspect-square relative" style={{ maxWidth: 'min(100vw - 16px, 520px)' }}>
+    <div className="flex flex-col items-center w-full h-full">
+      <div className="flex-1 w-full flex items-center justify-center min-h-0">
         <svg
-          width="100%"
-          height="100%"
           viewBox={`0 0 ${size} ${size}`}
-          className="select-none drop-shadow-2xl"
+          className="select-none drop-shadow-2xl max-h-full max-w-full"
           preserveAspectRatio="xMidYMid meet"
-          style={{ touchAction: 'none' }}
+          style={{ touchAction: 'none', width: 'min(100%, 520px)' }}
         >
           <defs>
             <radialGradient id="boardShadow" cx="50%" cy="50%" r="50%">
@@ -296,21 +294,13 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
         </svg>
       </div>
 
-      <div className="w-full space-y-1.5 mt-1 px-2" style={{ maxWidth: 'min(100vw - 16px, 520px)' }}>
-        <div className="h-6 flex items-center justify-center">
-          {hoveredSegment && (
-            <div className="text-center text-sm font-bold text-amber-400 tracking-wide">
-              {getSegmentLabel(hoveredSegment)}
-            </div>
-          )}
-        </div>
-
+      <div className="shrink-0 w-full mt-1 mx-auto" style={{ maxWidth: 'min(100vw - 16px, 520px)' }}>
         <button
           onClick={() => handleClick('MISS', 'MISS')}
           disabled={disabled}
           onMouseEnter={() => setHoveredSegment('MISS')}
           onMouseLeave={() => setHoveredSegment(null)}
-          className="px-6 py-3.5 bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white rounded-xl font-semibold text-base disabled:opacity-50 transition-all w-full border border-dark-700 hover:border-dark-600 active:scale-[0.98]"
+          className="px-6 py-2.5 bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white rounded-xl font-semibold text-base disabled:opacity-50 transition-all w-full border border-dark-700 hover:border-dark-600 active:scale-[0.98]"
         >
           MISS (0)
         </button>

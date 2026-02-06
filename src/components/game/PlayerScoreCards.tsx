@@ -80,7 +80,7 @@ export const PlayerScoreCards = memo(function PlayerScoreCards({
 
   if (players.length <= 2) {
     return (
-      <div className="grid grid-cols-2 gap-3">
+      <div className="shrink-0 grid grid-cols-2 gap-2">
         {players.map((player) => {
           const isCurrent = player.player_order === gameState.current_player_order;
           const displayScore = isCurrent && player.id === currentPlayerId
@@ -91,8 +91,8 @@ export const PlayerScoreCards = memo(function PlayerScoreCards({
           return (
             <Card
               key={player.id}
-              padding="sm"
-              className={`relative overflow-hidden transition-all duration-300 ${
+              padding="none"
+              className={`p-2 relative overflow-hidden transition-all duration-300 ${
                 isCurrent
                   ? 'ring-2 ring-primary-500/80 shadow-glow-sm'
                   : 'opacity-80'
@@ -102,24 +102,17 @@ export const PlayerScoreCards = memo(function PlayerScoreCards({
                 <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary-500 to-primary-400" />
               )}
               <div className="text-center">
-                <p className={`text-xs font-medium mb-1 ${isCurrent ? 'text-primary-600 dark:text-primary-400' : 'text-dark-500 dark:text-dark-400'}`}>
+                <p className={`text-[11px] font-medium ${isCurrent ? 'text-primary-600 dark:text-primary-400' : 'text-dark-500 dark:text-dark-400'}`}>
                   {getPlayerName(player)}
                 </p>
-                <p className="text-4xl sm:text-5xl font-extrabold text-dark-900 dark:text-white tracking-tight" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                <p className="text-3xl font-extrabold text-dark-900 dark:text-white tracking-tight" style={{ fontVariantNumeric: 'tabular-nums' }}>
                   {displayScore}
                 </p>
-
-                <div className="mt-2 pt-2 border-t border-dark-100 dark:border-dark-700/50 space-y-0.5">
-                  <StatRow label="Atlag" value={getAverage(stats)} />
-                  <StatRow label="Elso 9" value={getFirst9Avg(stats)} />
-                  <StatRow label="Utolso" value={stats?.lastVisitScore !== undefined && stats.visits > 0 ? String(stats.lastVisitScore) : '-'} />
-                  <StatRow label="Legjobb" value={stats?.highestVisit ? String(stats.highestVisit) : '-'} />
-                </div>
-
-                <div className="flex items-center justify-center gap-3 mt-2 text-[11px] text-dark-400">
+                <div className="mt-1 pt-1 border-t border-dark-100 dark:border-dark-700/50 flex items-center justify-center gap-2 text-[10px] text-dark-400 flex-wrap">
+                  <span>Atl: {getAverage(stats)}</span>
                   <span>Leg {player.legs_won}/{legsToWin}</span>
-                  {stats && stats.dartsThrown > 0 && (
-                    <span>{stats.dartsThrown} nyil</span>
+                  {stats?.lastVisitScore !== undefined && stats.visits > 0 && (
+                    <span>Ut: {stats.lastVisitScore}</span>
                   )}
                 </div>
               </div>

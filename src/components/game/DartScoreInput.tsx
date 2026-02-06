@@ -143,8 +143,8 @@ export function DartScoreInput({
 
   if (editingDartIndex !== null) {
     return (
-      <Card className="p-2 sm:p-4">
-        <div className="flex items-center justify-between mb-3">
+      <Card padding="none" className="p-2 sm:p-3 h-full flex flex-col overflow-hidden">
+        <div className="shrink-0 flex items-center justify-between mb-2">
           <span className="text-sm font-medium text-dark-300">
             Javitas: {editingDartIndex + 1}. nyil
           </span>
@@ -164,8 +164,9 @@ export function DartScoreInput({
   }
 
   return (
-    <Card className="p-2 sm:p-4">
-      <div className="flex items-center justify-center gap-2 mb-1.5">
+    <Card padding="none" className="p-2 sm:p-3 h-full flex flex-col overflow-hidden">
+      <div className="shrink-0">
+      <div className="flex items-center justify-center gap-2 mb-1">
         {[0, 1, 2].map((idx) => {
           const dart = currentDarts[idx];
           const queuedDart = !dart && queuedDarts[idx - currentDarts.length];
@@ -182,7 +183,7 @@ export function DartScoreInput({
               key={idx}
               onClick={() => handleSlotClick(idx)}
               disabled={!canEdit}
-              className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center text-sm font-bold transition-all ${
+              className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center text-sm font-bold transition-all ${
                 dart
                   ? `${colors!.bg} ${colors!.text} ${colors!.glow} ${canEdit ? 'cursor-pointer hover:scale-105 active:scale-95' : ''}`
                   : isQueued
@@ -199,11 +200,11 @@ export function DartScoreInput({
         })}
       </div>
 
-      <p className="text-xs text-dark-400 text-center mb-2">
+      <p className="text-xs text-dark-400 text-center mb-1">
         Nyil {totalDarts} / 3 | {totalScore} pont
       </p>
 
-      <div className="flex items-center gap-1.5 mb-1.5">
+      <div className="flex items-center gap-1 mb-1">
         <button
           onClick={onUndo}
           disabled={(currentDarts.length === 0 && queuedDarts.length === 0) || isProcessing || disabled}
@@ -408,7 +409,8 @@ export function DartScoreInput({
         </div>
       )}
 
-      <div className="mt-1">
+      </div>
+      <div className="flex-1 min-h-0 mt-1">
         {inputMode === 'dartboard' && (
           <DartboardInput onThrow={onThrow} disabled={isProcessing || totalDarts >= 3 || disabled} />
         )}

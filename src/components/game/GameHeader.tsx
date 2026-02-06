@@ -40,7 +40,7 @@ export const GameHeader = memo(function GameHeader({
   onToggleBackend,
 }: GameHeaderProps) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="shrink-0 flex items-center justify-between">
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"

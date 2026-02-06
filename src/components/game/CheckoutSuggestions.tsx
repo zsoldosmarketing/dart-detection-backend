@@ -24,7 +24,7 @@ export const CheckoutSuggestions = memo(function CheckoutSuggestions({
   }
 
   return (
-    <div className="mb-3">
+    <div className="shrink-0">
       <p className="text-xs text-dark-500 mb-1">{t('training.suggested_routes')}:</p>
       {checkoutRoutes.length > 0 ? (
         checkoutRoutes.length === 1 ? (
