@@ -105,7 +105,7 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
 
   return (
     <div className="flex flex-col items-center w-full">
-      <div className="w-full max-w-md mx-auto aspect-square relative">
+      <div className="w-full mx-auto aspect-square relative" style={{ maxWidth: 'min(100vw - 16px, 520px)' }}>
         <svg
           width="100%"
           height="100%"
@@ -296,10 +296,10 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
         </svg>
       </div>
 
-      <div className="w-full max-w-xs space-y-2 mt-1">
-        <div className="h-7 flex items-center justify-center">
+      <div className="w-full space-y-1.5 mt-1 px-2" style={{ maxWidth: 'min(100vw - 16px, 520px)' }}>
+        <div className="h-6 flex items-center justify-center">
           {hoveredSegment && (
-            <div className="text-center text-sm font-bold text-amber-400 tracking-wide animate-fade-in">
+            <div className="text-center text-sm font-bold text-amber-400 tracking-wide">
               {getSegmentLabel(hoveredSegment)}
             </div>
           )}
@@ -310,7 +310,7 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
           disabled={disabled}
           onMouseEnter={() => setHoveredSegment('MISS')}
           onMouseLeave={() => setHoveredSegment(null)}
-          className="px-6 py-3 bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white rounded-xl font-semibold text-sm disabled:opacity-50 transition-all w-full border border-dark-700 hover:border-dark-600 active:scale-[0.98]"
+          className="px-6 py-3.5 bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white rounded-xl font-semibold text-base disabled:opacity-50 transition-all w-full border border-dark-700 hover:border-dark-600 active:scale-[0.98]"
         >
           MISS (0)
         </button>
