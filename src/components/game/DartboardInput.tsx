@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { DartTarget } from '../../lib/dartsEngine';
 
 interface DartboardInputProps {
@@ -11,26 +11,31 @@ const SECTOR_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 1
 export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
   const [hoveredSegment, setHoveredSegment] = useState<string | null>(null);
   const [flashSegment, setFlashSegment] = useState<string | null>(null);
+  const lastTapRef = useRef<string | null>(null);
 
-  const size = 400;
+  const size = 440;
   const center = size / 2;
 
-  const outerRingRadius = 178;
+  const outerRimRadius = 210;
+  const outerRingRadius = 195;
   const doubleOuterRadius = 170;
-  const doubleInnerRadius = 162;
-  const outerSingleOuter = 162;
+  const doubleInnerRadius = 160;
+  const outerSingleOuter = 160;
   const outerSingleInner = 107;
   const tripleOuterRadius = 107;
-  const tripleInnerRadius = 99;
-  const innerSingleOuter = 99;
+  const tripleInnerRadius = 97;
+  const innerSingleOuter = 97;
   const innerSingleInner = 32;
   const outerBullRadius = 32;
   const innerBullRadius = 14;
 
-  const numberRingRadius = 188;
+  const numberRingRadius = 183;
 
   const handleClick = useCallback((target: DartTarget, segmentId: string) => {
     if (disabled) return;
+    if (lastTapRef.current === segmentId) return;
+    lastTapRef.current = segmentId;
+    setTimeout(() => { lastTapRef.current = null; }, 300);
     setFlashSegment(segmentId);
     setTimeout(() => setFlashSegment(null), 200);
     onThrow(target);
@@ -86,6 +91,18 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
     return prefix ? `${prefix} ${num} (${score})` : `${num}`;
   };
 
+  const touchProps = (target: DartTarget, segmentId: string) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      e.preventDefault();
+      setHoveredSegment(segmentId);
+      handleClick(target, segmentId);
+    },
+    onPointerUp: () => setHoveredSegment(null),
+    onPointerCancel: () => setHoveredSegment(null),
+    onMouseEnter: () => setHoveredSegment(segmentId),
+    onMouseLeave: () => setHoveredSegment(null),
+  });
+
   return (
     <div className="flex flex-col items-center w-full">
       <div className="w-full max-w-md mx-auto aspect-square relative">
@@ -93,22 +110,24 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
           width="100%"
           height="100%"
           viewBox={`0 0 ${size} ${size}`}
-          className="touch-none select-none drop-shadow-2xl"
+          className="select-none drop-shadow-2xl"
           preserveAspectRatio="xMidYMid meet"
+          style={{ touchAction: 'none' }}
         >
           <defs>
             <radialGradient id="boardShadow" cx="50%" cy="50%" r="50%">
               <stop offset="85%" stopColor="transparent" />
               <stop offset="100%" stopColor="rgba(0,0,0,0.4)" />
             </radialGradient>
-            <radialGradient id="wireShine" cx="30%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="rgba(220,220,220,0.6)" />
-              <stop offset="100%" stopColor="rgba(140,140,140,0.2)" />
+            <radialGradient id="rimGradient" cx="40%" cy="35%" r="60%">
+              <stop offset="0%" stopColor="#222" />
+              <stop offset="50%" stopColor="#111" />
+              <stop offset="100%" stopColor="#050505" />
             </radialGradient>
             <filter id="innerShadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur" />
-              <feOffset dx="0" dy="2" result="offsetBlur" />
-              <feFlood floodColor="rgba(0,0,0,0.3)" result="color" />
+              <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur" />
+              <feOffset dx="0" dy="1" result="offsetBlur" />
+              <feFlood floodColor="rgba(0,0,0,0.25)" result="color" />
               <feComposite in2="offsetBlur" operator="in" result="shadow" />
               <feComposite in="SourceGraphic" in2="shadow" operator="over" />
             </filter>
@@ -121,9 +140,9 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
             </filter>
           </defs>
 
-          <circle cx={center} cy={center} r={outerRingRadius + 12} fill="#0a0a0a" />
-          <circle cx={center} cy={center} r={outerRingRadius + 10} fill="#111" />
-          <circle cx={center} cy={center} r={outerRingRadius + 8} fill="#181818" stroke="#2a2a2a" strokeWidth="1" />
+          <circle cx={center} cy={center} r={outerRimRadius} fill="url(#rimGradient)" />
+          <circle cx={center} cy={center} r={outerRimRadius - 1} fill="none" stroke="#2a2a2a" strokeWidth="0.5" />
+          <circle cx={center} cy={center} r={outerRimRadius - 3} fill="none" stroke="#1a1a1a" strokeWidth="0.5" />
 
           <circle cx={center} cy={center} r={outerRingRadius} fill="#1e1e1e" />
 
@@ -141,11 +160,14 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
             const bgX4 = center + doubleOuterRadius * Math.cos(endAngle);
             const bgY4 = center + doubleOuterRadius * Math.sin(endAngle);
 
+            const isHit = hoveredSegment?.includes(String(num));
+
             return (
               <path
                 key={`bg-${num}`}
                 d={`M ${bgX1} ${bgY1} L ${bgX2} ${bgY2} A ${outerRingRadius} ${outerRingRadius} 0 0 1 ${bgX3} ${bgY3} L ${bgX4} ${bgY4} A ${doubleOuterRadius} ${doubleOuterRadius} 0 0 0 ${bgX1} ${bgY1} Z`}
-                fill={isEvenSector(idx) ? '#161616' : '#1a1a1a'}
+                fill={isHit ? '#1f1f1f' : isEvenSector(idx) ? '#141414' : '#181818'}
+                style={{ transition: 'fill 0.15s ease' }}
               />
             );
           })}
@@ -163,9 +185,7 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
                   fill={getDoubleFill(idx, dId)}
                   className="cursor-pointer"
                   style={{ transition: 'fill 0.1s ease' }}
-                  onMouseEnter={() => setHoveredSegment(dId)}
-                  onMouseLeave={() => setHoveredSegment(null)}
-                  onClick={() => handleClick(`D${num}` as DartTarget, dId)}
+                  {...touchProps(`D${num}` as DartTarget, dId)}
                 />
 
                 <path
@@ -173,9 +193,7 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
                   fill={getSingleFill(idx, sId)}
                   className="cursor-pointer"
                   style={{ transition: 'fill 0.1s ease' }}
-                  onMouseEnter={() => setHoveredSegment(sId)}
-                  onMouseLeave={() => setHoveredSegment(null)}
-                  onClick={() => handleClick(`S${num}` as DartTarget, sId)}
+                  {...touchProps(`S${num}` as DartTarget, sId)}
                 />
 
                 <path
@@ -183,9 +201,7 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
                   fill={getTripleFill(idx, tId)}
                   className="cursor-pointer"
                   style={{ transition: 'fill 0.1s ease' }}
-                  onMouseEnter={() => setHoveredSegment(tId)}
-                  onMouseLeave={() => setHoveredSegment(null)}
-                  onClick={() => handleClick(`T${num}` as DartTarget, tId)}
+                  {...touchProps(`T${num}` as DartTarget, tId)}
                 />
 
                 <path
@@ -193,9 +209,7 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
                   fill={getSingleFill(idx, siId)}
                   className="cursor-pointer"
                   style={{ transition: 'fill 0.1s ease' }}
-                  onMouseEnter={() => setHoveredSegment(siId)}
-                  onMouseLeave={() => setHoveredSegment(null)}
-                  onClick={() => handleClick(`S${num}` as DartTarget, siId)}
+                  {...touchProps(`S${num}` as DartTarget, siId)}
                 />
               </g>
             );
@@ -231,9 +245,7 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
             fill={flashSegment === 'OB' ? '#fbbf24' : hoveredSegment === 'OB' ? '#f59e0b' : '#1a7a3a'}
             className="cursor-pointer"
             style={{ transition: 'fill 0.1s ease' }}
-            onMouseEnter={() => setHoveredSegment('OB')}
-            onMouseLeave={() => setHoveredSegment(null)}
-            onClick={() => handleClick('OB', 'OB')}
+            {...touchProps('OB', 'OB')}
           />
 
           <circle cx={center} cy={center} r={outerBullRadius} fill="none" stroke="#8a8a8a" strokeWidth="0.8" opacity="0.5" className="pointer-events-none" />
@@ -243,9 +255,7 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
             fill={flashSegment === 'BULL' ? '#fbbf24' : hoveredSegment === 'BULL' ? '#f59e0b' : '#c0392b'}
             className="cursor-pointer"
             style={{ transition: 'fill 0.1s ease' }}
-            onMouseEnter={() => setHoveredSegment('BULL')}
-            onMouseLeave={() => setHoveredSegment(null)}
-            onClick={() => handleClick('BULL', 'BULL')}
+            {...touchProps('BULL', 'BULL')}
           />
 
           <circle cx={center} cy={center} r={innerBullRadius} fill="none" stroke="#8a8a8a" strokeWidth="0.8" opacity="0.5" className="pointer-events-none" />
