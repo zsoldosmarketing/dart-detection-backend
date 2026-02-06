@@ -93,6 +93,29 @@
     pointer-events: none;
   }
 
+  .scroll-list {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(59, 130, 246, 0.25) transparent;
+  }
+
+  .scroll-list::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .scroll-list::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 4px 0;
+  }
+
+  .scroll-list::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(59, 130, 246, 0.35), rgba(16, 185, 129, 0.35));
+    border-radius: 10px;
+  }
+
+  .scroll-list::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(59, 130, 246, 0.55), rgba(16, 185, 129, 0.55));
+  }
+
   .stat-value {
     @apply text-3xl font-bold tracking-tight;
     font-variant-numeric: tabular-nums;

@@ -7,6 +7,7 @@ import {
   TrendingUp,
   Flame,
   ChevronRight,
+  ChevronDown,
   Calendar,
   Clock,
   Play,
@@ -114,6 +115,7 @@ export function DashboardPage() {
   const [matchHistory, setMatchHistory] = useState<MatchHistoryItem[]>([]);
   const [opponentNames, setOpponentNames] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -449,15 +451,24 @@ export function DashboardPage() {
             </div>
           </Card>
         ) : (
-          <div className="space-y-2">
-            {matchHistory.map((match) => (
-              <Link
-                key={match.id}
-                to={`/statistics/match/${match.room_id}`}
-                className="block"
-              >
-                <div className="p-4 rounded-xl border border-dark-200/70 dark:border-dark-700/50 bg-white dark:bg-dark-800/80 hover:shadow-card-hover hover:border-dark-300 dark:hover:border-dark-600/70 transition-all duration-200 group">
-                  <div className="flex items-center gap-4">
+          <div className="overflow-y-auto max-h-[50vh] scroll-list pr-1 space-y-2">
+            {matchHistory.map((match) => {
+              const isExpanded = selectedMatchId === match.id;
+              const doublesPercent = match.total_doubles_thrown > 0
+                ? ((match.total_doubles_hit / match.total_doubles_thrown) * 100).toFixed(0)
+                : null;
+
+              return (
+                <div
+                  key={match.id}
+                  onClick={() => setSelectedMatchId(isExpanded ? null : match.id)}
+                  className={`p-3 sm:p-4 rounded-xl border cursor-pointer transition-all duration-200 group ${
+                    isExpanded
+                      ? 'border-primary-500/30 dark:border-primary-500/30 bg-white dark:bg-dark-800 shadow-lg shadow-primary-500/5'
+                      : 'border-dark-200/70 dark:border-dark-700/50 bg-white dark:bg-dark-800/80 hover:shadow-card-hover hover:border-dark-300 dark:hover:border-dark-600/70'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 sm:gap-4">
                     <div className="hidden sm:flex flex-col items-center text-center min-w-[3.5rem]">
                       <span className="text-xs font-medium text-dark-400 dark:text-dark-500">
                         {format(new Date(match.created_at), 'MMM', { locale: hu })}
@@ -477,16 +488,10 @@ export function DashboardPage() {
                         <span className="font-semibold text-dark-900 dark:text-white truncate">
                           {getOpponentDisplayName(match.opponent_id)}
                         </span>
-                        <Badge
-                          variant={match.game_type === '501' ? 'primary' : 'secondary'}
-                          size="sm"
-                        >
+                        <Badge variant={match.game_type === '501' ? 'primary' : 'secondary'} size="sm">
                           {match.game_type}
                         </Badge>
-                        <Badge
-                          variant={match.won ? 'success' : 'error'}
-                          size="sm"
-                        >
+                        <Badge variant={match.won ? 'success' : 'error'} size="sm">
                           {match.won ? 'Gyozelem' : 'Vereseg'}
                         </Badge>
                       </div>
@@ -508,11 +513,42 @@ export function DashboardPage() {
                       </div>
                     </div>
 
-                    <ChevronRight className="w-5 h-5 text-dark-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                    <ChevronDown className={`w-5 h-5 text-dark-400 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                   </div>
+
+                  {isExpanded && (
+                    <div className="mt-3 pt-3 border-t border-dark-200/50 dark:border-dark-700/40 animate-in">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
+                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Legjobb leg</p>
+                          <p className="text-base font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {match.best_leg_average?.toFixed(1) || '-'}
+                          </p>
+                        </div>
+                        <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
+                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Dupla %</p>
+                          <p className="text-base font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {doublesPercent ? `${doublesPercent}%` : '-'}
+                          </p>
+                        </div>
+                        <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
+                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Kiszallok</p>
+                          <p className="text-base font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {match.checkouts_hit || 0}
+                          </p>
+                        </div>
+                        <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
+                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Mod</p>
+                          <p className="text-base font-bold text-dark-900 dark:text-white capitalize">
+                            {match.game_mode === 'bot' ? 'Bot' : match.game_mode === 'pvp' ? 'Online' : 'Helyi'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
