@@ -8,11 +8,7 @@ import {
   Bell,
   User,
   Settings,
-  Menu,
-  X,
-  Swords,
 } from 'lucide-react';
-import { useState } from 'react';
 import clsx from 'clsx';
 import { t } from '../../lib/i18n';
 import { useAuthStore } from '../../stores/authStore';
@@ -34,16 +30,9 @@ const navItems: NavItem[] = [
 ];
 
 export function Navigation() {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
   const { user, isAdmin } = useAuthStore();
   const { unreadCount } = useNotificationStore();
-
-  const filteredItems = navItems.filter((item) => {
-    if (item.requiresAuth && !user) return false;
-    if (item.adminOnly && !isAdmin) return false;
-    return true;
-  });
 
   return (
     <>

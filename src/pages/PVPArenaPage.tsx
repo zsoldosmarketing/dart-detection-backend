@@ -2,29 +2,24 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Swords,
-  Plus,
   Filter,
   Clock,
-  Trophy,
-  Target,
   Users,
   X,
-  Check,
   TrendingUp,
   TrendingDown,
   Minus,
-  RefreshCw,
   Loader2,
-  UserPlus,
 } from 'lucide-react';
-import { Card, CardTitle } from '../components/ui/Card';
+import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Badge } from '../components/ui/Badge';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
-import { formatDistanceToNow } from 'date-fns';
-import { hu } from 'date-fns/locale';
 import { ActiveGamesModal } from '../components/pvp/ActiveGamesModal';
+import { LobbyBrowser } from '../components/pvp/LobbyBrowser';
+import { LobbyWaiting } from '../components/pvp/LobbyWaiting';
+import { ActiveGamesList } from '../components/pvp/ActiveGamesList';
+import { CreateLobbyModal } from '../components/pvp/CreateLobbyModal';
 
 type SkillFilter = 'any' | 'similar' | 'higher' | 'lower';
 
@@ -40,6 +35,7 @@ interface LobbyEntry {
   skill_filter: SkillFilter;
   created_at: string;
   expires_at: string;
+  status?: string;
   user_profile?: {
     display_name: string;
     username: string;
@@ -887,620 +883,64 @@ export function PVPArenaPage() {
       )}
 
       {!waitingForAcceptance && activeTab === 'browse' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-dark-600 dark:text-dark-400">
-              {lobbyEntries.length} játékos vár kihívóra
-            </p>
-            <Button
-              leftIcon={<RefreshCw className={`w-4 h-4 ${isManualRefresh ? 'animate-spin' : ''}`} />}
-              variant="outline"
-              size="sm"
-              onClick={handleManualRefresh}
-              disabled={isManualRefresh}
-            >
-              {isManualRefresh ? 'Frissítés...' : 'Frissítés'}
-            </Button>
-          </div>
-
-          {!myLobby && (
-            <Card className="border-2 border-primary-500/30 bg-primary-50/50 dark:bg-primary-900/10">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-dark-900 dark:text-white mb-1">
-                    Várakozz kihívóra
-                  </h3>
-                  <p className="text-sm text-dark-600 dark:text-dark-400">
-                    Állíts be egy játékot és várd meg, hogy mások kihívjanak
-                  </p>
-                </div>
-                <Button
-                  leftIcon={<Plus className="w-4 h-4" />}
-                  onClick={() => setShowCreateLobby(true)}
-                >
-                  Belépés az arénába
-                </Button>
-              </div>
-            </Card>
-          )}
-
-          {lobbyEntries.length === 0 && !isLoading && (
-            <Card className="text-center py-12">
-              <Users className="w-12 h-12 text-dark-400 mx-auto mb-4" />
-              <p className="text-dark-600 dark:text-dark-400">
-                Jelenleg nincs várakozó játékos
-              </p>
-              <p className="text-sm text-dark-500 mt-2">
-                Lépj be te először az arénába!
-              </p>
-            </Card>
-          )}
-
-          <div className="grid gap-3">
-            {lobbyEntries.map((entry) => (
-              <Card key={entry.id} className="hover:shadow-lg transition-shadow">
-                <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                  <div className="flex items-start gap-3 flex-1">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-white font-bold text-base sm:text-lg shrink-0">
-                      {(entry.user_profile?.display_name || entry.user_profile?.username || '?')[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h3 className="font-semibold text-dark-900 dark:text-white text-sm sm:text-base">
-                          {entry.user_profile?.display_name || entry.user_profile?.username}
-                        </h3>
-                        {(() => {
-                          const hasPvpAvg = entry.player_stats?.pvp_average && entry.player_stats.pvp_average > 0;
-                          const hasLifetimeAvg = entry.player_stats?.lifetime_average && entry.player_stats.lifetime_average > 0;
-
-                          if (hasPvpAvg) {
-                            return (
-                              <Badge variant="warning" size="sm">
-                                <Target className="w-3 h-3 mr-1" />
-                                {entry.player_stats.pvp_average!.toFixed(1)} PVP
-                              </Badge>
-                            );
-                          } else if (hasLifetimeAvg) {
-                            return (
-                              <Badge variant="secondary" size="sm">
-                                <Target className="w-3 h-3 mr-1" />
-                                {entry.player_stats.lifetime_average!.toFixed(1)} Össz
-                              </Badge>
-                            );
-                          }
-                          return null;
-                        })()}
-                        {entry.player_stats && entry.player_stats.pvp_games_played > 0 && (
-                          <Badge variant="default" size="sm">
-                            <Trophy className="w-3 h-3 mr-1" />
-                            {entry.player_stats.pvp_games_played} PVP
-                          </Badge>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        <Badge variant="default" size="sm">{entry.starting_score}</Badge>
-                        <Badge variant="secondary" size="sm">
-                          L{entry.legs_to_win} S{entry.sets_to_win}
-                        </Badge>
-                        {entry.double_out && <Badge variant="success" size="sm">DO</Badge>}
-                        {entry.double_in && <Badge variant="warning" size="sm">DI</Badge>}
-                        <Badge variant="default" size="sm" className="flex items-center gap-1">
-                          {getSkillFilterIcon(entry.skill_filter)}
-                          <span className="hidden sm:inline">{getSkillFilterLabel(entry.skill_filter)}</span>
-                        </Badge>
-                        {lobbyTimeRemaining[entry.id] > 0 && (
-                          <Badge variant="warning" size="sm" className="font-mono flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {formatTimeRemaining(lobbyTimeRemaining[entry.id])}
-                          </Badge>
-                        )}
-                      </div>
-
-                      <p className="text-xs text-dark-500 dark:text-dark-400">
-                        <Clock className="w-3 h-3 inline mr-1" />
-                        {formatDistanceToNow(new Date(entry.created_at), { addSuffix: true, locale: hu })}
-                      </p>
-                    </div>
-                  </div>
-
-                  <Button
-                    size="sm"
-                    leftIcon={<Swords className="w-4 h-4" />}
-                    onClick={() => challengePlayer(entry.id)}
-                    className="w-full sm:w-auto"
-                  >
-                    Kihívás
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
+        <LobbyBrowser
+          lobbyEntries={lobbyEntries}
+          isLoading={isLoading}
+          isManualRefresh={isManualRefresh}
+          myLobby={myLobby}
+          lobbyTimeRemaining={lobbyTimeRemaining}
+          onManualRefresh={handleManualRefresh}
+          onShowCreateLobby={() => setShowCreateLobby(true)}
+          onChallengePlayer={challengePlayer}
+          getSkillFilterLabel={getSkillFilterLabel}
+          getSkillFilterIcon={getSkillFilterIcon}
+          formatTimeRemaining={formatTimeRemaining}
+        />
       )}
 
       {!waitingForAcceptance && activeTab === 'waiting' && (
-        <div className="space-y-4">
-          {myLobby ? (
-            <>
-              <Card className="border-2 border-success-500/30 bg-success-50/50 dark:bg-success-900/10">
-                <div className="flex items-center justify-between gap-3 mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-success-100 dark:bg-success-900/30 rounded-lg">
-                      <Clock className="w-5 h-5 text-success-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-dark-900 dark:text-white">
-                        Várakozol kihívóra
-                      </h3>
-                      <p className="text-sm text-dark-600 dark:text-dark-400">
-                        Más játékosok láthatják a beállításaid és kihívhatnak
-                      </p>
-                    </div>
-                  </div>
-                  {timeRemaining > 0 && (
-                    <div className="flex flex-col items-end">
-                      <span className="text-xs text-dark-500 dark:text-dark-400">Lejár:</span>
-                      <span className="text-lg font-bold text-success-600 dark:text-success-400 font-mono">
-                        {formatTimeRemaining(timeRemaining)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <Badge variant="default">{myLobby.starting_score}</Badge>
-                  <Badge variant="secondary">L{myLobby.legs_to_win} S{myLobby.sets_to_win}</Badge>
-                  {myLobby.double_out && <Badge variant="success" size="sm">Double Out</Badge>}
-                  {myLobby.double_in && <Badge variant="warning" size="sm">Double In</Badge>}
-                  <Badge variant="default" size="sm">
-                    {getSkillFilterIcon(myLobby.skill_filter)}
-                    <span className="ml-1">{getSkillFilterLabel(myLobby.skill_filter)}</span>
-                  </Badge>
-                  {(() => {
-                    const hasPvpAvg = myLobby.player_stats?.pvp_average && myLobby.player_stats.pvp_average > 0;
-                    const hasLifetimeAvg = myLobby.player_stats?.lifetime_average && myLobby.player_stats.lifetime_average > 0;
-
-                    if (hasPvpAvg) {
-                      return (
-                        <Badge variant="warning" size="sm">
-                          <Target className="w-3 h-3 mr-1" />
-                          {myLobby.player_stats.pvp_average!.toFixed(1)} PVP
-                        </Badge>
-                      );
-                    } else if (hasLifetimeAvg) {
-                      return (
-                        <Badge variant="secondary" size="sm">
-                          <Target className="w-3 h-3 mr-1" />
-                          {myLobby.player_stats.lifetime_average!.toFixed(1)} Össz
-                        </Badge>
-                      );
-                    }
-                    return null;
-                  })()}
-                </div>
-
-                <Button
-                  variant="outline"
-                  leftIcon={<X className="w-4 h-4" />}
-                  onClick={cancelLobby}
-                >
-                  Kilépés az arénából
-                </Button>
-              </Card>
-
-              {challenges.length > 0 && (
-                <div>
-                  <h3 className="font-semibold text-dark-900 dark:text-white mb-3">
-                    Beérkezett kihívások ({challenges.length})
-                  </h3>
-                  <div className="grid gap-3">
-                    {challenges.map((challenge) => (
-                      <Card key={challenge.id} className="border-l-4 border-l-warning-500">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-warning-500 to-error-500 flex items-center justify-center text-white font-bold shrink-0">
-                              {(challenge.challenger?.display_name || challenge.challenger?.username || '?')[0].toUpperCase()}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <p className="font-medium text-dark-900 dark:text-white truncate">
-                                  {challenge.challenger?.display_name || challenge.challenger?.username}
-                                </p>
-                                {(() => {
-                                  const hasPvpAvg = challenge.challenger_stats?.pvp_average && challenge.challenger_stats.pvp_average > 0;
-                                  const hasLifetimeAvg = challenge.challenger_stats?.lifetime_average && challenge.challenger_stats.lifetime_average > 0;
-
-                                  if (hasPvpAvg) {
-                                    return (
-                                      <Badge variant="warning" size="sm">
-                                        <Target className="w-3 h-3 mr-1" />
-                                        {challenge.challenger_stats.pvp_average!.toFixed(1)} PVP
-                                      </Badge>
-                                    );
-                                  } else if (hasLifetimeAvg) {
-                                    return (
-                                      <Badge variant="secondary" size="sm">
-                                        <Target className="w-3 h-3 mr-1" />
-                                        {challenge.challenger_stats.lifetime_average!.toFixed(1)} Össz
-                                      </Badge>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                              </div>
-                              <div className="flex items-center gap-3 text-xs text-dark-500 dark:text-dark-400">
-                                <span>{formatDistanceToNow(new Date(challenge.created_at), { addSuffix: true, locale: hu })}</span>
-                                {challengeTimeRemaining[challenge.id] !== undefined && (
-                                  <div className="flex items-center gap-1 text-warning-600 dark:text-warning-400 font-medium">
-                                    <Clock className="w-3 h-3" />
-                                    <span className="font-mono">
-                                      {Math.floor(challengeTimeRemaining[challenge.id] / 60)}:{(challengeTimeRemaining[challenge.id] % 60).toString().padStart(2, '0')}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="primary"
-                              leftIcon={<Check className="w-4 h-4" />}
-                              onClick={() => respondToChallenge(challenge.id, true)}
-                              className="flex-1 sm:flex-none"
-                            >
-                              Elfogad
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              leftIcon={<X className="w-4 h-4" />}
-                              onClick={() => respondToChallenge(challenge.id, false)}
-                              className="flex-1 sm:flex-none"
-                            >
-                              Elutasít
-                            </Button>
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <Card className="text-center py-12">
-              <Clock className="w-12 h-12 text-dark-400 mx-auto mb-4" />
-              <p className="text-dark-600 dark:text-dark-400 mb-4">
-                Jelenleg nem várakozol az arénában
-              </p>
-              <Button
-                leftIcon={<Plus className="w-4 h-4" />}
-                onClick={() => setShowCreateLobby(true)}
-              >
-                Belépés az arénába
-              </Button>
-            </Card>
-          )}
-        </div>
+        <LobbyWaiting
+          myLobby={myLobby}
+          challenges={challenges}
+          timeRemaining={timeRemaining}
+          challengeTimeRemaining={challengeTimeRemaining}
+          onCancelLobby={cancelLobby}
+          onShowCreateLobby={() => setShowCreateLobby(true)}
+          onRespondToChallenge={respondToChallenge}
+          getSkillFilterLabel={getSkillFilterLabel}
+          getSkillFilterIcon={getSkillFilterIcon}
+          formatTimeRemaining={formatTimeRemaining}
+        />
       )}
 
       {activeTab === 'challenges' && (
-        <div className="space-y-4">
-          {activeGames.length === 0 && !isLoading ? (
-            <Card className="text-center py-12">
-              <Clock className="w-12 h-12 text-dark-400 mx-auto mb-4" />
-              <p className="text-dark-600 dark:text-dark-400 mb-2 font-medium">
-                Nincs aktív játékod
-              </p>
-              <p className="text-sm text-dark-500 dark:text-dark-400">
-                Kezdj új játékot az Aréna vagy Kihívás tabon
-              </p>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {activeGames.map((game: any) => {
-                const otherPlayer = game.game_players.find((p: any) => p.user_id !== user?.id);
-                const myPlayer = game.game_players.find((p: any) => p.user_id === user?.id);
-                const gameAge = Date.now() - new Date(game.updated_at || game.started_at).getTime();
-                const hoursOld = gameAge / (1000 * 60 * 60);
-                const minutesOld = gameAge / (1000 * 60);
-
-                const otherPlayerName = otherPlayer?.display_name ||
-                  otherPlayer?.user_profile?.display_name ||
-                  otherPlayer?.user_profile?.username ||
-                  'Ellenfél';
-
-                const isDisconnected = game.status === 'paused_disconnect';
-                const isPaused = game.status === 'paused_mutual';
-
-                return (
-                  <Card
-                    key={game.id}
-                    className={`border-l-4 ${
-                      isDisconnected ? 'border-l-error-500' :
-                      isPaused ? 'border-l-warning-500' :
-                      'border-l-success-500'
-                    } hover:shadow-lg transition-all`}
-                  >
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${
-                            game.mode === 'pvp'
-                              ? 'from-primary-500 to-secondary-500'
-                              : 'from-success-500 to-success-600'
-                          } flex items-center justify-center text-white font-bold shadow-lg flex-shrink-0`}>
-                            {game.mode === 'pvp' ? <Swords className="w-6 h-6" /> : <UserPlus className="w-6 h-6" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <p className="font-semibold text-dark-900 dark:text-white truncate">
-                                {otherPlayerName}
-                              </p>
-                              <Badge
-                                variant={
-                                  game.status === 'in_progress' ? 'success' :
-                                  isDisconnected ? 'error' : 'warning'
-                                }
-                                size="sm"
-                              >
-                                {game.status === 'in_progress' && 'Folyamatban'}
-                                {isDisconnected && 'Lekapcsolódva'}
-                                {isPaused && 'Szüneteltetve'}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-dark-500 dark:text-dark-400 flex-wrap">
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {minutesOld < 60
-                                  ? `${Math.floor(minutesOld)} perce`
-                                  : hoursOld < 24
-                                  ? `${Math.floor(hoursOld)} órája`
-                                  : `${Math.floor(hoursOld / 24)} napja`}
-                              </span>
-                              <span>•</span>
-                              <span>{game.mode === 'pvp' ? 'PVP Aréna' : 'Baráti kihívás'}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 px-3 py-2 bg-dark-50 dark:bg-dark-800 rounded-lg">
-                        <div className="flex-1 text-center">
-                          <p className="text-2xl font-bold text-dark-900 dark:text-white">
-                            {myPlayer?.current_score || 0}
-                          </p>
-                          <p className="text-xs text-dark-500 dark:text-dark-400">Te</p>
-                        </div>
-                        <div className="text-dark-400 dark:text-dark-500">VS</div>
-                        <div className="flex-1 text-center">
-                          <p className="text-2xl font-bold text-dark-900 dark:text-white">
-                            {otherPlayer?.current_score || 0}
-                          </p>
-                          <p className="text-xs text-dark-500 dark:text-dark-400 truncate">
-                            {otherPlayerName}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-xs text-dark-500 dark:text-dark-400 flex-wrap">
-                        <Badge variant="default" size="sm">{game.starting_score}</Badge>
-                        <Badge variant="secondary" size="sm">
-                          {game.game_type === 'cricket' ? 'Cricket' :
-                           game.game_type === 'shanghai' ? 'Shanghai' :
-                           game.game_type === 'killer' ? 'Killer' :
-                           game.game_type === 'knockout' ? 'Knockout' :
-                           game.game_type === 'halve_it' ? 'Halve It' : 'X01'}
-                        </Badge>
-                        {game.legs_to_win > 1 && (
-                          <Badge variant="secondary" size="sm">
-                            BO{game.legs_to_win * 2 - 1}
-                          </Badge>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          className="flex-1"
-                          onClick={() => navigate(`/game/${game.id}`)}
-                        >
-                          Folytatás
-                        </Button>
-                        {isDisconnected && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              await supabase
-                                .from('push_notifications')
-                                .insert({
-                                  user_id: otherPlayer.user_id,
-                                  type: 'game_reconnect_request',
-                                  title: 'Újracsatlakozás kérése',
-                                  body: `${myPlayer?.display_name || 'Ellenfeled'} szeretné folytatni a játékot`,
-                                  data: { game_id: game.id }
-                                });
-                            }}
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-error-600 hover:bg-error-50 dark:hover:bg-error-900/20"
-                          onClick={async () => {
-                            if (confirm('Biztosan feladod ezt a játékot?')) {
-                              await supabase.rpc('surrender_game', { p_game_id: game.id });
-                              fetchMyChallenges();
-                            }
-                          }}
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <ActiveGamesList
+          activeGames={activeGames}
+          isLoading={isLoading}
+          userId={user?.id}
+          onNavigate={navigate}
+          onRefreshGames={fetchMyChallenges}
+        />
       )}
 
       {showCreateLobby && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <Card className="max-w-md w-full max-h-[90vh] overflow-y-auto animate-scale-in">
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-dark-800 py-2 -mt-2 z-10">
-              <CardTitle>Belépés az arénába</CardTitle>
-              <button
-                onClick={() => setShowCreateLobby(false)}
-                className="p-1 text-dark-400 hover:text-dark-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4 pb-2">
-              <div>
-                <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
-                  Kezdő pontszám
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[301, 501, 701, 1001].map((score) => (
-                    <button
-                      key={score}
-                      onClick={() => setStartingScore(score)}
-                      className={`py-2 rounded-lg font-bold transition-all ${
-                        startingScore === score
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-dark-100 dark:bg-dark-700 text-dark-600 dark:text-dark-400 hover:bg-dark-200'
-                      }`}
-                    >
-                      {score}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
-                    Leg-ek
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="11"
-                    value={legs}
-                    onChange={(e) => setLegs(parseInt(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg border border-dark-300 dark:border-dark-600 bg-white dark:bg-dark-800 text-dark-900 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
-                    Set-ek
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="7"
-                    value={sets}
-                    onChange={(e) => setSets(parseInt(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg border border-dark-300 dark:border-dark-600 bg-white dark:bg-dark-800 text-dark-900 dark:text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-dark-700 dark:text-dark-300">
-                    Double Out
-                  </span>
-                  <button
-                    onClick={() => setDoubleOut(!doubleOut)}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${
-                      doubleOut ? 'bg-primary-600' : 'bg-dark-300 dark:bg-dark-600'
-                    }`}
-                  >
-                    <div
-                      className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                        doubleOut ? 'translate-x-7' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-dark-700 dark:text-dark-300">
-                    Double In
-                  </span>
-                  <button
-                    onClick={() => setDoubleIn(!doubleIn)}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${
-                      doubleIn ? 'bg-primary-600' : 'bg-dark-300 dark:bg-dark-600'
-                    }`}
-                  >
-                    <div
-                      className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                        doubleIn ? 'translate-x-7' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
-                  Ellenfél szintje
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {([
-                    { value: 'any', label: 'Bárki', icon: <Users className="w-3.5 h-3.5" /> },
-                    { value: 'similar', label: 'Hasonló', icon: <Minus className="w-3.5 h-3.5" /> },
-                    { value: 'higher', label: 'Magasabb', icon: <TrendingUp className="w-3.5 h-3.5" /> },
-                    { value: 'lower', label: 'Alacsonyabb', icon: <TrendingDown className="w-3.5 h-3.5" /> },
-                  ] as const).map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => setSkillFilter(option.value)}
-                      className={`py-2.5 px-2 rounded-lg text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${
-                        skillFilter === option.value
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-dark-100 dark:bg-dark-700 text-dark-600 dark:text-dark-400 hover:bg-dark-200'
-                      }`}
-                    >
-                      {option.icon}
-                      <span className="truncate">{option.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowCreateLobby(false)}
-                  className="flex-1"
-                >
-                  Mégse
-                </Button>
-                <Button
-                  variant="primary"
-                  leftIcon={<Plus className="w-4 h-4" />}
-                  onClick={createLobby}
-                  isLoading={isCreating}
-                  className="flex-1"
-                >
-                  Belépés
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </div>
+        <CreateLobbyModal
+          startingScore={startingScore}
+          legs={legs}
+          sets={sets}
+          doubleOut={doubleOut}
+          doubleIn={doubleIn}
+          skillFilter={skillFilter}
+          isCreating={isCreating}
+          onStartingScoreChange={setStartingScore}
+          onLegsChange={setLegs}
+          onSetsChange={setSets}
+          onDoubleOutChange={setDoubleOut}
+          onDoubleInChange={setDoubleIn}
+          onSkillFilterChange={setSkillFilter}
+          onCreateLobby={createLobby}
+          onClose={() => setShowCreateLobby(false)}
+        />
       )}
     </div>
   );

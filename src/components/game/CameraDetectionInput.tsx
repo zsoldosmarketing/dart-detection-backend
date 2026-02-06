@@ -3,9 +3,6 @@ import {
   Camera,
   CameraOff,
   RefreshCw,
-  Check,
-  X,
-  AlertCircle,
   Crosshair,
   Wifi,
   WifiOff,
@@ -44,6 +41,10 @@ import {
   type ThrowScoreResult,
   type AutoCalibrationResult,
 } from '../../lib/dartDetectionApi';
+import { drawFrame } from './CameraCanvasRenderer';
+import { ScoreConfirmationDialog } from './ScoreConfirmationDialog';
+import { CameraSettingsModal } from './CameraSettingsModal';
+import { CalibrationStatusBar } from './CalibrationStatusBar';
 
 interface CameraDetectionInputProps {
   onThrow: (target: DartTarget) => void;
@@ -656,267 +657,17 @@ export function CameraDetectionInput({
       let animationId: number;
 
       const draw = () => {
-        if (video.readyState >= 2) {
-          const vw = video.videoWidth;
-          const vh = video.videoHeight;
-          const boardResult = boardResultRef.current;
-
-          let srcX = 0, srcY = 0, srcW = vw, srcH = vh;
-          let zoomScale = 1;
-
-          if (autoZoomEnabled && boardResult && boardResult.board_found && boardResult.ellipse) {
-            const { cx, cy, a, b } = boardResult.ellipse;
-            const maxRadius = Math.max(a, b);
-            const padding = 1.05;
-            const boardSize = maxRadius * 2 * padding;
-
-            srcX = Math.max(0, cx - boardSize / 2);
-            srcY = Math.max(0, cy - boardSize / 2);
-            srcW = Math.min(boardSize, vw - srcX);
-            srcH = Math.min(boardSize, vh - srcY);
-
-            if (srcX + srcW > vw) srcW = vw - srcX;
-            if (srcY + srcH > vh) srcH = vh - srcY;
-
-            const aspect = vw / vh;
-            if (srcW / srcH > aspect) {
-              const newH = srcW / aspect;
-              const diffH = newH - srcH;
-              srcY = Math.max(0, srcY - diffH / 2);
-              srcH = Math.min(newH, vh - srcY);
-            } else {
-              const newW = srcH * aspect;
-              const diffW = newW - srcW;
-              srcX = Math.max(0, srcX - diffW / 2);
-              srcW = Math.min(newW, vw - srcX);
-            }
-
-            zoomScale = vw / srcW;
-            zoomRegionRef.current = { x: srcX, y: srcY, w: srcW, h: srcH };
-          } else {
-            zoomRegionRef.current = null;
-          }
-
-          canvas.width = vw;
-          canvas.height = vh;
-
-          ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, vw, vh);
-
-          if (boardResult && boardResult.board_found && boardResult.overlay_points) {
-            const offsetX = -srcX * zoomScale;
-            const offsetY = -srcY * zoomScale;
-
-            ctx.save();
-            ctx.translate(offsetX, offsetY);
-            ctx.scale(zoomScale, zoomScale);
-
-            if (boardResult.ellipse) {
-              const { cx, cy, a, b, angle } = boardResult.ellipse;
-              const pulsePhase = (Date.now() % 2000) / 2000;
-              const pulseAlpha = 0.4 + Math.sin(pulsePhase * Math.PI * 2) * 0.3;
-
-              ctx.save();
-              ctx.translate(cx, cy);
-              ctx.rotate((angle * Math.PI) / 180);
-
-              ctx.shadowColor = 'rgba(0, 255, 255, 0.9)';
-              ctx.shadowBlur = 30 / zoomScale;
-              ctx.strokeStyle = `rgba(0, 255, 255, ${pulseAlpha})`;
-              ctx.lineWidth = 6 / zoomScale;
-              ctx.beginPath();
-              ctx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
-              ctx.stroke();
-
-              ctx.shadowBlur = 20 / zoomScale;
-              ctx.strokeStyle = 'rgba(0, 220, 255, 0.8)';
-              ctx.lineWidth = 3 / zoomScale;
-              ctx.beginPath();
-              ctx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
-              ctx.stroke();
-
-              ctx.shadowBlur = 10 / zoomScale;
-              ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-              ctx.lineWidth = 1.5 / zoomScale;
-              ctx.beginPath();
-              ctx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
-              ctx.stroke();
-              ctx.shadowBlur = 0;
-
-              const scanAngle = (Date.now() % 3000) / 3000 * Math.PI * 2;
-              const scanX = Math.cos(scanAngle) * a;
-              const scanY = Math.sin(scanAngle) * b;
-              ctx.fillStyle = 'rgba(0, 255, 255, 1)';
-              ctx.shadowColor = 'rgba(0, 255, 255, 1)';
-              ctx.shadowBlur = 20 / zoomScale;
-              ctx.beginPath();
-              ctx.arc(scanX, scanY, 8 / zoomScale, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.shadowBlur = 0;
-
-              ctx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
-              ctx.lineWidth = 1 / zoomScale;
-              ctx.setLineDash([5 / zoomScale, 10 / zoomScale]);
-              ctx.beginPath();
-              ctx.ellipse(0, 0, a * 0.63, b * 0.63, 0, 0, Math.PI * 2);
-              ctx.stroke();
-              ctx.beginPath();
-              ctx.ellipse(0, 0, a * 0.37, b * 0.37, 0, 0, Math.PI * 2);
-              ctx.stroke();
-              ctx.beginPath();
-              ctx.ellipse(0, 0, a * 0.08, b * 0.08, 0, 0, Math.PI * 2);
-              ctx.stroke();
-              ctx.setLineDash([]);
-
-              ctx.restore();
-
-              if (boardResult.bull_center) {
-                const [bx, by] = boardResult.bull_center;
-
-                ctx.fillStyle = 'rgba(0, 255, 255, 1)';
-                ctx.shadowColor = 'rgba(0, 255, 255, 1)';
-                ctx.shadowBlur = 15 / zoomScale;
-                ctx.beginPath();
-                ctx.arc(bx, by, 6 / zoomScale, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.shadowBlur = 0;
-
-                ctx.fillStyle = '#fff';
-                ctx.beginPath();
-                ctx.arc(bx, by, 2 / zoomScale, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
-                ctx.lineWidth = 1 / zoomScale;
-                ctx.beginPath();
-                ctx.moveTo(bx - 25 / zoomScale, by);
-                ctx.lineTo(bx + 25 / zoomScale, by);
-                ctx.moveTo(bx, by - 25 / zoomScale);
-                ctx.lineTo(bx, by + 25 / zoomScale);
-                ctx.stroke();
-              }
-
-              const dartHit = lastDartHitRef.current;
-              if (dartHit) {
-                ctx.fillStyle = 'rgba(255, 50, 50, 1)';
-                ctx.shadowColor = 'rgba(255, 50, 50, 1)';
-                ctx.shadowBlur = 20 / zoomScale;
-                ctx.beginPath();
-                ctx.arc(dartHit.x, dartHit.y, 10 / zoomScale, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-                ctx.lineWidth = 2 / zoomScale;
-                ctx.beginPath();
-                ctx.arc(dartHit.x, dartHit.y, 10 / zoomScale, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.shadowBlur = 0;
-
-                ctx.fillStyle = '#fff';
-                ctx.beginPath();
-                ctx.arc(dartHit.x, dartHit.y, 3 / zoomScale, 0, Math.PI * 2);
-                ctx.fill();
-              }
-
-              if (showSectorOverlay) {
-                const SEGMENTS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
-                const rotationOffset = -9;
-
-                ctx.save();
-                ctx.translate(cx, cy);
-                ctx.rotate((angle * Math.PI) / 180);
-
-                for (let i = 0; i < 20; i++) {
-                  const startAngle = ((i * 18 - 9 + rotationOffset) * Math.PI) / 180;
-                  const midAngle = ((i * 18 + rotationOffset) * Math.PI) / 180;
-
-                  ctx.strokeStyle = 'rgba(0, 255, 255, 0.25)';
-                  ctx.lineWidth = 1 / zoomScale;
-                  ctx.beginPath();
-                  ctx.moveTo(a * 0.08 * Math.sin(startAngle), -b * 0.08 * Math.cos(startAngle));
-                  ctx.lineTo(a * Math.sin(startAngle), -b * Math.cos(startAngle));
-                  ctx.stroke();
-
-                  const labelDist = 0.85;
-                  const labelX = a * labelDist * Math.sin(midAngle);
-                  const labelY = -b * labelDist * Math.cos(midAngle);
-
-                  ctx.fillStyle = 'rgba(0, 255, 255, 0.9)';
-                  ctx.font = `bold ${14 / zoomScale}px sans-serif`;
-                  ctx.textAlign = 'center';
-                  ctx.textBaseline = 'middle';
-                  ctx.shadowColor = 'rgba(0, 255, 255, 0.5)';
-                  ctx.shadowBlur = 6 / zoomScale;
-                  ctx.fillText(String(SEGMENTS[i]), labelX, labelY);
-                  ctx.shadowBlur = 0;
-                }
-
-                ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
-                ctx.lineWidth = 2 / zoomScale;
-                ctx.beginPath();
-                ctx.ellipse(0, 0, a * 0.58, b * 0.58, 0, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.ellipse(0, 0, a * 0.63, b * 0.63, 0, 0, Math.PI * 2);
-                ctx.stroke();
-
-                ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
-                ctx.beginPath();
-                ctx.ellipse(0, 0, a * 0.95, b * 0.95, 0, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
-                ctx.stroke();
-
-                ctx.restore();
-              }
-            }
-
-            ctx.restore();
-
-            const cornerSize = 40;
-            const cornerThickness = 3;
-            ctx.strokeStyle = 'rgba(0, 255, 255, 0.7)';
-            ctx.shadowColor = 'rgba(0, 255, 255, 0.8)';
-            ctx.shadowBlur = 8;
-            ctx.lineWidth = cornerThickness;
-
-            ctx.beginPath();
-            ctx.moveTo(10, 10 + cornerSize);
-            ctx.lineTo(10, 10);
-            ctx.lineTo(10 + cornerSize, 10);
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.moveTo(vw - 10 - cornerSize, 10);
-            ctx.lineTo(vw - 10, 10);
-            ctx.lineTo(vw - 10, 10 + cornerSize);
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.moveTo(vw - 10, vh - 10 - cornerSize);
-            ctx.lineTo(vw - 10, vh - 10);
-            ctx.lineTo(vw - 10 - cornerSize, vh - 10);
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.moveTo(10 + cornerSize, vh - 10);
-            ctx.lineTo(10, vh - 10);
-            ctx.lineTo(10, vh - 10 - cornerSize);
-            ctx.stroke();
-
-            ctx.shadowBlur = 0;
-          }
-
-          if (isDetecting) {
-            const scanY = (Date.now() % 2000) / 2000 * canvas.height;
-            const scanGradient = ctx.createLinearGradient(0, scanY - 30, 0, scanY + 30);
-            scanGradient.addColorStop(0, 'rgba(59, 130, 246, 0)');
-            scanGradient.addColorStop(0.5, 'rgba(59, 130, 246, 0.3)');
-            scanGradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
-            ctx.fillStyle = scanGradient;
-            ctx.fillRect(0, scanY - 30, canvas.width, 60);
-          }
-        }
+        const zoomRegion = drawFrame({
+          ctx,
+          canvas,
+          video,
+          boardResult: boardResultRef.current,
+          autoZoomEnabled,
+          showSectorOverlay,
+          isDetecting,
+          lastDartHit: lastDartHitRef.current,
+        });
+        zoomRegionRef.current = zoomRegion;
         animationId = requestAnimationFrame(draw);
       };
 
@@ -1213,306 +964,53 @@ export function CameraDetectionInput({
 
       {!isFullscreen && (
         <>
-          <div className="min-h-[76px] space-y-3">
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
-                  <AlertCircle className="w-5 h-5 text-red-400" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-red-300 font-medium">{error}</p>
-                </div>
-              </div>
-            )}
-
-            {isCalibrated && !error && (
-              <div className={`rounded-xl p-3 flex items-center gap-3 transition-all duration-300 ${
-                boardConfidence >= 0.6
-                  ? 'bg-green-500/10 border border-green-500/30'
-                  : boardConfidence >= 0.4
-                    ? 'bg-amber-500/10 border border-amber-500/30'
-                    : 'bg-red-500/10 border border-red-500/30'
-              }`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  boardConfidence >= 0.6
-                    ? 'bg-green-500/20'
-                    : boardConfidence >= 0.4
-                      ? 'bg-amber-500/20'
-                      : 'bg-red-500/20'
-                }`}>
-                  <Check className={`w-4 h-4 ${
-                    boardConfidence >= 0.6
-                      ? 'text-green-400'
-                      : boardConfidence >= 0.4
-                        ? 'text-amber-400'
-                        : 'text-red-400'
-                  }`} />
-                </div>
-                <div className="flex-1 flex items-center justify-between">
-                  <span className={`font-medium ${
-                    boardConfidence >= 0.6
-                      ? 'text-green-300'
-                      : boardConfidence >= 0.4
-                        ? 'text-amber-300'
-                        : 'text-red-300'
-                  }`}>
-                    Tabla OK ({(boardConfidence * 100).toFixed(0)}%)
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setAutoDetectEnabled(!autoDetectEnabled)}
-                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                        autoDetectEnabled
-                          ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                          : 'bg-dark-600 text-dark-400 hover:bg-dark-500'
-                      }`}
-                    >
-                      {autoDetectEnabled ? 'Auto ON' : 'Auto OFF'}
-                    </button>
-                    <button
-                      onClick={() => setAutoZoomEnabled(!autoZoomEnabled)}
-                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                        autoZoomEnabled
-                          ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
-                          : 'bg-dark-600 text-dark-400 hover:bg-dark-500'
-                      }`}
-                    >
-                      {autoZoomEnabled ? 'Zoom ON' : 'Zoom OFF'}
-                    </button>
-                    <button
-                      onClick={() => setShowSectorOverlay(!showSectorOverlay)}
-                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                        showSectorOverlay
-                          ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'
-                          : 'bg-dark-600 text-dark-400 hover:bg-dark-500'
-                      }`}
-                    >
-                      Szektorok
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {statusMessage && !error && !isCalibrated && (
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                  <Check className="w-5 h-5 text-blue-400" />
-                </div>
-                <p className="text-blue-300 font-medium">{statusMessage}</p>
-              </div>
-            )}
-          </div>
+          <CalibrationStatusBar
+            isCalibrated={isCalibrated}
+            isActive={isActive}
+            boardConfidence={boardConfidence}
+            autoDetectEnabled={autoDetectEnabled}
+            autoZoomEnabled={autoZoomEnabled}
+            showSectorOverlay={showSectorOverlay}
+            error={error}
+            statusMessage={statusMessage}
+            pendingScore={!!pendingScore}
+            remainingDarts={remainingDarts}
+            onToggleAutoDetect={() => setAutoDetectEnabled(!autoDetectEnabled)}
+            onToggleAutoZoom={() => setAutoZoomEnabled(!autoZoomEnabled)}
+            onToggleSectorOverlay={() => setShowSectorOverlay(!showSectorOverlay)}
+          />
 
           {pendingScore && (
-            <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-2xl font-bold text-amber-300">{pendingScore.label}</p>
-                  <p className="text-lg text-amber-200">{pendingScore.score} pont</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className="h-1.5 w-24 bg-dark-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full"
-                        style={{ width: `${pendingScore.confidence * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-amber-400/70 text-sm">
-                      {(pendingScore.confidence * 100).toFixed(0)}% | {pendingScore.decision}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <Button
-                  onClick={confirmPendingScore}
-                  className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 shadow-lg shadow-green-500/20"
-                  leftIcon={<Check className="w-4 h-4" />}
-                >
-                  Elfogadom
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={rejectPendingScore}
-                  className="flex-1 border-dark-600 hover:bg-dark-700"
-                  leftIcon={<X className="w-4 h-4" />}
-                >
-                  Elutasitom
-                </Button>
-              </div>
-            </div>
+            <ScoreConfirmationDialog
+              pendingScore={pendingScore}
+              isFullscreen={false}
+              onConfirm={confirmPendingScore}
+              onReject={rejectPendingScore}
+            />
           )}
-
-          <div className="min-h-[52px]">
-            {isActive && isCalibrated && !pendingScore && (
-              <div className="flex items-center justify-between px-4 py-3 bg-dark-800/50 rounded-xl border border-dark-700">
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className="w-3 h-3 rounded-full bg-green-500" />
-                    <div className="absolute inset-0 w-3 h-3 rounded-full bg-green-500 animate-ping opacity-50" />
-                  </div>
-                  <span className="text-dark-300 text-sm font-medium">
-                    Kesz - Nyomd meg a "Dobas" gombot
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-dark-500 text-sm">{remainingDarts} nyil hatra</span>
-                </div>
-              </div>
-            )}
-          </div>
         </>
       )}
 
       {isFullscreen && pendingScore && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-dark-800 border border-dark-600 rounded-xl p-4 shadow-2xl w-80">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="text-xl font-bold text-amber-300">{pendingScore.label}</p>
-              <p className="text-sm text-amber-200">{pendingScore.score} pont</p>
-            </div>
-            <span className="text-amber-400/70 text-sm">{(pendingScore.confidence * 100).toFixed(0)}%</span>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={confirmPendingScore}
-              size="sm"
-              className="flex-1 bg-green-600 hover:bg-green-500"
-              leftIcon={<Check className="w-4 h-4" />}
-            >
-              OK
-            </Button>
-            <Button
-              variant="outline"
-              onClick={rejectPendingScore}
-              size="sm"
-              className="flex-1"
-              leftIcon={<X className="w-4 h-4" />}
-            >
-              Nem
-            </Button>
-          </div>
-        </div>
+        <ScoreConfirmationDialog
+          pendingScore={pendingScore}
+          isFullscreen={true}
+          onConfirm={confirmPendingScore}
+          onReject={rejectPendingScore}
+        />
       )}
 
       {showCameraSettings && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-dark-800 rounded-xl border border-dark-700 shadow-2xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/20 rounded-lg">
-                  <Camera className="w-5 h-5 text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">Kamera valasztas</h3>
-                  <p className="text-sm text-dark-400">Valassz az elerheto kamerak kozul</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowCameraSettings(false)}
-                className="p-2 hover:bg-dark-700 rounded-lg transition-colors text-dark-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {remoteCameras.length > 0 && (
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Smartphone className="w-4 h-4 text-green-400" />
-                  <span className="text-sm font-medium text-green-400">Tavoli Kamerak</span>
-                </div>
-                <div className="space-y-2">
-                  {remoteCameras.map((session) => (
-                    <button
-                      key={session.id}
-                      onClick={() => connectToRemoteCamera(session)}
-                      disabled={connectingRemoteId === session.id}
-                      className={`w-full text-left p-4 rounded-lg border transition-all ${
-                        activeRemoteCamera === session.id
-                          ? 'bg-green-500/20 border-green-500/50 text-green-300'
-                          : 'bg-dark-700 border-dark-600 text-white hover:bg-dark-600 hover:border-green-500/30'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Smartphone className={`w-5 h-5 ${activeRemoteCamera === session.id ? 'text-green-400' : 'text-green-400/60'}`} />
-                          <div>
-                            <div className="font-medium flex items-center gap-2">
-                              {session.device_name}
-                              {session.status === 'waiting' && (
-                                <span className="text-xs text-amber-400">(varakozik)</span>
-                              )}
-                            </div>
-                            <div className="text-xs text-dark-400 mt-0.5">
-                              Tavoli {session.device_type}
-                            </div>
-                          </div>
-                        </div>
-                        {connectingRemoteId === session.id ? (
-                          <Loader2 className="w-5 h-5 text-green-400 animate-spin" />
-                        ) : activeRemoteCamera === session.id ? (
-                          <div className="flex items-center gap-2 text-green-400">
-                            <Wifi className="w-5 h-5" />
-                            <span className="text-sm font-medium">Aktiv</span>
-                          </div>
-                        ) : null}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {availableCameras.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Camera className="w-4 h-4 text-blue-400" />
-                  <span className="text-sm font-medium text-blue-400">Helyi Kamerak</span>
-                </div>
-                <div className="space-y-2">
-                  {availableCameras.map((camera, index) => (
-                    <button
-                      key={camera.deviceId}
-                      onClick={() => selectCamera(index)}
-                      className={`w-full text-left p-4 rounded-lg border transition-all ${
-                        index === currentCameraIndex && !activeRemoteCamera
-                          ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
-                          : 'bg-dark-700 border-dark-600 text-white hover:bg-dark-600 hover:border-dark-500'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Camera className={`w-5 h-5 ${index === currentCameraIndex && !activeRemoteCamera ? 'text-blue-400' : 'text-dark-400'}`} />
-                          <div>
-                            <div className="font-medium">{camera.label}</div>
-                            <div className="text-xs text-dark-400 mt-0.5">
-                              {camera.deviceId.slice(0, 16)}...
-                            </div>
-                          </div>
-                        </div>
-                        {index === currentCameraIndex && !activeRemoteCamera && (
-                          <div className="flex items-center gap-2 text-blue-400">
-                            <Check className="w-5 h-5" />
-                            <span className="text-sm font-medium">Aktiv</span>
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {availableCameras.length === 0 && remoteCameras.length === 0 && (
-              <div className="text-center py-8 text-dark-400">
-                <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>Nem talalhato kamera</p>
-                <p className="text-xs mt-2">Oszd meg a kamerad egy masik eszkozrol</p>
-              </div>
-            )}
-          </div>
-        </div>
+        <CameraSettingsModal
+          availableCameras={availableCameras}
+          remoteCameras={remoteCameras}
+          currentCameraIndex={currentCameraIndex}
+          activeRemoteCamera={activeRemoteCamera}
+          connectingRemoteId={connectingRemoteId}
+          onClose={() => setShowCameraSettings(false)}
+          onSelectCamera={selectCamera}
+          onConnectRemoteCamera={connectToRemoteCamera}
+        />
       )}
     </div>
   );

@@ -1,21 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  ChevronLeft,
-  Volume2,
-  VolumeX,
-  Flag,
-  Save,
-  Mic,
-  Target,
-  Settings,
-  Server,
-} from 'lucide-react';
 import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { Badge } from '../components/ui/Badge';
 import { DartScoreInput } from '../components/game/DartScoreInput';
-import { t } from '../lib/i18n';
+import { GameHeader } from '../components/game/GameHeader';
+import { MessageOverlay } from '../components/game/MessageOverlay';
+import { PlayerScoreCards } from '../components/game/PlayerScoreCards';
+import { CheckoutSuggestions } from '../components/game/CheckoutSuggestions';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
@@ -986,389 +976,45 @@ export function GamePlayPage() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            leftIcon={<ChevronLeft className="w-4 h-4" />}
-            onClick={() => navigate('/game')}
-          >
-            Vissza
-          </Button>
-          {isAdmin && (
-            <button
-              onClick={toggleBackend}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
-                isLocalBackend
-                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                  : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-              }`}
-              title={isLocalBackend ? 'Local Backend' : 'Online Backend'}
-            >
-              <Server className="w-3.5 h-3.5" />
-              {isLocalBackend ? 'LOCAL' : 'ONLINE'}
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {room.mode === 'pvp' && (
-            <>
-              <button
-                onClick={handleSurrender}
-                disabled={isProcessing}
-                className="p-2 rounded-lg transition-colors bg-error-100 dark:bg-error-900/30 text-error-600 dark:text-error-400 hover:bg-error-200 dark:hover:bg-error-900/50 disabled:opacity-50"
-                title="Feladás"
-              >
-                <Flag className="w-5 h-5" />
-              </button>
-              <button
-                onClick={handleSaveAndExit}
-                disabled={isProcessing}
-                className="p-2 rounded-lg transition-colors bg-warning-100 dark:bg-warning-900/30 text-warning-600 dark:text-warning-400 hover:bg-warning-200 dark:hover:bg-warning-900/50 disabled:opacity-50"
-                title="Mentés és kilépés"
-              >
-                <Save className="w-5 h-5" />
-              </button>
-            </>
-          )}
-          <button
-            onClick={toggleSound}
-            className={`p-2 rounded-lg transition-colors ${
-              soundEnabled
-                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
-                : 'bg-dark-100 dark:bg-dark-700 text-dark-400'
-            }`}
-            title={soundEnabled ? 'Hang kikapcsolasa' : 'Hang bekapcsolasa'}
-          >
-            {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-          </button>
-          <Badge variant="primary">Leg {gameState.current_leg}</Badge>
-          <Badge variant="secondary">{room.starting_score}</Badge>
-        </div>
-      </div>
+      <GameHeader
+        mode={room.mode}
+        currentLeg={gameState.current_leg}
+        startingScore={room.starting_score}
+        soundEnabled={soundEnabled}
+        isProcessing={isProcessing}
+        isAdmin={isAdmin}
+        isLocalBackend={isLocalBackend}
+        onNavigateBack={() => navigate('/game')}
+        onSurrender={handleSurrender}
+        onSaveAndExit={handleSaveAndExit}
+        onToggleSound={toggleSound}
+        onToggleBackend={toggleBackend}
+      />
 
-      {message && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-dark-800 rounded-2xl p-8 text-center animate-scale-in">
-            <div className="text-4xl font-bold text-primary-600 dark:text-primary-400">
-              {message}
-            </div>
-          </div>
-        </div>
-      )}
+      <MessageOverlay
+        message={message}
+        showVoiceHelp={showVoiceHelp}
+        voiceRecognitionEnabled={voiceRecognitionEnabled}
+        onCloseVoiceHelp={() => setShowVoiceHelp(false)}
+      />
 
-      {showVoiceHelp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowVoiceHelp(false)}>
-          <div className="bg-white dark:bg-dark-800 rounded-2xl p-6 max-w-2xl max-h-[90vh] overflow-y-auto animate-scale-in" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary-100 dark:bg-primary-900/30">
-                  <Mic className="w-6 h-6 text-primary-600 dark:text-primary-400" />
-                </div>
-                <h2 className="text-2xl font-bold text-dark-900 dark:text-white">Hangvezérlés súgó</h2>
-              </div>
-              <button
-                onClick={() => setShowVoiceHelp(false)}
-                className="p-2 rounded-lg hover:bg-dark-100 dark:hover:bg-dark-700 transition-colors"
-              >
-                <span className="text-2xl text-dark-500">×</span>
-              </button>
-            </div>
+      <PlayerScoreCards
+        players={players}
+        gameState={gameState}
+        currentPlayerId={currentPlayer?.id}
+        currentRemaining={currentRemaining}
+        legsToWin={room.legs_to_win}
+        getPlayerName={getPlayerName}
+        currentTurnDarts={currentTurnDarts}
+        isMyTurn={!!isMyTurn}
+      />
 
-            <div className="space-y-6 text-left">
-              <div>
-                <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-3 flex items-center gap-2">
-                  <Target className="w-5 h-5 text-primary-500" />
-                  Hogyan működik a hangvezérlés?
-                </h3>
-                <p className="text-sm text-dark-700 dark:text-dark-300 mb-3">
-                  A hangvezérlés lehetővé teszi, hogy hangparancsokkal rögzítsd a dobásaidat. Nincs szükség gomb megnyomására - csak mondd ki a dobásod!
-                </p>
-                <p className="text-sm text-dark-700 dark:text-dark-300">
-                  A mikrofon ikon {voiceRecognitionEnabled ? 'zöld színnel jelzi, hogy a hangvezérlés aktív' : 'szürkével jelzi, hogy a hangvezérlés kikapcsolt állapotban van'}.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-3">Dobás parancsok</h3>
-                <div className="space-y-2">
-                  <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">Egyszeres dobás</p>
-                    <p className="text-sm text-dark-700 dark:text-dark-300">
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">húsz</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">20</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded">egy</span>
-                    </p>
-                    <p className="text-xs text-dark-600 dark:text-dark-400 mt-1">Bármely szám 1-től 20-ig, szóban vagy számmal</p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">Dupla dobás</p>
-                    <p className="text-sm text-dark-700 dark:text-dark-300">
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">dupla húsz</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded">D20</span>
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">Tripla dobás</p>
-                    <p className="text-sm text-dark-700 dark:text-dark-300">
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">tripla húsz</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded">T20</span>
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">Dupla bull (50 pont)</p>
-                    <p className="text-sm text-dark-700 dark:text-dark-300">
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">bull</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">ötven</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">50</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">közép</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">bika</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">nagybull</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded">dupla bull</span>
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">Kis bull (25 pont)</p>
-                    <p className="text-sm text-dark-700 dark:text-dark-300">
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">kisbull</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">kis bull</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">huszonöt</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">25</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">külső bull</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded">szimpla bull</span>
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">Mellé dobás (0 pont)</p>
-                    <p className="text-sm text-dark-700 dark:text-dark-300">
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">miss</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">mellé</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">nulla</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded">0</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-3">Vezérlő parancsok</h3>
-                <div className="space-y-2">
-                  <div className="p-3 rounded-lg bg-secondary-50 dark:bg-secondary-900/20">
-                    <p className="font-semibold text-secondary-700 dark:text-secondary-300 mb-1">Visszavonás / Törlés</p>
-                    <p className="text-sm text-dark-700 dark:text-dark-300 mb-2">
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">vissza</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">törlés</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">töröl</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">undo</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">delete</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded">előző</span>
-                    </p>
-                    <p className="text-xs text-dark-600 dark:text-dark-400">Utolsó dobás törlése</p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-secondary-50 dark:bg-secondary-900/20">
-                    <p className="font-semibold text-secondary-700 dark:text-secondary-300 mb-1">Beküldés / Kör lezárása</p>
-                    <p className="text-sm text-dark-700 dark:text-dark-300 mb-2">
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">beküld</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">küld</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">kész</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">oké</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">ok</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">mehet</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">megy</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">rendben</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">rajta</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">gyerünk</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">indulhat</span>
-                      <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded">következő</span>
-                    </p>
-                    <p className="text-xs text-dark-600 dark:text-dark-400">Kör beküldése (3 dobás után automatikus)</p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-3 flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-primary-500" />
-                  Beállítási tippek
-                </h3>
-                <div className="space-y-3 text-sm text-dark-700 dark:text-dark-300">
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary-500 mt-0.5">•</span>
-                    <p><strong>Felismerési mód:</strong> Zajos környezetben válaszd a "Pontos" módot a jobb eredményekért.</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary-500 mt-0.5">•</span>
-                    <p><strong>Zajszűrés:</strong> Ha a rendszer túl érzékeny, állítsd a küszöböt alacsonyabb értékre (-60 dB körül).</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-primary-500 mt-0.5">•</span>
-                    <p><strong>Mikrofonhasználat:</strong> Beszélj tisztán és közvetlenül a mikrofon felé. A parancsok közötti kis szünet segít a felismerésben.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-dark-200 dark:border-dark-700">
-                <Button
-                  onClick={() => setShowVoiceHelp(false)}
-                  className="w-full"
-                >
-                  Értettem
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {players.length <= 2 ? (
-        <div className="grid grid-cols-2 gap-4">
-          {players.map((player) => {
-            const isCurrent = player.player_order === gameState.current_player_order;
-            const displayScore = isCurrent && player.id === currentPlayer?.id
-              ? currentRemaining
-              : player.current_score;
-
-            return (
-              <Card
-                key={player.id}
-                className={`relative overflow-hidden transition-all ${
-                  isCurrent ? 'ring-2 ring-primary-500' : ''
-                }`}
-              >
-                {isCurrent && (
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-primary-500" />
-                )}
-                <div className="text-center">
-                  <p className="text-sm text-dark-500 dark:text-dark-400 mb-1">
-                    {getPlayerName(player)}
-                  </p>
-                  <p className="text-5xl font-bold text-dark-900 dark:text-white">
-                    {displayScore}
-                  </p>
-                  <div className="flex items-center justify-center gap-4 mt-3 text-sm text-dark-500">
-                    <span>Leg: {player.legs_won}/{room.legs_to_win}</span>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {players.find(p => p.player_order === gameState.current_player_order) && (() => {
-            const player = players.find(p => p.player_order === gameState.current_player_order)!;
-            const displayScore = player.id === currentPlayer?.id ? currentRemaining : player.current_score;
-            return (
-              <Card className="relative overflow-hidden ring-2 ring-primary-500">
-                <div className="absolute top-0 left-0 right-0 h-1 bg-primary-500" />
-                <div className="text-center">
-                  <p className="text-sm text-dark-500 dark:text-dark-400 mb-1">
-                    {getPlayerName(player)}
-                  </p>
-                  <p className="text-5xl font-bold text-dark-900 dark:text-white">
-                    {displayScore}
-                  </p>
-                  <div className="flex items-center justify-center gap-4 mt-3 text-sm text-dark-500">
-                    <span>Leg: {player.legs_won}/{room.legs_to_win}</span>
-                  </div>
-                </div>
-              </Card>
-            );
-          })()}
-
-          <div className="grid grid-cols-3 gap-2">
-            {players
-              .filter(p => p.player_order !== gameState.current_player_order)
-              .map((player) => (
-                <Card
-                  key={player.id}
-                  className="p-2 text-center bg-dark-50 dark:bg-dark-800/50"
-                >
-                  <p className="text-xs text-dark-500 dark:text-dark-400 mb-1 truncate">
-                    {getPlayerName(player)}
-                  </p>
-                  <p className="text-2xl font-bold text-dark-700 dark:text-dark-300">
-                    {player.current_score}
-                  </p>
-                  <p className="text-[10px] text-dark-400 mt-1">
-                    {player.legs_won}/{room.legs_to_win}
-                  </p>
-                </Card>
-              ))}
-          </div>
-        </div>
-      )}
-
-      {showSuggestions && (checkoutRoutes.length > 0 || (setupSuggestions.length > 0 && currentRemaining > 170)) && (
-        <div className="mb-3">
-          <p className="text-xs text-dark-500 mb-1">{t('training.suggested_routes')}:</p>
-          {checkoutRoutes.length > 0 ? (
-            checkoutRoutes.length === 1 ? (
-              <div className="px-4 py-3 rounded-lg bg-primary-500 text-white text-base font-bold">
-                {checkoutRoutes[0].darts.map(d => formatDartDisplay(d)).join(' → ')}
-                {checkoutRoutes[0].salvage && (
-                  <span className="text-sm block opacity-90 mt-1 font-medium">{checkoutRoutes[0].salvage.replace(/S(\d+)/g, '$1')}</span>
-                )}
-              </div>
-            ) : (
-              <div className={`grid gap-2 ${checkoutRoutes.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-                {checkoutRoutes.slice(0, 3).map((route, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-2.5 rounded-lg text-center transition-all ${
-                      idx === 0
-                        ? 'bg-primary-500 text-white'
-                        : 'bg-dark-200 dark:bg-dark-700 text-dark-900 dark:text-dark-100'
-                    }`}
-                  >
-                    <p className={`text-sm font-bold ${idx === 0 ? 'text-white' : ''}`}>
-                      {route.darts.map(d => formatDartDisplay(d)).join(' → ')}
-                    </p>
-                    {route.salvage && (
-                      <p className={`text-xs mt-1 font-medium ${idx === 0 ? 'opacity-90' : 'text-dark-600 dark:text-dark-300'}`}>
-                        {route.salvage.replace(/S(\d+)/g, '$1')}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )
-          ) : setupSuggestions.length === 1 ? (
-            <div className="px-4 py-3 rounded-lg bg-primary-500 text-white text-base font-bold">
-              {formatDartDisplay(setupSuggestions[0].target)} → {setupSuggestions[0].leave}
-              <span className="text-sm block opacity-90 mt-1 font-medium">
-                {setupSuggestions[0].projection.slice(0, 2).map((p) => `Ha ${p.hit.startsWith('S') ? p.hit.slice(1) : p.hit}: ${p.leave} marad`).join(' | ')}
-              </span>
-            </div>
-          ) : (
-            <div className={`grid gap-2 ${setupSuggestions.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-              {setupSuggestions.slice(0, 3).map((suggestion, idx) => (
-                <div
-                  key={idx}
-                  className={`p-2.5 rounded-lg text-center transition-all ${
-                    idx === 0
-                      ? 'bg-primary-500 text-white'
-                      : 'bg-dark-200 dark:bg-dark-700 text-dark-900 dark:text-dark-100'
-                  }`}
-                >
-                  <p className={`text-sm font-bold ${idx === 0 ? 'text-white' : ''}`}>
-                    {formatDartDisplay(suggestion.target)} → {suggestion.leave}
-                  </p>
-                  <p className={`text-xs mt-1 font-medium ${idx === 0 ? 'opacity-90' : 'text-dark-600 dark:text-dark-300'}`}>
-                    {suggestion.projection.slice(0, 2).map((p) => `${p.hit.startsWith('S') ? p.hit.slice(1) : p.hit}:${p.leave}`).join(' ')}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <CheckoutSuggestions
+        showSuggestions={showSuggestions}
+        checkoutRoutes={checkoutRoutes}
+        setupSuggestions={setupSuggestions}
+        currentRemaining={currentRemaining}
+      />
 
       {isMyTurn && (
         <DartScoreInput
