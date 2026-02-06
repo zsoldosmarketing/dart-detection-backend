@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import type { DartTarget } from '../../lib/dartsEngine';
 
 interface DartboardInputProps {
@@ -8,46 +8,33 @@ interface DartboardInputProps {
 
 const SECTOR_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
 
-const SECTOR_COLORS: Record<number, { single: string; double: string; triple: string }> = {
-  20: { single: '#000', double: '#e74c3c', triple: '#e74c3c' },
-  1: { single: '#f5e6d3', double: '#27ae60', triple: '#27ae60' },
-  18: { single: '#000', double: '#e74c3c', triple: '#e74c3c' },
-  4: { single: '#f5e6d3', double: '#27ae60', triple: '#27ae60' },
-  13: { single: '#000', double: '#e74c3c', triple: '#e74c3c' },
-  6: { single: '#f5e6d3', double: '#27ae60', triple: '#27ae60' },
-  10: { single: '#000', double: '#e74c3c', triple: '#e74c3c' },
-  15: { single: '#f5e6d3', double: '#27ae60', triple: '#27ae60' },
-  2: { single: '#000', double: '#e74c3c', triple: '#e74c3c' },
-  17: { single: '#f5e6d3', double: '#27ae60', triple: '#27ae60' },
-  3: { single: '#000', double: '#e74c3c', triple: '#e74c3c' },
-  19: { single: '#f5e6d3', double: '#27ae60', triple: '#27ae60' },
-  7: { single: '#000', double: '#e74c3c', triple: '#e74c3c' },
-  16: { single: '#f5e6d3', double: '#27ae60', triple: '#27ae60' },
-  8: { single: '#000', double: '#e74c3c', triple: '#e74c3c' },
-  11: { single: '#f5e6d3', double: '#27ae60', triple: '#27ae60' },
-  14: { single: '#000', double: '#e74c3c', triple: '#e74c3c' },
-  9: { single: '#f5e6d3', double: '#27ae60', triple: '#27ae60' },
-  12: { single: '#000', double: '#e74c3c', triple: '#e74c3c' },
-  5: { single: '#f5e6d3', double: '#27ae60', triple: '#27ae60' },
-};
-
 export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
   const [hoveredSegment, setHoveredSegment] = useState<string | null>(null);
+  const [flashSegment, setFlashSegment] = useState<string | null>(null);
 
-  const size = 320;
+  const size = 400;
   const center = size / 2;
-  const doubleRadius = 133;
-  const outerSingleRadius = 122;
-  const tripleOuterRadius = 87;
-  const tripleInnerRadius = 79;
-  const innerSingleRadius = 70;
-  const bullRadius = 26;
-  const innerBullRadius = 10;
 
-  const handleClick = (target: DartTarget) => {
+  const outerRingRadius = 178;
+  const doubleOuterRadius = 170;
+  const doubleInnerRadius = 162;
+  const outerSingleOuter = 162;
+  const outerSingleInner = 107;
+  const tripleOuterRadius = 107;
+  const tripleInnerRadius = 99;
+  const innerSingleOuter = 99;
+  const innerSingleInner = 32;
+  const outerBullRadius = 32;
+  const innerBullRadius = 14;
+
+  const numberRingRadius = 188;
+
+  const handleClick = useCallback((target: DartTarget, segmentId: string) => {
     if (disabled) return;
+    setFlashSegment(segmentId);
+    setTimeout(() => setFlashSegment(null), 200);
     onThrow(target);
-  };
+  }, [disabled, onThrow]);
 
   const createSectorPath = (index: number, innerR: number, outerR: number) => {
     const anglePerSector = 360 / 20;
@@ -66,140 +53,254 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
     return `M ${x1} ${y1} L ${x2} ${y2} A ${outerR} ${outerR} 0 0 1 ${x3} ${y3} L ${x4} ${y4} A ${innerR} ${innerR} 0 0 0 ${x1} ${y1} Z`;
   };
 
-  const getDisplayText = (segment: string | null) => {
-    if (!segment) return '\u00A0';
-    if (segment === 'BULL') return 'BULL';
-    if (segment === 'OB') return 'OB';
-    return segment.replace(/^[SDT]/, '').replace('_inner', '');
+  const isEvenSector = (idx: number) => idx % 2 === 0;
+
+  const getSingleFill = (idx: number, segId: string) => {
+    if (flashSegment === segId) return '#fbbf24';
+    if (hoveredSegment === segId) return hoveredSegment ? '#f59e0b' : '';
+    return isEvenSector(idx) ? '#1a1a1a' : '#f7e8c8';
+  };
+
+  const getDoubleFill = (idx: number, segId: string) => {
+    if (flashSegment === segId) return '#fbbf24';
+    if (hoveredSegment === segId) return '#f59e0b';
+    return isEvenSector(idx) ? '#c0392b' : '#1a7a3a';
+  };
+
+  const getTripleFill = (idx: number, segId: string) => {
+    if (flashSegment === segId) return '#fbbf24';
+    if (hoveredSegment === segId) return '#f59e0b';
+    return isEvenSector(idx) ? '#c0392b' : '#1a7a3a';
+  };
+
+  const getSegmentLabel = (seg: string | null): string => {
+    if (!seg) return '';
+    if (seg === 'BULL') return 'BULLSEYE (50)';
+    if (seg === 'OB') return 'OUTER BULL (25)';
+    if (seg === 'MISS') return 'MISS (0)';
+    const match = seg.match(/^([SDT])(\d+)/);
+    if (!match) return '';
+    const [, type, num] = match;
+    const prefix = type === 'D' ? 'DOUBLE' : type === 'T' ? 'TRIPLE' : '';
+    const score = type === 'D' ? parseInt(num) * 2 : type === 'T' ? parseInt(num) * 3 : parseInt(num);
+    return prefix ? `${prefix} ${num} (${score})` : `${num}`;
   };
 
   return (
     <div className="flex flex-col items-center w-full">
-      <div className="w-full max-w-md mx-auto aspect-square">
+      <div className="w-full max-w-md mx-auto aspect-square relative">
         <svg
           width="100%"
           height="100%"
           viewBox={`0 0 ${size} ${size}`}
-          className="touch-none select-none"
+          className="touch-none select-none drop-shadow-2xl"
           preserveAspectRatio="xMidYMid meet"
         >
-        <circle cx={center} cy={center} r={doubleRadius + 5} fill="#1a1a1a" />
+          <defs>
+            <radialGradient id="boardShadow" cx="50%" cy="50%" r="50%">
+              <stop offset="85%" stopColor="transparent" />
+              <stop offset="100%" stopColor="rgba(0,0,0,0.4)" />
+            </radialGradient>
+            <radialGradient id="wireShine" cx="30%" cy="30%" r="70%">
+              <stop offset="0%" stopColor="rgba(220,220,220,0.6)" />
+              <stop offset="100%" stopColor="rgba(140,140,140,0.2)" />
+            </radialGradient>
+            <filter id="innerShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur" />
+              <feOffset dx="0" dy="2" result="offsetBlur" />
+              <feFlood floodColor="rgba(0,0,0,0.3)" result="color" />
+              <feComposite in2="offsetBlur" operator="in" result="shadow" />
+              <feComposite in="SourceGraphic" in2="shadow" operator="over" />
+            </filter>
+            <filter id="glowFilter">
+              <feGaussianBlur stdDeviation="2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
 
-        {SECTOR_ORDER.map((num, idx) => {
-          const colors = SECTOR_COLORS[num];
+          <circle cx={center} cy={center} r={outerRingRadius + 12} fill="#0a0a0a" />
+          <circle cx={center} cy={center} r={outerRingRadius + 10} fill="#111" />
+          <circle cx={center} cy={center} r={outerRingRadius + 8} fill="#181818" stroke="#2a2a2a" strokeWidth="1" />
 
-          return (
-            <g key={num}>
+          <circle cx={center} cy={center} r={outerRingRadius} fill="#1e1e1e" />
+
+          {SECTOR_ORDER.map((num, idx) => {
+            const anglePerSector = 360 / 20;
+            const startAngle = (idx * anglePerSector - anglePerSector / 2 - 90) * (Math.PI / 180);
+            const endAngle = ((idx + 1) * anglePerSector - anglePerSector / 2 - 90) * (Math.PI / 180);
+
+            const bgX1 = center + doubleOuterRadius * Math.cos(startAngle);
+            const bgY1 = center + doubleOuterRadius * Math.sin(startAngle);
+            const bgX2 = center + outerRingRadius * Math.cos(startAngle);
+            const bgY2 = center + outerRingRadius * Math.sin(startAngle);
+            const bgX3 = center + outerRingRadius * Math.cos(endAngle);
+            const bgY3 = center + outerRingRadius * Math.sin(endAngle);
+            const bgX4 = center + doubleOuterRadius * Math.cos(endAngle);
+            const bgY4 = center + doubleOuterRadius * Math.sin(endAngle);
+
+            return (
               <path
-                d={createSectorPath(idx, outerSingleRadius, doubleRadius)}
-                fill={hoveredSegment === `D${num}` ? '#f97316' : colors.double}
-                stroke="#c0a080"
-                strokeWidth="1"
-                className="cursor-pointer transition-colors"
-                onMouseEnter={() => setHoveredSegment(`D${num}`)}
-                onMouseLeave={() => setHoveredSegment(null)}
-                onClick={() => handleClick(`D${num}` as DartTarget)}
+                key={`bg-${num}`}
+                d={`M ${bgX1} ${bgY1} L ${bgX2} ${bgY2} A ${outerRingRadius} ${outerRingRadius} 0 0 1 ${bgX3} ${bgY3} L ${bgX4} ${bgY4} A ${doubleOuterRadius} ${doubleOuterRadius} 0 0 0 ${bgX1} ${bgY1} Z`}
+                fill={isEvenSector(idx) ? '#161616' : '#1a1a1a'}
               />
+            );
+          })}
 
-              <path
-                d={createSectorPath(idx, tripleOuterRadius, outerSingleRadius)}
-                fill={hoveredSegment === `S${num}` ? '#f97316' : colors.single}
-                stroke="#c0a080"
-                strokeWidth="0.5"
-                className="cursor-pointer transition-colors"
-                onMouseEnter={() => setHoveredSegment(`S${num}`)}
-                onMouseLeave={() => setHoveredSegment(null)}
-                onClick={() => handleClick(`S${num}` as DartTarget)}
+          {SECTOR_ORDER.map((num, idx) => {
+            const dId = `D${num}`;
+            const sId = `S${num}`;
+            const tId = `T${num}`;
+            const siId = `S${num}_inner`;
+
+            return (
+              <g key={num} filter="url(#innerShadow)">
+                <path
+                  d={createSectorPath(idx, doubleInnerRadius, doubleOuterRadius)}
+                  fill={getDoubleFill(idx, dId)}
+                  className="cursor-pointer"
+                  style={{ transition: 'fill 0.1s ease' }}
+                  onMouseEnter={() => setHoveredSegment(dId)}
+                  onMouseLeave={() => setHoveredSegment(null)}
+                  onClick={() => handleClick(`D${num}` as DartTarget, dId)}
+                />
+
+                <path
+                  d={createSectorPath(idx, outerSingleInner, outerSingleOuter)}
+                  fill={getSingleFill(idx, sId)}
+                  className="cursor-pointer"
+                  style={{ transition: 'fill 0.1s ease' }}
+                  onMouseEnter={() => setHoveredSegment(sId)}
+                  onMouseLeave={() => setHoveredSegment(null)}
+                  onClick={() => handleClick(`S${num}` as DartTarget, sId)}
+                />
+
+                <path
+                  d={createSectorPath(idx, tripleInnerRadius, tripleOuterRadius)}
+                  fill={getTripleFill(idx, tId)}
+                  className="cursor-pointer"
+                  style={{ transition: 'fill 0.1s ease' }}
+                  onMouseEnter={() => setHoveredSegment(tId)}
+                  onMouseLeave={() => setHoveredSegment(null)}
+                  onClick={() => handleClick(`T${num}` as DartTarget, tId)}
+                />
+
+                <path
+                  d={createSectorPath(idx, innerSingleInner, innerSingleOuter)}
+                  fill={getSingleFill(idx, siId)}
+                  className="cursor-pointer"
+                  style={{ transition: 'fill 0.1s ease' }}
+                  onMouseEnter={() => setHoveredSegment(siId)}
+                  onMouseLeave={() => setHoveredSegment(null)}
+                  onClick={() => handleClick(`S${num}` as DartTarget, siId)}
+                />
+              </g>
+            );
+          })}
+
+          {SECTOR_ORDER.map((_num, idx) => {
+            const anglePerSector = 360 / 20;
+            const angle = (idx * anglePerSector - anglePerSector / 2 - 90) * (Math.PI / 180);
+            const x1 = center + innerSingleInner * Math.cos(angle);
+            const y1 = center + innerSingleInner * Math.sin(angle);
+            const x2 = center + doubleOuterRadius * Math.cos(angle);
+            const y2 = center + doubleOuterRadius * Math.sin(angle);
+            return (
+              <line
+                key={`wire-${idx}`}
+                x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke="#8a8a8a"
+                strokeWidth="0.8"
+                className="pointer-events-none"
+                opacity="0.5"
               />
+            );
+          })}
 
-              <path
-                d={createSectorPath(idx, tripleInnerRadius, tripleOuterRadius)}
-                fill={hoveredSegment === `T${num}` ? '#f97316' : colors.triple}
-                stroke="#c0a080"
-                strokeWidth="1"
-                className="cursor-pointer transition-colors"
-                onMouseEnter={() => setHoveredSegment(`T${num}`)}
-                onMouseLeave={() => setHoveredSegment(null)}
-                onClick={() => handleClick(`T${num}` as DartTarget)}
-              />
+          <circle cx={center} cy={center} r={doubleOuterRadius} fill="none" stroke="#8a8a8a" strokeWidth="0.8" opacity="0.5" className="pointer-events-none" />
+          <circle cx={center} cy={center} r={doubleInnerRadius} fill="none" stroke="#8a8a8a" strokeWidth="0.8" opacity="0.5" className="pointer-events-none" />
+          <circle cx={center} cy={center} r={tripleOuterRadius} fill="none" stroke="#8a8a8a" strokeWidth="0.8" opacity="0.5" className="pointer-events-none" />
+          <circle cx={center} cy={center} r={tripleInnerRadius} fill="none" stroke="#8a8a8a" strokeWidth="0.8" opacity="0.5" className="pointer-events-none" />
+          <circle cx={center} cy={center} r={innerSingleInner} fill="none" stroke="#8a8a8a" strokeWidth="0.8" opacity="0.5" className="pointer-events-none" />
 
-              <path
-                d={createSectorPath(idx, bullRadius, tripleInnerRadius)}
-                fill={hoveredSegment === `S${num}_inner` ? '#f97316' : colors.single}
-                stroke="#c0a080"
-                strokeWidth="0.5"
-                className="cursor-pointer transition-colors"
-                onMouseEnter={() => setHoveredSegment(`S${num}_inner`)}
-                onMouseLeave={() => setHoveredSegment(null)}
-                onClick={() => handleClick(`S${num}` as DartTarget)}
-              />
-            </g>
-          );
-        })}
+          <circle
+            cx={center} cy={center} r={outerBullRadius}
+            fill={flashSegment === 'OB' ? '#fbbf24' : hoveredSegment === 'OB' ? '#f59e0b' : '#1a7a3a'}
+            className="cursor-pointer"
+            style={{ transition: 'fill 0.1s ease' }}
+            onMouseEnter={() => setHoveredSegment('OB')}
+            onMouseLeave={() => setHoveredSegment(null)}
+            onClick={() => handleClick('OB', 'OB')}
+          />
 
-        <circle
-          cx={center}
-          cy={center}
-          r={bullRadius}
-          fill={hoveredSegment === 'OB' ? '#f97316' : '#27ae60'}
-          stroke="#c0a080"
-          strokeWidth="1"
-          className="cursor-pointer transition-colors"
-          onMouseEnter={() => setHoveredSegment('OB')}
-          onMouseLeave={() => setHoveredSegment(null)}
-          onClick={() => handleClick('OB')}
-        />
+          <circle cx={center} cy={center} r={outerBullRadius} fill="none" stroke="#8a8a8a" strokeWidth="0.8" opacity="0.5" className="pointer-events-none" />
 
-        <circle
-          cx={center}
-          cy={center}
-          r={innerBullRadius}
-          fill={hoveredSegment === 'BULL' ? '#f97316' : '#e74c3c'}
-          stroke="#c0a080"
-          strokeWidth="1"
-          className="cursor-pointer transition-colors"
-          onMouseEnter={() => setHoveredSegment('BULL')}
-          onMouseLeave={() => setHoveredSegment(null)}
-          onClick={() => handleClick('BULL')}
-        />
+          <circle
+            cx={center} cy={center} r={innerBullRadius}
+            fill={flashSegment === 'BULL' ? '#fbbf24' : hoveredSegment === 'BULL' ? '#f59e0b' : '#c0392b'}
+            className="cursor-pointer"
+            style={{ transition: 'fill 0.1s ease' }}
+            onMouseEnter={() => setHoveredSegment('BULL')}
+            onMouseLeave={() => setHoveredSegment(null)}
+            onClick={() => handleClick('BULL', 'BULL')}
+          />
 
-        {SECTOR_ORDER.map((num, idx) => {
-          const anglePerSector = 360 / 20;
-          const angle = (idx * anglePerSector - 90) * (Math.PI / 180);
-          const textRadius = doubleRadius + 18;
-          const x = center + textRadius * Math.cos(angle);
-          const y = center + textRadius * Math.sin(angle);
+          <circle cx={center} cy={center} r={innerBullRadius} fill="none" stroke="#8a8a8a" strokeWidth="0.8" opacity="0.5" className="pointer-events-none" />
 
-          return (
-            <text
-              key={`label-${num}`}
-              x={x}
-              y={y}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fill="#fff"
-              fontSize="12"
-              fontWeight="bold"
-              className="pointer-events-none select-none"
-            >
-              {num}
-            </text>
-          );
-        })}
+          <circle cx={center} cy={center} r={doubleOuterRadius} fill="url(#boardShadow)" className="pointer-events-none" />
+
+          {SECTOR_ORDER.map((num, idx) => {
+            const anglePerSector = 360 / 20;
+            const angle = (idx * anglePerSector - 90) * (Math.PI / 180);
+            const x = center + numberRingRadius * Math.cos(angle);
+            const y = center + numberRingRadius * Math.sin(angle);
+
+            const isHovered = hoveredSegment?.includes(String(num));
+
+            return (
+              <text
+                key={`label-${num}`}
+                x={x}
+                y={y}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill={isHovered ? '#fbbf24' : '#d4d4d4'}
+                fontSize="14"
+                fontWeight="800"
+                fontFamily="Inter, system-ui, sans-serif"
+                letterSpacing="-0.02em"
+                className="pointer-events-none select-none"
+                style={{
+                  textShadow: isHovered ? '0 0 8px rgba(251,191,36,0.5)' : '0 1px 2px rgba(0,0,0,0.8)',
+                  transition: 'fill 0.15s ease',
+                }}
+                filter={isHovered ? 'url(#glowFilter)' : undefined}
+              >
+                {num}
+              </text>
+            );
+          })}
         </svg>
       </div>
 
-      <div className="w-full max-w-xs space-y-2">
-        <div className="h-6 flex items-center justify-center">
-          <div className="text-center text-lg font-bold text-primary-600 dark:text-primary-400">
-            {getDisplayText(hoveredSegment)}
-          </div>
+      <div className="w-full max-w-xs space-y-2 mt-1">
+        <div className="h-7 flex items-center justify-center">
+          {hoveredSegment && (
+            <div className="text-center text-sm font-bold text-amber-400 tracking-wide animate-fade-in">
+              {getSegmentLabel(hoveredSegment)}
+            </div>
+          )}
         </div>
 
         <button
-          onClick={() => handleClick('MISS')}
+          onClick={() => handleClick('MISS', 'MISS')}
           disabled={disabled}
-          className="px-6 py-2.5 bg-dark-700 text-white rounded-lg font-medium hover:bg-dark-600 disabled:opacity-50 transition-colors w-full"
+          onMouseEnter={() => setHoveredSegment('MISS')}
+          onMouseLeave={() => setHoveredSegment(null)}
+          className="px-6 py-3 bg-dark-800 hover:bg-dark-700 text-dark-300 hover:text-white rounded-xl font-semibold text-sm disabled:opacity-50 transition-all w-full border border-dark-700 hover:border-dark-600 active:scale-[0.98]"
         >
           MISS (0)
         </button>
