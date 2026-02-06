@@ -1001,7 +1001,7 @@ export function GamePlayPage() {
   };
 
   return (
-    <div className="flex flex-col gap-2 h-[calc(100dvh-11rem)] md:h-[calc(100dvh-8.5rem)] overflow-hidden animate-fade-in">
+    <div className="flex flex-col gap-2 h-[calc(100dvh_-_11rem)] md:h-[calc(100dvh_-_8.5rem)] overflow-hidden animate-fade-in">
       <GameHeader
         mode={room.mode}
         currentLeg={gameState.current_leg}
@@ -1044,7 +1044,7 @@ export function GamePlayPage() {
       />
 
       {isMyTurn && (
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 flex flex-col">
         <DartScoreInput
           onThrow={addToQueue}
           onUndo={handleUndo}

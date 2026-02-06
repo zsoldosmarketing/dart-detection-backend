@@ -143,7 +143,7 @@ export function DartScoreInput({
 
   if (editingDartIndex !== null) {
     return (
-      <Card padding="none" className="p-2 sm:p-3 h-full flex flex-col overflow-hidden">
+      <Card padding="none" className="p-2 sm:p-3 flex-1 min-h-0 flex flex-col overflow-hidden">
         <div className="shrink-0 flex items-center justify-between mb-2">
           <span className="text-sm font-medium text-dark-300">
             Javitas: {editingDartIndex + 1}. nyil
@@ -164,7 +164,7 @@ export function DartScoreInput({
   }
 
   return (
-    <Card padding="none" className="p-2 sm:p-3 h-full flex flex-col overflow-hidden">
+    <Card padding="none" className="p-2 sm:p-3 flex-1 min-h-0 flex flex-col overflow-hidden">
       <div className="shrink-0">
       <div className="flex items-center justify-center gap-2 mb-1">
         {[0, 1, 2].map((idx) => {
