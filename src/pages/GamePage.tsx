@@ -6,6 +6,7 @@ import {
   Users,
   Monitor,
   ChevronRight,
+  ChevronDown,
   Settings,
   Play,
   Minus,
@@ -88,6 +89,7 @@ export function GamePage() {
   const [showPlayerSearch, setShowPlayerSearch] = useState(false);
   const [pendingPlayer, setPendingPlayer] = useState<{ player: any; index: number } | null>(null);
   const [showPinModal, setShowPinModal] = useState(false);
+  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -435,43 +437,82 @@ export function GamePage() {
               Folyamatban levo jatekok ({inProgressGames.length})
             </span>
           </div>
-          <div className="space-y-2">
-            {inProgressGames.map((game) => (
-              <div
-                key={game.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-dark-800"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-primary-600">{game.my_score}</p>
-                    <p className="text-[10px] text-dark-500">Te</p>
+          <div className="overflow-y-auto max-h-[40vh] scroll-list pr-1 space-y-2">
+            {inProgressGames.map((game) => {
+              const isExpanded = selectedGameId === game.id;
+              return (
+                <div
+                  key={game.id}
+                  onClick={() => setSelectedGameId(isExpanded ? null : game.id)}
+                  className={`p-3 rounded-xl border cursor-pointer transition-all duration-200 ${
+                    isExpanded
+                      ? 'border-warning-500/50 dark:border-warning-500/50 bg-white dark:bg-dark-800 shadow-lg shadow-warning-500/10'
+                      : 'bg-white dark:bg-dark-800 border-dark-200/70 dark:border-dark-700/50 hover:shadow-md hover:border-dark-300 dark:hover:border-dark-600/70'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="text-center">
+                        <p className="text-lg font-bold text-primary-600" style={{ fontVariantNumeric: 'tabular-nums' }}>{game.my_score}</p>
+                        <p className="text-[10px] text-dark-500">Te</p>
+                      </div>
+                      <span className="text-dark-400 font-medium">vs</span>
+                      <div className="text-center">
+                        <p className="text-lg font-bold text-secondary-600" style={{ fontVariantNumeric: 'tabular-nums' }}>{game.opponent_score}</p>
+                        <p className="text-[10px] text-dark-500 truncate max-w-[60px]">
+                          {game.bot_name || 'Ellenfél'}
+                        </p>
+                      </div>
+                      <Badge variant="default" size="sm">{game.starting_score}</Badge>
+                    </div>
+                    <ChevronDown className={`w-5 h-5 text-dark-400 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                   </div>
-                  <span className="text-dark-400">vs</span>
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-secondary-600">{game.opponent_score}</p>
-                    <p className="text-[10px] text-dark-500">
-                      {game.bot_name || 'Ellenfél'}
-                    </p>
-                  </div>
-                  <Badge variant="default" size="sm">{game.starting_score}</Badge>
+
+                  {isExpanded && (
+                    <div className="mt-3 pt-3 border-t border-dark-200/50 dark:border-dark-700/40 animate-in">
+                      <div className="grid grid-cols-3 gap-2 mb-3">
+                        <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
+                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Mod</p>
+                          <p className="text-sm font-bold text-dark-900 dark:text-white capitalize">
+                            {game.mode === 'bot' ? 'Bot' : game.mode === 'pvp' ? 'Online' : 'Helyi'}
+                          </p>
+                        </div>
+                        {game.bot_difficulty && (
+                          <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
+                            <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Bot</p>
+                            <p className="text-sm font-bold text-dark-900 dark:text-white capitalize">
+                              {t(`bot.${game.bot_difficulty}`)}
+                            </p>
+                          </div>
+                        )}
+                        <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
+                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Kezdes</p>
+                          <p className="text-sm font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {new Date(game.created_at).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => deleteGame(game.id)}
+                          className="text-error-500 hover:text-error-600 flex-1"
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Torles
+                        </Button>
+                        <Link to={`/game/${game.id}`} className="flex-1">
+                          <Button size="sm" leftIcon={<Play className="w-4 h-4" />} className="w-full">
+                            Folytatas
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => deleteGame(game.id)}
-                    className="text-error-500 hover:text-error-600"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                  <Link to={`/game/${game.id}`}>
-                    <Button size="sm" leftIcon={<Play className="w-4 h-4" />}>
-                      Folytatas
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}

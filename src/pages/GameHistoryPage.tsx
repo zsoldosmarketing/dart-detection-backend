@@ -7,6 +7,7 @@ import {
   TrendingUp,
   Calendar,
   ChevronRight,
+  ChevronDown,
   Gamepad2,
   Bot,
   Users
@@ -48,6 +49,7 @@ export function GameHistoryPage() {
   const [stats, setStats] = useState<GameStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'bot' | 'pvp' | 'local'>('all');
+  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -235,26 +237,32 @@ export function GameHistoryPage() {
           </Link>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {games.map((game) => (
-            <Link
-              key={game.id}
-              to={game.status === 'completed' ? `/match-stats/${game.id}` : `/game/${game.id}`}
-            >
-              <Card className="p-4 hover:border-primary-500/50 transition-colors cursor-pointer">
+        <div className="overflow-y-auto max-h-[60vh] scroll-list pr-1 space-y-2">
+          {games.map((game) => {
+            const isExpanded = selectedGameId === game.id;
+            return (
+              <div
+                key={game.id}
+                onClick={() => setSelectedGameId(isExpanded ? null : game.id)}
+                className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
+                  isExpanded
+                    ? 'border-primary-500/30 dark:border-primary-500/30 bg-white dark:bg-dark-800 shadow-lg shadow-primary-500/5'
+                    : 'border-dark-200/70 dark:border-dark-700/50 bg-white dark:bg-dark-800/80 hover:shadow-card-hover hover:border-dark-300 dark:hover:border-dark-600/70'
+                }`}
+              >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-dark-100 dark:bg-dark-700 flex items-center justify-center">
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <div className="w-12 h-12 rounded-xl bg-dark-100 dark:bg-dark-700 flex items-center justify-center shrink-0">
                       {getModeIcon(game.mode)}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-dark-900 dark:text-white">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-semibold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
                           {game.starting_score} - {game.legs_to_win} leg
                         </span>
                         {getResultBadge(game)}
                       </div>
-                      <div className="flex items-center gap-3 mt-1 text-sm text-dark-500">
+                      <div className="flex items-center gap-3 text-sm text-dark-500">
                         <span className="flex items-center gap-1">
                           {getModeIcon(game.mode)}
                           {getModeLabel(game.mode, game.bot_difficulty)}
@@ -266,11 +274,47 @@ export function GameHistoryPage() {
                       </div>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-dark-400" />
+                  <ChevronDown className={`w-5 h-5 text-dark-400 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                 </div>
-              </Card>
-            </Link>
-          ))}
+
+                {isExpanded && (
+                  <div className="mt-3 pt-3 border-t border-dark-200/50 dark:border-dark-700/40 animate-in">
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
+                        <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Set-ek</p>
+                        <p className="text-base font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {game.sets_to_win}
+                        </p>
+                      </div>
+                      <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
+                        <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Jatek tipus</p>
+                        <p className="text-base font-bold text-dark-900 dark:text-white uppercase">
+                          {game.game_type}
+                        </p>
+                      </div>
+                      <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
+                        <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Statusz</p>
+                        <p className="text-base font-bold text-dark-900 dark:text-white capitalize">
+                          {game.status === 'completed' ? 'Befejezett' : 'Folyamat'}
+                        </p>
+                      </div>
+                    </div>
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <Link
+                        to={game.status === 'completed' ? `/match-stats/${game.id}` : `/game/${game.id}`}
+                        className="block"
+                      >
+                        <button className="w-full py-2 px-4 rounded-lg bg-primary-500 hover:bg-primary-600 text-white font-medium transition-colors flex items-center justify-center gap-2">
+                          <ChevronRight className="w-4 h-4" />
+                          {game.status === 'completed' ? 'Reszletek' : 'Folytatas'}
+                        </button>
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
