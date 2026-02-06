@@ -25,19 +25,19 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+      'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-dark-900 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]';
 
     const variants = {
       primary:
-        'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500 dark:focus:ring-offset-dark-900',
+        'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-md shadow-primary-600/20 hover:from-primary-500 hover:to-primary-400 hover:shadow-lg hover:shadow-primary-500/25 focus:ring-primary-500',
       secondary:
-        'bg-secondary-600 text-white hover:bg-secondary-700 focus:ring-secondary-500 dark:focus:ring-offset-dark-900',
+        'bg-gradient-to-r from-secondary-600 to-secondary-500 text-white shadow-md shadow-secondary-600/20 hover:from-secondary-500 hover:to-secondary-400 hover:shadow-lg hover:shadow-secondary-500/25 focus:ring-secondary-500',
       outline:
-        'border-2 border-dark-300 dark:border-dark-600 text-dark-900 dark:text-dark-100 hover:bg-dark-100 dark:hover:bg-dark-800 focus:ring-dark-500',
+        'border border-dark-300 dark:border-dark-600 text-dark-900 dark:text-dark-100 hover:bg-dark-50 dark:hover:bg-dark-800 hover:border-dark-400 dark:hover:border-dark-500 focus:ring-dark-500',
       ghost:
-        'text-dark-700 dark:text-dark-300 hover:bg-dark-100 dark:hover:bg-dark-800 focus:ring-dark-500',
+        'text-dark-700 dark:text-dark-300 hover:bg-dark-100 dark:hover:bg-dark-800/70 focus:ring-dark-500',
       danger:
-        'bg-error-600 text-white hover:bg-error-700 focus:ring-error-500 dark:focus:ring-offset-dark-900',
+        'bg-gradient-to-r from-error-600 to-error-500 text-white shadow-md shadow-error-600/20 hover:from-error-500 hover:to-error-400 hover:shadow-lg hover:shadow-error-500/25 focus:ring-error-500',
     };
 
     const sizes = {

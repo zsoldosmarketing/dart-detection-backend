@@ -4,7 +4,7 @@ import { Card } from '../components/ui/Card';
 import { DartScoreInput } from '../components/game/DartScoreInput';
 import { GameHeader } from '../components/game/GameHeader';
 import { MessageOverlay } from '../components/game/MessageOverlay';
-import { PlayerScoreCards } from '../components/game/PlayerScoreCards';
+import { PlayerScoreCards, type PlayerMatchStats } from '../components/game/PlayerScoreCards';
 import { CheckoutSuggestions } from '../components/game/CheckoutSuggestions';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
@@ -102,6 +102,7 @@ export function GamePlayPage() {
   const [allLegThrows, setAllLegThrows] = useState<DartThrow[]>([]);
   const [visitNumber, setVisitNumber] = useState(1);
   const [preferredDoubles, setPreferredDoubles] = useState<number[]>([20, 16, 8]);
+  const [playerMatchStats, setPlayerMatchStats] = useState<Record<string, PlayerMatchStats>>({});
 
   useEffect(() => {
     soundEffects.setEnabled(soundEnabled);
@@ -714,6 +715,31 @@ export function GamePlayPage() {
       })
       .eq('room_id', room.id);
 
+    if (currentTurnDarts.length > 0 && currentPlayer) {
+      const visitScore = wasBust ? 0 : currentTurnDarts.reduce((sum, d) => sum + d.score, 0);
+      const dartsCount = currentTurnDarts.length;
+      setPlayerMatchStats(prev => {
+        const existing = prev[currentPlayer.id] || {
+          dartsThrown: 0, totalScore: 0, visits: 0,
+          lastVisitScore: 0, highestVisit: 0, first9Darts: [],
+        };
+        const newFirst9 = existing.first9Darts.length < 9
+          ? [...existing.first9Darts, ...currentTurnDarts.map(d => d.score)].slice(0, 9)
+          : existing.first9Darts;
+        return {
+          ...prev,
+          [currentPlayer.id]: {
+            dartsThrown: existing.dartsThrown + dartsCount,
+            totalScore: existing.totalScore + visitScore,
+            visits: existing.visits + 1,
+            lastVisitScore: visitScore,
+            highestVisit: Math.max(existing.highestVisit, visitScore),
+            first9Darts: newFirst9,
+          },
+        };
+      });
+    }
+
     setCurrentTurnDarts([]);
     setMessage(null);
     await loadGame();
@@ -1007,6 +1033,7 @@ export function GamePlayPage() {
         getPlayerName={getPlayerName}
         currentTurnDarts={currentTurnDarts}
         isMyTurn={!!isMyTurn}
+        playerMatchStats={playerMatchStats}
       />
 
       <CheckoutSuggestions

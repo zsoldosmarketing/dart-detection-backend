@@ -4,20 +4,21 @@ import {
   Target,
   Gamepad2,
   Trophy,
-  Users,
   TrendingUp,
   Flame,
-  Award,
   ChevronRight,
   Calendar,
   Clock,
   Play,
   Pause,
+  Crosshair,
+  Swords,
 } from 'lucide-react';
 import { Card, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { PushNotificationPrompt } from '../components/ui/PushNotificationPrompt';
+import { LandingPage } from './LandingPage';
 import { t } from '../lib/i18n';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
@@ -69,6 +70,7 @@ interface PlayerStats {
   lifetime_180s: number;
   current_win_streak: number;
   lifetime_win_percentage: number;
+  first_nine_average?: number;
 }
 
 interface PausedGame {
@@ -83,6 +85,24 @@ interface PausedGame {
   game_state: any;
 }
 
+interface MatchHistoryItem {
+  id: string;
+  room_id: string;
+  opponent_id: string;
+  game_type: string;
+  game_mode: string;
+  won: boolean;
+  match_average: number;
+  best_leg_average: number;
+  legs_won: number;
+  legs_lost: number;
+  highest_checkout: number;
+  checkouts_hit: number;
+  total_doubles_hit: number;
+  total_doubles_thrown: number;
+  created_at: string;
+}
+
 export function DashboardPage() {
   const { user, profile, shouldShowPushPrompt, setShouldShowPushPrompt } = useAuthStore();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
@@ -91,6 +111,8 @@ export function DashboardPage() {
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
   const [pausedGames, setPausedGames] = useState<PausedGame[]>([]);
+  const [matchHistory, setMatchHistory] = useState<MatchHistoryItem[]>([]);
+  const [opponentNames, setOpponentNames] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -103,7 +125,7 @@ export function DashboardPage() {
     if (!user) return;
     setIsLoading(true);
 
-    const [challengesRes, programsRes, activeTrainingsRes, gamesRes, trainingsRes, statsRes] = await Promise.all([
+    const [challengesRes, programsRes, activeTrainingsRes, gamesRes, trainingsRes, statsRes, matchHistoryRes] = await Promise.all([
       supabase
         .from('challenges')
         .select('id, name_key, desc_key, rule, reward')
@@ -139,9 +161,15 @@ export function DashboardPage() {
         .limit(5),
       supabase
         .from('player_statistics_summary')
-        .select('lifetime_average, lifetime_best_average, lifetime_checkout_percentage, lifetime_highest_checkout, lifetime_180s, current_win_streak, lifetime_win_percentage')
+        .select('lifetime_average, lifetime_best_average, lifetime_checkout_percentage, lifetime_highest_checkout, lifetime_180s, current_win_streak, lifetime_win_percentage, first_nine_average')
         .eq('player_id', user.id)
         .maybeSingle(),
+      supabase
+        .from('match_statistics')
+        .select('id, room_id, opponent_id, game_type, game_mode, won, match_average, best_leg_average, legs_won, legs_lost, highest_checkout, checkouts_hit, total_doubles_hit, total_doubles_thrown, created_at')
+        .eq('player_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10),
     ]);
 
     if (challengesRes.data) {
@@ -189,6 +217,33 @@ export function DashboardPage() {
     activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     setRecentActivity(activities.slice(0, 5));
 
+    if (matchHistoryRes.data) {
+      setMatchHistory(matchHistoryRes.data as MatchHistoryItem[]);
+
+      const opponentIds = [
+        ...new Set(
+          matchHistoryRes.data
+            .map((m: any) => m.opponent_id)
+            .filter((id: string | null) => id && id !== user.id)
+        ),
+      ] as string[];
+
+      if (opponentIds.length > 0) {
+        const { data: opponentProfiles } = await supabase
+          .from('user_profile')
+          .select('id, display_name, username')
+          .in('id', opponentIds);
+
+        if (opponentProfiles) {
+          const names: Record<string, string> = {};
+          opponentProfiles.forEach((p: any) => {
+            names[p.id] = p.display_name || p.username || 'Ismeretlen';
+          });
+          setOpponentNames(names);
+        }
+      }
+    }
+
     const { data: pausedGamesData } = await supabase.rpc('get_paused_games', {
       p_user_id: user.id,
     });
@@ -211,11 +266,11 @@ export function DashboardPage() {
       if (data?.success) {
         window.location.href = `/game/${gameId}`;
       } else {
-        alert(data?.error || 'Hiba történt a játék folytatása közben');
+        alert(data?.error || 'Hiba tortent a jatek folytatas kozben');
       }
     } catch (err) {
       console.error('Failed to resume game:', err);
-      alert('Nem sikerült folytatni a játékot');
+      alert('Nem sikerult folytatni a jatekot');
     }
   };
 
@@ -238,73 +293,93 @@ export function DashboardPage() {
     }
   };
 
+  const getOpponentDisplayName = (opponentId: string | null): string => {
+    if (!opponentId) return 'Bot';
+    if (opponentNames[opponentId]) return opponentNames[opponentId];
+    return 'Bot';
+  };
+
   if (!user) {
     return <LandingPage />;
   }
 
+  const today = format(new Date(), 'yyyy. MMMM d., EEEE', { locale: hu });
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-slide-up stagger-1" style={{ animationFillMode: 'both' }}>
         <div>
           <h1 className="text-2xl font-bold text-dark-900 dark:text-white">
-            Udvozlunk, {profile?.display_name || profile?.username || 'Jatekos'}!
+            Szia, {profile?.display_name || profile?.username || 'Jatekos'}!
           </h1>
-          <p className="text-dark-500 dark:text-dark-400 mt-1">
-            Folytasd az edzest es javitsd az atlagodat
+          <p className="text-dark-500 dark:text-dark-400 mt-1 text-sm">
+            {today}
           </p>
         </div>
         <div className="flex gap-3">
           <Link to="/training">
-            <Button leftIcon={<Target className="w-4 h-4" />}>{t('training.start')}</Button>
+            <Button leftIcon={<Target className="w-4 h-4" />}>Edzes</Button>
           </Link>
           <Link to="/game">
             <Button variant="outline" leftIcon={<Gamepad2 className="w-4 h-4" />}>
-              {t('game.start')}
+              Jatek
             </Button>
           </Link>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={<Flame className="w-5 h-5" />}
-          label={t('stats.current_streak')}
-          value={`${playerStats?.current_win_streak || profile?.current_streak || 0} nap`}
-          trend={playerStats?.current_win_streak || profile?.current_streak ? '+' : undefined}
-          color="accent"
-        />
-        <StatCard
-          icon={<TrendingUp className="w-5 h-5" />}
-          label={t('stats.average')}
-          value={playerStats?.lifetime_average?.toFixed(1) || profile?.average_score?.toFixed(1) || '0.0'}
-          color="primary"
-        />
-        <StatCard
-          icon={<Award className="w-5 h-5" />}
-          label={t('stats.highest_checkout')}
-          value={(playerStats?.lifetime_highest_checkout || profile?.highest_checkout || 0).toString()}
-          color="secondary"
-        />
-        <StatCard
-          icon={<Trophy className="w-5 h-5" />}
-          label={t('stats.win_rate')}
-          value={
-            playerStats?.lifetime_win_percentage
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up stagger-2" style={{ animationFillMode: 'both' }}>
+        <Card className="relative overflow-hidden">
+          <div className="absolute top-3 right-3 p-2 rounded-lg bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+          <p className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wide">Match atlag</p>
+          <p className="text-2xl font-bold text-dark-900 dark:text-white mt-1" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {playerStats?.lifetime_average?.toFixed(1) || profile?.average_score?.toFixed(1) || '0.0'}
+          </p>
+        </Card>
+
+        <Card className="relative overflow-hidden">
+          <div className="absolute top-3 right-3 p-2 rounded-lg bg-secondary-50 dark:bg-secondary-900/20 text-secondary-600 dark:text-secondary-400">
+            <Crosshair className="w-5 h-5" />
+          </div>
+          <p className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wide">Elso 9</p>
+          <p className="text-2xl font-bold text-dark-900 dark:text-white mt-1" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {playerStats?.first_nine_average?.toFixed(1) || '0.0'}
+          </p>
+        </Card>
+
+        <Card className="relative overflow-hidden">
+          <div className="absolute top-3 right-3 p-2 rounded-lg bg-success-50 dark:bg-success-900/20 text-success-600 dark:text-success-400">
+            <Trophy className="w-5 h-5" />
+          </div>
+          <p className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wide">Gyozelmi arany</p>
+          <p className="text-2xl font-bold text-dark-900 dark:text-white mt-1" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {playerStats?.lifetime_win_percentage
               ? `${playerStats.lifetime_win_percentage.toFixed(0)}%`
               : profile?.total_games_played
-              ? `${((profile.total_wins / profile.total_games_played) * 100).toFixed(0)}%`
-              : '0%'
-          }
-          color="success"
-        />
+                ? `${((profile.total_wins / profile.total_games_played) * 100).toFixed(0)}%`
+                : '0%'}
+          </p>
+        </Card>
+
+        <Card className="relative overflow-hidden">
+          <div className="absolute top-3 right-3 p-2 rounded-lg bg-accent-50 dark:bg-accent-900/20 text-accent-600 dark:text-accent-400">
+            <Flame className="w-5 h-5" />
+          </div>
+          <p className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wide">180-asok</p>
+          <p className="text-2xl font-bold text-dark-900 dark:text-white mt-1" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            {playerStats?.lifetime_180s || 0}
+          </p>
+        </Card>
       </div>
 
       {pausedGames.length > 0 && (
-        <Card className="border-2 border-warning-500/30 bg-warning-50/50 dark:bg-warning-900/10">
+        <Card className="border-2 border-warning-500/30 bg-warning-50/50 dark:bg-warning-900/10 animate-slide-up stagger-3" style={{ animationFillMode: 'both' }}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Pause className="w-5 h-5 text-warning-600" />
-              <CardTitle>Félbehagyott játékok</CardTitle>
+              <CardTitle>Felbehagyott jatekok</CardTitle>
             </div>
             <Badge variant="warning">{pausedGames.length}</Badge>
           </div>
@@ -326,7 +401,7 @@ export function DashboardPage() {
                       <div className="flex items-center gap-2 text-xs text-dark-500 dark:text-dark-400">
                         <Clock className="w-3 h-3" />
                         <span>
-                          {game.paused_by_me ? 'Te szüneteltetted' : 'Ellenfél szüneteltette'}
+                          {game.paused_by_me ? 'Te szuneteltetted' : 'Ellenfel szuneteltette'}
                         </span>
                         <span>•</span>
                         <span>{format(new Date(game.paused_at), 'PPp', { locale: hu })}</span>
@@ -339,7 +414,7 @@ export function DashboardPage() {
                     leftIcon={<Play className="w-4 h-4" />}
                     onClick={() => handleResumeGame(game.game_id)}
                   >
-                    Folytatás
+                    Folytatas
                   </Button>
                 </div>
               </div>
@@ -348,7 +423,101 @@ export function DashboardPage() {
         </Card>
       )}
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="animate-slide-up stagger-4" style={{ animationFillMode: 'both' }}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-dark-900 dark:text-white">Legutobbi meccsek</h2>
+          <Link to="/profile/history">
+            <Button variant="ghost" size="sm" rightIcon={<ChevronRight className="w-4 h-4" />}>
+              Osszes
+            </Button>
+          </Link>
+        </div>
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : matchHistory.length === 0 ? (
+          <Card>
+            <div className="text-center py-6">
+              <Swords className="w-10 h-10 text-dark-300 dark:text-dark-600 mx-auto mb-3" />
+              <p className="text-dark-500 dark:text-dark-400 text-sm">
+                Meg nincs meccs elozmenyed. Jatssz egy meccset!
+              </p>
+              <Link to="/game" className="inline-block mt-3">
+                <Button size="sm" leftIcon={<Gamepad2 className="w-4 h-4" />}>Jatek inditasa</Button>
+              </Link>
+            </div>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {matchHistory.map((match) => (
+              <Link
+                key={match.id}
+                to={`/statistics/match/${match.room_id}`}
+                className="block"
+              >
+                <div className="p-4 rounded-xl border border-dark-200/70 dark:border-dark-700/50 bg-white dark:bg-dark-800/80 hover:shadow-card-hover hover:border-dark-300 dark:hover:border-dark-600/70 transition-all duration-200 group">
+                  <div className="flex items-center gap-4">
+                    <div className="hidden sm:flex flex-col items-center text-center min-w-[3.5rem]">
+                      <span className="text-xs font-medium text-dark-400 dark:text-dark-500">
+                        {format(new Date(match.created_at), 'MMM', { locale: hu })}
+                      </span>
+                      <span className="text-lg font-bold text-dark-900 dark:text-white leading-tight" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {format(new Date(match.created_at), 'd')}
+                      </span>
+                      <span className="text-xs text-dark-400 dark:text-dark-500" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {format(new Date(match.created_at), 'HH:mm')}
+                      </span>
+                    </div>
+
+                    <div className={`w-1 h-12 rounded-full shrink-0 ${match.won ? 'bg-success-500' : 'bg-error-500'}`} />
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-semibold text-dark-900 dark:text-white truncate">
+                          {getOpponentDisplayName(match.opponent_id)}
+                        </span>
+                        <Badge
+                          variant={match.game_type === '501' ? 'primary' : 'secondary'}
+                          size="sm"
+                        >
+                          {match.game_type}
+                        </Badge>
+                        <Badge
+                          variant={match.won ? 'success' : 'error'}
+                          size="sm"
+                        >
+                          {match.won ? 'Gyozelem' : 'Vereseg'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3 text-sm text-dark-500 dark:text-dark-400 sm:hidden mb-1">
+                        <span>{format(new Date(match.created_at), 'MMM d, HH:mm', { locale: hu })}</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className="text-dark-600 dark:text-dark-300">
+                          Atlag: <span className="font-semibold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>{match.match_average?.toFixed(1) || '0.0'}</span>
+                        </span>
+                        <span className="text-dark-600 dark:text-dark-300">
+                          Legek: <span className="font-semibold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>{match.legs_won}-{match.legs_lost}</span>
+                        </span>
+                        {match.highest_checkout > 0 && (
+                          <span className="text-dark-600 dark:text-dark-300">
+                            Kiszallo: <span className="font-semibold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>{match.highest_checkout}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <ChevronRight className="w-5 h-5 text-dark-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6 animate-slide-up stagger-5" style={{ animationFillMode: 'both' }}>
         <Card>
           <div className="flex items-center justify-between">
             <CardTitle>Aktiv edzesek</CardTitle>
@@ -477,236 +646,9 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      <Card>
-        <div className="flex items-center justify-between">
-          <CardTitle>Legutobbi aktivitas</CardTitle>
-          <Link to="/profile/history">
-            <Button variant="ghost" size="sm" rightIcon={<ChevronRight className="w-4 h-4" />}>
-              Elozmeny
-            </Button>
-          </Link>
-        </div>
-        <div className="mt-4">
-          {isLoading ? (
-            <div className="flex justify-center py-4">
-              <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : recentActivity.length === 0 ? (
-            <p className="text-dark-500 dark:text-dark-400 text-sm">
-              Nincs meg aktivitas. Kezdj edzeni vagy jatszani!
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {recentActivity.map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-dark-50 dark:bg-dark-700/50"
-                >
-                  <div className={`p-2 rounded-lg ${
-                    activity.type === 'game'
-                      ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
-                      : 'bg-secondary-100 dark:bg-secondary-900/30 text-secondary-600 dark:text-secondary-400'
-                  }`}>
-                    {activity.type === 'game' ? (
-                      <Gamepad2 className="w-4 h-4" />
-                    ) : (
-                      <Target className="w-4 h-4" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-dark-900 dark:text-white text-sm truncate">
-                      {activity.title}
-                    </p>
-                    <p className="text-xs text-dark-500">{activity.subtitle}</p>
-                  </div>
-                  <div className="text-xs text-dark-400 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {format(new Date(activity.date), 'MMM d', { locale: hu })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Card>
-
       {shouldShowPushPrompt && (
         <PushNotificationPrompt onDismiss={() => setShouldShowPushPrompt(false)} />
       )}
-    </div>
-  );
-}
-
-function LandingPage() {
-  return (
-    <div className="min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center text-center animate-fade-in">
-      <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 mb-6">
-        <Target className="w-10 h-10 text-white" />
-      </div>
-      <h1 className="text-3xl sm:text-4xl font-bold text-dark-900 dark:text-white mb-4">
-        DartsTraining
-      </h1>
-      <p className="text-lg text-dark-500 dark:text-dark-400 max-w-md mb-8">
-        A legkomolyabb darts oktato es training platform. Fejleszd a jatekodat profi szintre!
-      </p>
-      <div className="flex flex-col sm:flex-row gap-4">
-        <Link to="/register">
-          <Button size="lg" leftIcon={<Target className="w-5 h-5" />}>
-            Ingyenes regisztracio
-          </Button>
-        </Link>
-        <Link to="/login">
-          <Button variant="outline" size="lg">
-            Bejelentkezes
-          </Button>
-        </Link>
-      </div>
-
-      <div className="mt-16 grid sm:grid-cols-3 gap-8 max-w-3xl">
-        <FeatureCard
-          icon={<Target className="w-6 h-6" />}
-          title="60+ gyakorlat"
-          description="Professzionalis edzesprogramok minden szinten"
-        />
-        <FeatureCard
-          icon={<Gamepad2 className="w-6 h-6" />}
-          title="Bot es PVP"
-          description="Jatssz bot ellen vagy kihivhatsz masokat"
-        />
-        <FeatureCard
-          icon={<Trophy className="w-6 h-6" />}
-          title="Versenyek"
-          description="Csatlakozz tornakhoz es klubokhoz"
-        />
-      </div>
-    </div>
-  );
-}
-
-interface StatCardProps {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  trend?: string;
-  color: 'primary' | 'secondary' | 'accent' | 'success';
-}
-
-function StatCard({ icon, label, value, trend, color }: StatCardProps) {
-  const colors = {
-    primary: 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400',
-    secondary: 'bg-secondary-50 dark:bg-secondary-900/20 text-secondary-600 dark:text-secondary-400',
-    accent: 'bg-accent-50 dark:bg-accent-900/20 text-accent-600 dark:text-accent-400',
-    success: 'bg-success-50 dark:bg-success-900/20 text-success-600 dark:text-success-400',
-  };
-
-  return (
-    <Card className="relative overflow-hidden">
-      <div className={`absolute top-3 right-3 p-2 rounded-lg ${colors[color]}`}>{icon}</div>
-      <p className="text-sm text-dark-500 dark:text-dark-400">{label}</p>
-      <p className="text-2xl font-bold text-dark-900 dark:text-white mt-1">{value}</p>
-      {trend && (
-        <span className="text-xs text-success-500 font-medium mt-1 inline-block">{trend}</span>
-      )}
-    </Card>
-  );
-}
-
-interface QuickActionProps {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  to: string;
-  badge?: string;
-}
-
-function QuickAction({ icon, title, description, to, badge }: QuickActionProps) {
-  return (
-    <Link
-      to={to}
-      className="flex items-center gap-4 p-3 rounded-lg hover:bg-dark-50 dark:hover:bg-dark-700/50 transition-colors group"
-    >
-      <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 group-hover:scale-110 transition-transform">
-        {icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="font-medium text-dark-900 dark:text-white">{title}</p>
-          {badge && <Badge variant="primary" size="sm">{badge}</Badge>}
-        </div>
-        <p className="text-sm text-dark-500 dark:text-dark-400 truncate">{description}</p>
-      </div>
-      <ChevronRight className="w-5 h-5 text-dark-400 group-hover:translate-x-1 transition-transform" />
-    </Link>
-  );
-}
-
-interface ChallengeCardProps {
-  title: string;
-  description: string;
-  progress: number;
-  reward: string;
-}
-
-function ChallengeCard({ title, description, progress, reward }: ChallengeCardProps) {
-  const getRewardDisplay = (rewardStr: string) => {
-    try {
-      const parts = rewardStr.split(' ');
-      const amount = parts[0];
-      const type = parts[1];
-
-      const typeLabels: Record<string, string> = {
-        'xp': 'XP',
-        'coins': 'Erme',
-        'points': 'Pont',
-        'badge': 'Jelveny',
-      };
-
-      return `${amount} ${typeLabels[type] || type}`;
-    } catch {
-      return rewardStr;
-    }
-  };
-
-  return (
-    <div className="p-3 rounded-lg border border-dark-200 dark:border-dark-700">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="font-medium text-dark-900 dark:text-white">{title}</p>
-          <p className="text-sm text-dark-500 dark:text-dark-400">{description}</p>
-        </div>
-        <Badge variant="secondary" size="sm">
-          {getRewardDisplay(reward)}
-        </Badge>
-      </div>
-      <div className="mt-3">
-        <div className="flex items-center justify-between text-xs mb-1">
-          <span className="text-dark-500">{Math.round(progress)}%</span>
-        </div>
-        <div className="h-2 bg-dark-200 dark:bg-dark-700 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-primary-500 to-secondary-500 rounded-full transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface FeatureCardProps {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}
-
-function FeatureCard({ icon, title, description }: FeatureCardProps) {
-  return (
-    <div className="text-center">
-      <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 mb-3">
-        {icon}
-      </div>
-      <h3 className="font-semibold text-dark-900 dark:text-white mb-1">{title}</h3>
-      <p className="text-sm text-dark-500 dark:text-dark-400">{description}</p>
     </div>
   );
 }
