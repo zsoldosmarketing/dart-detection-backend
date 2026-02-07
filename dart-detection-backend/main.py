@@ -11,10 +11,14 @@ from typing import Optional, List, Tuple, Dict, Any
 from pydantic import BaseModel
 import json
 
+from image_preprocessing import ImagePreprocessor
+from advanced_calibration import AdvancedDartboardCalibration, CalibrationResult
+from advanced_detection import AdvancedDartDetection
+
 app = FastAPI(
-    title="Dart Detection API v3",
-    description="Real board detection with homography and perspective correction",
-    version="3.0.0"
+    title="Dart Detection API v4",
+    description="Advanced board detection with perspective correction for side-angle cameras",
+    version="4.0.0"
 )
 
 app.add_middleware(
@@ -40,12 +44,19 @@ RADIUS_RATIOS = {
     "outer_double": 1.0,
 }
 
+calibrator = AdvancedDartboardCalibration()
+preprocessor = ImagePreprocessor()
+
 session_data: Dict[str, Any] = {
     "homography": None,
     "inverse_homography": None,
     "ellipse": None,
     "board_found": False,
     "reference_canonical": None,
+    "rotation_offset": -9.0,
+    "calibration_result": None,
+    "is_angled": False,
+    "reference_raw": None,
 }
 
 
@@ -59,6 +70,9 @@ class BoardDetectResponse(BaseModel):
     canonical_preview: Optional[str] = None
     debug_contour: Optional[str] = None
     message: str = ""
+    is_angled: bool = False
+    rotation_offset: float = -9.0
+    method: str = ""
 
 
 class ThrowScoreResponse(BaseModel):
@@ -77,222 +91,50 @@ def image_to_base64(img: np.ndarray, quality: int = 80) -> str:
     return f"data:image/jpeg;base64,{base64.b64encode(buffer).decode()}"
 
 
-def check_board_colors(image: np.ndarray, contour: np.ndarray) -> float:
-    mask = np.zeros(image.shape[:2], dtype=np.uint8)
-    cv2.drawContours(mask, [contour], -1, 255, -1)
-
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-    lower_red1 = np.array([0, 70, 50])
-    upper_red1 = np.array([10, 255, 255])
-    lower_red2 = np.array([170, 70, 50])
-    upper_red2 = np.array([180, 255, 255])
-    lower_green = np.array([35, 70, 50])
-    upper_green = np.array([85, 255, 255])
-    lower_black = np.array([0, 0, 0])
-    upper_black = np.array([180, 100, 60])
-    lower_white = np.array([0, 0, 180])
-    upper_white = np.array([180, 40, 255])
-
-    mask_red = cv2.bitwise_or(
-        cv2.inRange(hsv, lower_red1, upper_red1),
-        cv2.inRange(hsv, lower_red2, upper_red2)
-    )
-    mask_green = cv2.inRange(hsv, lower_green, upper_green)
-    mask_black = cv2.inRange(hsv, lower_black, upper_black)
-    mask_white = cv2.inRange(hsv, lower_white, upper_white)
-
-    mask_red = cv2.bitwise_and(mask_red, mask)
-    mask_green = cv2.bitwise_and(mask_green, mask)
-    mask_black = cv2.bitwise_and(mask_black, mask)
-    mask_white = cv2.bitwise_and(mask_white, mask)
-
-    total_pixels = cv2.countNonZero(mask)
-    if total_pixels == 0:
-        return 0.0
-
-    red_pixels = cv2.countNonZero(mask_red)
-    green_pixels = cv2.countNonZero(mask_green)
-    black_pixels = cv2.countNonZero(mask_black)
-    white_pixels = cv2.countNonZero(mask_white)
-
-    red_ratio = red_pixels / total_pixels
-    green_ratio = green_pixels / total_pixels
-    black_ratio = black_pixels / total_pixels
-    white_ratio = white_pixels / total_pixels
-
-    has_red = red_ratio > 0.03
-    has_green = green_ratio > 0.03
-    has_black = black_ratio > 0.05
-    has_white = white_ratio > 0.03
-
-    color_count = sum([has_red, has_green, has_black, has_white])
-
-    if has_red and has_green:
-        return min(1.0, (color_count / 4) * 1.5)
-    elif has_red or has_green:
-        return color_count / 4 * 0.7
-    else:
-        return 0.0
+def preprocess_image(image: np.ndarray) -> np.ndarray:
+    return preprocessor.adaptive_preprocessing(image)
 
 
-def find_dartboard_contour(image: np.ndarray) -> Tuple[Optional[np.ndarray], float, np.ndarray]:
-    height, width = image.shape[:2]
+def find_dartboard_advanced(image: np.ndarray) -> Tuple[Optional[CalibrationResult], np.ndarray]:
+    processed = preprocess_image(image)
+    result = calibrator.calibrate_multi_method(processed)
 
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    if not result.success:
+        result_raw = calibrator.calibrate_multi_method(image)
+        if result_raw.success and result_raw.confidence > result.confidence:
+            result = result_raw
 
-    lower_red1 = np.array([0, 50, 50])
-    upper_red1 = np.array([10, 255, 255])
-    lower_red2 = np.array([170, 50, 50])
-    upper_red2 = np.array([180, 255, 255])
-    lower_green = np.array([35, 50, 50])
-    upper_green = np.array([85, 255, 255])
-
-    mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
-    mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
-    mask_green = cv2.inRange(hsv, lower_green, upper_green)
-
-    mask_board = cv2.bitwise_or(mask_red1, mask_red2)
-    mask_board = cv2.bitwise_or(mask_board, mask_green)
-
-    kernel = np.ones((7, 7), np.uint8)
-    mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_CLOSE, kernel)
-    mask_board = cv2.morphologyEx(mask_board, cv2.MORPH_OPEN, kernel)
-
-    contours, _ = cv2.findContours(mask_board, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(blurred, 30, 100)
-
-    if not contours:
-        kernel = np.ones((3, 3), np.uint8)
-        edges = cv2.dilate(edges, kernel, iterations=2)
-        edges = cv2.erode(edges, kernel, iterations=1)
-        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    best_contour = None
-    best_score = 0
-
-    min_area = (min(width, height) * 0.15) ** 2
-    max_area = (min(width, height) * 0.95) ** 2
-
-    for contour in contours:
-        area = cv2.contourArea(contour)
-
-        if area < min_area or area > max_area:
-            continue
-
-        if len(contour) < 5:
-            continue
-
-        try:
-            ellipse = cv2.fitEllipse(contour)
-            (cx, cy), (w, h), angle = ellipse
-
-            ellipse_area = math.pi * (w/2) * (h/2)
-            if ellipse_area < 1:
-                continue
-            circularity = area / ellipse_area
-
-            aspect_ratio = min(w, h) / max(w, h) if max(w, h) > 0 else 0
-
-            center_dist = math.sqrt((cx - width/2)**2 + (cy - height/2)**2)
-            center_score = 1 - (center_dist / (min(width, height) / 2))
-            center_score = max(0, center_score)
-
-            color_score = check_board_colors(image, contour)
-
-            score = (circularity * 0.25 + aspect_ratio * 0.2 + center_score * 0.15 + color_score * 0.4) * (area / max_area)
-
-            if score > best_score and circularity > 0.55 and aspect_ratio > 0.4 and color_score > 0.2:
-                best_score = score
-                best_contour = contour
-
-        except cv2.error:
-            continue
-
-    return best_contour, best_score, edges
+    return result, processed
 
 
-def find_bull_center(image: np.ndarray, ellipse_center: Tuple[float, float], search_radius: int) -> Optional[Tuple[int, int]]:
-    cx, cy = int(ellipse_center[0]), int(ellipse_center[1])
-    h, w = image.shape[:2]
+def compute_homography_from_calibration(cal: CalibrationResult, image_shape: Tuple, target_size: int = CANONICAL_SIZE) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    if not cal.success or cal.center_x is None:
+        return None, None
 
-    x1 = max(0, cx - search_radius)
-    y1 = max(0, cy - search_radius)
-    x2 = min(w, cx + search_radius)
-    y2 = min(h, cy + search_radius)
+    cx = cal.center_x
+    cy = cal.center_y
+    rx = cal.radius_x or cal.radius
+    ry = cal.radius_y or cal.radius
 
-    roi = image[y1:y2, x1:x2]
-    if roi.size == 0:
-        return None
+    angle = 0.0
+    if cal.ellipse:
+        angle = cal.ellipse.angle
 
-    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-
-    lower_red1 = np.array([0, 100, 80])
-    upper_red1 = np.array([10, 255, 255])
-    lower_red2 = np.array([170, 100, 80])
-    upper_red2 = np.array([180, 255, 255])
-
-    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
-    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
-    mask_bull = cv2.bitwise_or(mask1, mask2)
-
-    kernel = np.ones((3, 3), np.uint8)
-    mask_bull = cv2.morphologyEx(mask_bull, cv2.MORPH_CLOSE, kernel)
-
-    contours, _ = cv2.findContours(mask_bull, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    best_center = None
-    best_score = 0
-    roi_center = (search_radius, search_radius)
-
-    for contour in contours:
-        area = cv2.contourArea(contour)
-        if area < 30 or area > search_radius * search_radius:
-            continue
-
-        M = cv2.moments(contour)
-        if M["m00"] == 0:
-            continue
-
-        bcx = int(M["m10"] / M["m00"])
-        bcy = int(M["m01"] / M["m00"])
-
-        dist = math.sqrt((bcx - roi_center[0])**2 + (bcy - roi_center[1])**2)
-        centrality = 1 - (dist / search_radius) if search_radius > 0 else 0
-
-        (_, _), radius = cv2.minEnclosingCircle(contour)
-        circle_area = math.pi * radius * radius
-        circularity = area / circle_area if circle_area > 0 else 0
-
-        score = circularity * 0.5 + centrality * 0.5
-
-        if score > best_score:
-            best_score = score
-            best_center = (bcx + x1, bcy + y1)
-
-    return best_center
-
-
-def compute_homography_from_ellipse(ellipse: Tuple, target_size: int = CANONICAL_SIZE) -> Tuple[np.ndarray, np.ndarray]:
-    (cx, cy), (axis_w, axis_h), angle = ellipse
-
-    num_points = 16
+    num_points = 24
     src_points = []
     dst_points = []
 
     target_center = target_size // 2
     target_radius = int(target_size * 0.475)
 
+    angle_rad = math.radians(angle)
+
     for i in range(num_points):
         theta = 2 * math.pi * i / num_points
 
-        x_ellipse = (axis_w / 2) * math.cos(theta)
-        y_ellipse = (axis_h / 2) * math.sin(theta)
+        x_ellipse = rx * math.cos(theta)
+        y_ellipse = ry * math.sin(theta)
 
-        angle_rad = math.radians(angle)
         x_rot = x_ellipse * math.cos(angle_rad) - y_ellipse * math.sin(angle_rad)
         y_rot = x_ellipse * math.sin(angle_rad) + y_ellipse * math.cos(angle_rad)
 
@@ -304,21 +146,60 @@ def compute_homography_from_ellipse(ellipse: Tuple, target_size: int = CANONICAL
         dst_y = target_center + target_radius * math.sin(theta)
         dst_points.append([dst_x, dst_y])
 
+    src_points.append([float(cx), float(cy)])
+    dst_points.append([float(target_center), float(target_center)])
+
+    if cal.is_angled:
+        for ratio in [0.5, 0.75]:
+            for i in range(0, num_points, 3):
+                theta = 2 * math.pi * i / num_points
+
+                x_e = rx * ratio * math.cos(theta)
+                y_e = ry * ratio * math.sin(theta)
+
+                x_r = x_e * math.cos(angle_rad) - y_e * math.sin(angle_rad)
+                y_r = x_e * math.sin(angle_rad) + y_e * math.cos(angle_rad)
+
+                src_points.append([cx + x_r, cy + y_r])
+                dst_points.append([
+                    target_center + target_radius * ratio * math.cos(theta),
+                    target_center + target_radius * ratio * math.sin(theta)
+                ])
+
     src_pts = np.array(src_points, dtype=np.float32)
     dst_pts = np.array(dst_points, dtype=np.float32)
 
-    H, _ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+    try:
+        H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 3.0)
+    except cv2.error:
+        H = None
 
     if H is None:
-        H = cv2.getPerspectiveTransform(src_pts[:4], dst_pts[:4])
+        try:
+            H = cv2.getPerspectiveTransform(src_pts[:4], dst_pts[:4])
+        except cv2.error:
+            return None, None
 
-    H_inv = np.linalg.inv(H) if H is not None else None
+    try:
+        H_inv = np.linalg.inv(H)
+    except np.linalg.LinAlgError:
+        H_inv = None
 
     return H, H_inv
 
 
-def generate_overlay_points(ellipse: Tuple, num_points: int = 64) -> List[List[float]]:
-    (cx, cy), (axis_w, axis_h), angle = ellipse
+def generate_overlay_points(cal: CalibrationResult, num_points: int = 64) -> List[List[float]]:
+    if not cal.success or cal.center_x is None:
+        return []
+
+    cx = cal.center_x
+    cy = cal.center_y
+    rx = cal.radius_x or cal.radius
+    ry = cal.radius_y or cal.radius
+
+    angle = 0.0
+    if cal.ellipse:
+        angle = cal.ellipse.angle
 
     points = []
     angle_rad = math.radians(angle)
@@ -326,34 +207,11 @@ def generate_overlay_points(ellipse: Tuple, num_points: int = 64) -> List[List[f
     for i in range(num_points):
         theta = 2 * math.pi * i / num_points
 
-        x_ellipse = (axis_w / 2) * math.cos(theta)
-        y_ellipse = (axis_h / 2) * math.sin(theta)
+        x_e = rx * math.cos(theta)
+        y_e = ry * math.sin(theta)
 
-        x_rot = x_ellipse * math.cos(angle_rad) - y_ellipse * math.sin(angle_rad)
-        y_rot = x_ellipse * math.sin(angle_rad) + y_ellipse * math.cos(angle_rad)
-
-        points.append([cx + x_rot, cy + y_rot])
-
-    return points
-
-
-def generate_ring_overlay(ellipse: Tuple, ratio: float, num_points: int = 64) -> List[List[float]]:
-    (cx, cy), (axis_w, axis_h), angle = ellipse
-
-    points = []
-    angle_rad = math.radians(angle)
-
-    scaled_w = axis_w * ratio
-    scaled_h = axis_h * ratio
-
-    for i in range(num_points):
-        theta = 2 * math.pi * i / num_points
-
-        x_ellipse = (scaled_w / 2) * math.cos(theta)
-        y_ellipse = (scaled_h / 2) * math.sin(theta)
-
-        x_rot = x_ellipse * math.cos(angle_rad) - y_ellipse * math.sin(angle_rad)
-        y_rot = x_ellipse * math.sin(angle_rad) + y_ellipse * math.cos(angle_rad)
+        x_rot = x_e * math.cos(angle_rad) - y_e * math.sin(angle_rad)
+        y_rot = x_e * math.sin(angle_rad) + y_e * math.cos(angle_rad)
 
         points.append([cx + x_rot, cy + y_rot])
 
@@ -365,18 +223,29 @@ def warp_image(image: np.ndarray, H: np.ndarray, size: int = CANONICAL_SIZE) -> 
 
 
 def detect_dart_in_canonical(before: np.ndarray, after: np.ndarray) -> Tuple[Optional[Tuple[int, int]], float, np.ndarray, np.ndarray]:
-    diff = cv2.absdiff(after, before)
+    before_proc = cv2.GaussianBlur(before, (3, 3), 0)
+    after_proc = cv2.GaussianBlur(after, (3, 3), 0)
+
+    diff = cv2.absdiff(after_proc, before_proc)
     gray_diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
 
-    _, thresh = cv2.threshold(gray_diff, 15, 255, cv2.THRESH_BINARY)
+    _, thresh = cv2.threshold(gray_diff, 20, 255, cv2.THRESH_BINARY)
 
-    kernel = np.ones((5, 5), np.uint8)
-    mask = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    kernel_small = np.ones((3, 3), np.uint8)
+    kernel_med = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel_med)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_small)
 
     board_mask = np.zeros_like(mask)
-    cv2.circle(board_mask, (CANONICAL_CENTER, CANONICAL_CENTER), CANONICAL_RADIUS + 20, 255, -1)
+    cv2.circle(board_mask, (CANONICAL_CENTER, CANONICAL_CENTER), CANONICAL_RADIUS + 15, 255, -1)
     mask = cv2.bitwise_and(mask, board_mask)
+
+    total_change = cv2.countNonZero(mask)
+    board_area = math.pi * (CANONICAL_RADIUS + 15) ** 2
+    change_ratio = total_change / board_area
+
+    if change_ratio > 0.15:
+        return None, 0.0, diff, mask
 
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -386,24 +255,79 @@ def detect_dart_in_canonical(before: np.ndarray, after: np.ndarray) -> Tuple[Opt
     valid_contours = []
     for contour in contours:
         area = cv2.contourArea(contour)
-        if 50 < area < 50000:
-            valid_contours.append((contour, area))
+        if area < 80:
+            continue
+        if area > 30000:
+            continue
+
+        x, y, w, h = cv2.boundingRect(contour)
+        aspect = max(w, h) / (min(w, h) + 1)
+        if aspect > 8.0:
+            continue
+
+        valid_contours.append((contour, area))
 
     if not valid_contours:
         return None, 0.0, diff, mask
 
-    largest = max(valid_contours, key=lambda x: x[1])
-    contour, area = largest
+    valid_contours.sort(key=lambda x: x[1], reverse=True)
 
-    points = contour.reshape(-1, 2)
+    best_tip = None
+    best_confidence = 0.0
 
-    distances = np.sqrt((points[:, 0] - CANONICAL_CENTER)**2 + (points[:, 1] - CANONICAL_CENTER)**2)
-    tip_idx = np.argmin(distances)
-    tip_x, tip_y = points[tip_idx]
+    for contour, area in valid_contours[:3]:
+        points = contour.reshape(-1, 2)
+        distances = np.sqrt((points[:, 0] - CANONICAL_CENTER) ** 2 + (points[:, 1] - CANONICAL_CENTER) ** 2)
+        tip_idx = np.argmin(distances)
+        tip_x, tip_y = points[tip_idx]
 
-    confidence = min(0.95, 0.4 + (area / 5000) * 0.3)
+        tip_dist = distances[tip_idx]
+        if tip_dist > CANONICAL_RADIUS + 10:
+            continue
 
-    return (int(tip_x), int(tip_y)), confidence, diff, mask
+        perimeter = cv2.arcLength(contour, True)
+        circularity = 4 * math.pi * area / (perimeter * perimeter) if perimeter > 0 else 0
+
+        x, y, w, h = cv2.boundingRect(contour)
+        aspect = max(w, h) / (min(w, h) + 1)
+
+        conf = 0.3
+        conf += min(0.2, area / 3000)
+        conf += min(0.15, circularity * 0.2)
+        if 1.5 < aspect < 4.0:
+            conf += 0.1
+        if tip_dist < CANONICAL_RADIUS * 0.9:
+            conf += 0.1
+
+        if conf > best_confidence:
+            best_confidence = conf
+            best_tip = (int(tip_x), int(tip_y))
+
+    if best_tip is None:
+        return None, 0.0, diff, mask
+
+    best_confidence = min(0.95, best_confidence)
+
+    return best_tip, best_confidence, diff, mask
+
+
+def detect_dart_advanced(before: np.ndarray, after: np.ndarray, calibration_data: Dict) -> Tuple[Optional[Tuple[int, int]], float, str, np.ndarray, np.ndarray]:
+    detector = AdvancedDartDetection(calibration_data)
+    result = detector.detect_multiple_darts(after, before)
+
+    diff = cv2.absdiff(after, before)
+    gray_diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+    _, mask = cv2.threshold(gray_diff, 20, 255, cv2.THRESH_BINARY)
+
+    if not result.darts:
+        return None, 0.0, "none", diff, mask
+
+    best_dart = result.darts[0]
+
+    if not detector.validate_detection(best_dart):
+        return None, 0.0, "invalid", diff, mask
+
+    return (best_dart.x, best_dart.y), best_dart.confidence, best_dart.score, diff, mask
 
 
 def get_score_from_canonical_position(x: int, y: int, rotation_offset: float = -9.0) -> Tuple[str, int]:
@@ -412,7 +336,7 @@ def get_score_from_canonical_position(x: int, y: int, rotation_offset: float = -
     distance = math.sqrt(dx * dx + dy * dy)
     distance_ratio = distance / CANONICAL_RADIUS
 
-    if distance_ratio > 1.05:
+    if distance_ratio > 1.03:
         return "MISS", 0
 
     angle = math.degrees(math.atan2(dx, dy))
@@ -438,7 +362,11 @@ def get_score_from_canonical_position(x: int, y: int, rotation_offset: float = -
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "Dart Detection API v3 - Real board detection with homography", "version": "3.0.0"}
+    return {
+        "status": "ok",
+        "message": "Dart Detection API v4 - Advanced side-angle camera support",
+        "version": "4.0.0"
+    }
 
 
 @app.get("/health")
@@ -446,14 +374,13 @@ async def health():
     return {
         "status": "healthy",
         "board_found": session_data["board_found"],
-        "has_homography": session_data["homography"] is not None
+        "has_homography": session_data["homography"] is not None,
+        "is_angled": session_data.get("is_angled", False),
     }
 
 
 @app.post("/board/detect", response_model=BoardDetectResponse)
-async def board_detect(
-    image: UploadFile = File(...)
-):
+async def board_detect(image: UploadFile = File(...)):
     global session_data
 
     contents = await image.read()
@@ -463,76 +390,87 @@ async def board_detect(
     if img is None:
         raise HTTPException(status_code=400, detail="Invalid image")
 
-    contour, score, edges = find_dartboard_contour(img)
+    max_dim = 1280
+    h, w = img.shape[:2]
+    if max(h, w) > max_dim:
+        scale = max_dim / max(h, w)
+        img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
 
-    if contour is None or len(contour) < 5:
+    cal_result, processed = find_dartboard_advanced(img)
+
+    if not cal_result.success:
         return BoardDetectResponse(
             board_found=False,
-            confidence=0.0,
-            message="No dartboard contour found. Ensure the board is visible.",
-            debug_contour=image_to_base64(edges) if edges is not None else None
+            confidence=cal_result.confidence,
+            message=cal_result.message,
+            method=cal_result.method
         )
 
-    try:
-        ellipse = cv2.fitEllipse(contour)
-    except cv2.error:
-        return BoardDetectResponse(
-            board_found=False,
-            confidence=0.0,
-            message="Could not fit ellipse to contour"
-        )
-
-    (cx, cy), (axis_w, axis_h), angle = ellipse
-
-    search_radius = int(min(axis_w, axis_h) / 4)
-    bull = find_bull_center(img, (cx, cy), search_radius)
-
-    if bull:
-        dist = math.sqrt((bull[0] - cx)**2 + (bull[1] - cy)**2)
-        if dist < search_radius:
-            cx, cy = bull
-            ellipse = ((cx, cy), (axis_w, axis_h), angle)
-            score = min(0.98, score + 0.1)
-
-    H, H_inv = compute_homography_from_ellipse(ellipse, CANONICAL_SIZE)
+    H, H_inv = compute_homography_from_calibration(cal_result, img.shape)
 
     if H is None:
         return BoardDetectResponse(
             board_found=False,
             confidence=0.0,
-            message="Could not compute homography"
+            message="Could not compute homography from calibration"
         )
 
     canonical = warp_image(img, H, CANONICAL_SIZE)
 
     session_data["homography"] = H
     session_data["inverse_homography"] = H_inv
-    session_data["ellipse"] = ellipse
     session_data["board_found"] = True
     session_data["reference_canonical"] = canonical.copy()
+    session_data["reference_raw"] = img.copy()
+    session_data["rotation_offset"] = cal_result.rotation_offset
+    session_data["calibration_result"] = cal_result
+    session_data["is_angled"] = cal_result.is_angled
 
-    overlay_outer = generate_overlay_points(ellipse, 64)
-    overlay_triple = generate_ring_overlay(ellipse, RADIUS_RATIOS["outer_triple"], 64)
-    overlay_double_start = generate_ring_overlay(ellipse, RADIUS_RATIOS["inner_double"], 64)
-    overlay_bull = generate_ring_overlay(ellipse, RADIUS_RATIOS["single_bull"], 32)
+    ellipse_data = None
+    if cal_result.ellipse:
+        ellipse_data = {
+            "cx": float(cal_result.center_x),
+            "cy": float(cal_result.center_y),
+            "a": float(cal_result.radius_x or cal_result.radius),
+            "b": float(cal_result.radius_y or cal_result.radius),
+            "angle": float(cal_result.ellipse.angle)
+        }
+        session_data["ellipse"] = (
+            (float(cal_result.center_x), float(cal_result.center_y)),
+            (float((cal_result.radius_x or cal_result.radius) * 2),
+             float((cal_result.radius_y or cal_result.radius) * 2)),
+            float(cal_result.ellipse.angle)
+        )
+    else:
+        r = cal_result.radius or 100
+        ellipse_data = {
+            "cx": float(cal_result.center_x),
+            "cy": float(cal_result.center_y),
+            "a": float(r),
+            "b": float(r),
+            "angle": 0.0
+        }
+        session_data["ellipse"] = (
+            (float(cal_result.center_x), float(cal_result.center_y)),
+            (float(r * 2), float(r * 2)),
+            0.0
+        )
 
-    confidence = min(0.95, score * 1.2)
+    overlay_outer = generate_overlay_points(cal_result, 64)
+    confidence = min(0.95, cal_result.confidence)
 
     return BoardDetectResponse(
         board_found=True,
         confidence=confidence,
-        ellipse={
-            "cx": float(cx),
-            "cy": float(cy),
-            "a": float(axis_w / 2),
-            "b": float(axis_h / 2),
-            "angle": float(angle)
-        },
+        ellipse=ellipse_data,
         homography=H.tolist(),
         overlay_points=overlay_outer,
-        bull_center=[float(cx), float(cy)],
+        bull_center=[float(cal_result.center_x), float(cal_result.center_y)],
         canonical_preview=image_to_base64(canonical, 70),
-        message=f"Board detected with {confidence*100:.0f}% confidence"
+        message=cal_result.message,
+        is_angled=cal_result.is_angled,
+        rotation_offset=cal_result.rotation_offset,
+        method=cal_result.method
     )
 
 
@@ -572,38 +510,69 @@ async def throw_score(
     if before_img is None or after_img is None:
         raise HTTPException(status_code=400, detail="Invalid image(s)")
 
+    max_dim = 1280
+    for arr in [before_img, after_img]:
+        h, w = arr.shape[:2]
+        if max(h, w) > max_dim:
+            scale = max_dim / max(h, w)
+            arr = cv2.resize(arr, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+
     before_canonical = warp_image(before_img, H, CANONICAL_SIZE)
     after_canonical = warp_image(after_img, H, CANONICAL_SIZE)
 
     tip, confidence, diff_img, mask_img = detect_dart_in_canonical(before_canonical, after_canonical)
 
+    rotation_offset = session_data.get("rotation_offset", -9.0)
+
+    if tip is None:
+        cal = session_data.get("calibration_result")
+        if cal and cal.success:
+            cal_data = {
+                "center_x": cal.center_x,
+                "center_y": cal.center_y,
+                "radius": cal.radius,
+                "rotation_offset": cal.rotation_offset
+            }
+            raw_tip, raw_conf, raw_label, _, _ = detect_dart_advanced(
+                before_img, after_img, cal_data
+            )
+            if raw_tip is not None and raw_conf > 0.4:
+                tip_h = np.array([raw_tip[0], raw_tip[1], 1.0], dtype=np.float32)
+                tip_canonical = H @ tip_h
+                tip_canonical = tip_canonical / tip_canonical[2]
+                tip = (int(tip_canonical[0]), int(tip_canonical[1]))
+                confidence = raw_conf * 0.85
+
     if tip is None:
         return ThrowScoreResponse(
             label="MISS",
             score=0,
-            confidence=0.3,
+            confidence=0.2,
             decision="ASSIST",
             message="No dart detected. Manual input recommended.",
             debug={
-                "diff_preview": image_to_base64(diff_img, 80),
-                "mask_preview": image_to_base64(cv2.cvtColor(mask_img, cv2.COLOR_GRAY2BGR), 80),
-                "canonical_after": image_to_base64(after_canonical, 80)
+                "diff_preview": image_to_base64(diff_img, 70),
+                "mask_preview": image_to_base64(cv2.cvtColor(mask_img, cv2.COLOR_GRAY2BGR), 70),
+                "canonical_after": image_to_base64(after_canonical, 70)
             }
         )
 
-    label, score_value = get_score_from_canonical_position(tip[0], tip[1])
+    label, score_value = get_score_from_canonical_position(tip[0], tip[1], rotation_offset)
 
     tip_original = None
     H_inv = session_data.get("inverse_homography")
     if H_inv is not None:
-        tip_homogeneous = np.array([tip[0], tip[1], 1.0])
-        tip_back = H_inv @ tip_homogeneous
-        tip_back = tip_back / tip_back[2]
-        tip_original = [int(tip_back[0]), int(tip_back[1])]
+        try:
+            tip_homogeneous = np.array([tip[0], tip[1], 1.0])
+            tip_back = H_inv @ tip_homogeneous
+            tip_back = tip_back / tip_back[2]
+            tip_original = [int(tip_back[0]), int(tip_back[1])]
+        except Exception:
+            pass
 
-    if confidence >= 0.7:
+    if confidence >= 0.70:
         decision = "AUTO"
-    elif confidence >= 0.5:
+    elif confidence >= 0.45:
         decision = "ASSIST"
     else:
         decision = "RETRY"
@@ -620,11 +589,11 @@ async def throw_score(
         decision=decision,
         tip_canonical=list(tip),
         tip_original=tip_original,
-        message=f"Detected {label} ({score_value} points) with {confidence*100:.0f}% confidence",
+        message=f"Detected {label} ({score_value} pts) [{confidence * 100:.0f}%]",
         debug={
-            "diff_preview": image_to_base64(diff_img, 80),
-            "mask_preview": image_to_base64(cv2.cvtColor(mask_img, cv2.COLOR_GRAY2BGR), 80),
-            "canonical_preview": image_to_base64(debug_canonical, 80)
+            "diff_preview": image_to_base64(diff_img, 70),
+            "mask_preview": image_to_base64(cv2.cvtColor(mask_img, cv2.COLOR_GRAY2BGR), 70),
+            "canonical_preview": image_to_base64(debug_canonical, 70)
         }
     )
 
@@ -649,6 +618,7 @@ async def set_reference(image: UploadFile = File(...)):
     H = session_data["homography"]
     canonical = warp_image(img, H, CANONICAL_SIZE)
     session_data["reference_canonical"] = canonical
+    session_data["reference_raw"] = img.copy()
 
     return {
         "status": "reference_set",
@@ -658,17 +628,21 @@ async def set_reference(image: UploadFile = File(...)):
 
 @app.get("/session/status")
 async def session_status():
+    cal = session_data.get("calibration_result")
     return {
         "board_found": session_data["board_found"],
         "has_homography": session_data["homography"] is not None,
         "has_reference": session_data["reference_canonical"] is not None,
+        "is_angled": session_data.get("is_angled", False),
+        "rotation_offset": session_data.get("rotation_offset", -9.0),
+        "method": cal.method if cal else None,
         "ellipse": {
             "cx": session_data["ellipse"][0][0],
             "cy": session_data["ellipse"][0][1],
             "a": session_data["ellipse"][1][0] / 2,
             "b": session_data["ellipse"][1][1] / 2,
             "angle": session_data["ellipse"][2]
-        } if session_data["ellipse"] else None
+        } if session_data.get("ellipse") else None
     }
 
 
@@ -681,6 +655,10 @@ async def reset_session():
         "ellipse": None,
         "board_found": False,
         "reference_canonical": None,
+        "rotation_offset": -9.0,
+        "calibration_result": None,
+        "is_angled": False,
+        "reference_raw": None,
     }
     return {"status": "reset", "message": "Session cleared"}
 

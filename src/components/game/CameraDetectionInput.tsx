@@ -102,8 +102,10 @@ export function CameraDetectionInput({
   const remoteViewerRef = useRef<RemoteCameraViewer | null>(null);
   const pendingAfterFrameRef = useRef<Blob | null>(null);
   const lastBrightnessRef = useRef<number | null>(null);
+  const prevFrameDataRef = useRef<Uint8ClampedArray | null>(null);
   const brightnessStableCountRef = useRef<number>(0);
   const motionDetectedRef = useRef<boolean>(false);
+  const motionMagnitudeRef = useRef<number>(0);
   const autoDetectIntervalRef = useRef<number | null>(null);
   const throwCooldownRef = useRef<boolean>(false);
   const zoomRegionRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -316,7 +318,10 @@ export function CameraDetectionInput({
     boardResultRef.current = null;
     homographyRef.current = null;
     lastBrightnessRef.current = null;
+    prevFrameDataRef.current = null;
     brightnessStableCountRef.current = 0;
+    motionDetectedRef.current = false;
+    motionMagnitudeRef.current = 0;
   }, []);
 
   const switchCamera = useCallback(async () => {
@@ -476,25 +481,79 @@ export function CameraDetectionInput({
     }
   }, [remoteCameras, cameraStore.wasActive, cameraStore.lastRemoteCameraId, isActive, isConnecting, user, connectToRemoteCamera]);
 
-  const measureBrightness = useCallback((video: HTMLVideoElement): number => {
+  const measureMotion = useCallback((video: HTMLVideoElement): { brightness: number; changedPixelRatio: number; boardRegionChange: number } => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    if (!ctx) return 0;
+    if (!ctx) return { brightness: 0, changedPixelRatio: 0, boardRegionChange: 0 };
 
-    const sampleSize = 100;
+    const sampleSize = 120;
     canvas.width = sampleSize;
     canvas.height = sampleSize;
-    ctx.drawImage(video, 0, 0, sampleSize, sampleSize);
+
+    const cal = calibrationRef.current;
+    if (cal && cal.center && videoRef.current) {
+      const vw = video.videoWidth || 1;
+      const vh = video.videoHeight || 1;
+      const boardCx = cal.center.x / vw;
+      const boardCy = cal.center.y / vh;
+      const boardR = Math.max(cal.radiusX || 100, cal.radiusY || 100) / Math.min(vw, vh);
+      const pad = 1.3;
+      const sx = Math.max(0, (boardCx - boardR * pad)) * vw;
+      const sy = Math.max(0, (boardCy - boardR * pad)) * vh;
+      const sw = Math.min(vw - sx, boardR * pad * 2 * vw);
+      const sh = Math.min(vh - sy, boardR * pad * 2 * vh);
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sampleSize, sampleSize);
+    } else {
+      ctx.drawImage(video, 0, 0, sampleSize, sampleSize);
+    }
 
     const imageData = ctx.getImageData(0, 0, sampleSize, sampleSize);
     const data = imageData.data;
+    const totalPixels = data.length / 4;
 
     let totalBrightness = 0;
     for (let i = 0; i < data.length; i += 4) {
       totalBrightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
     }
+    const brightness = totalBrightness / totalPixels;
 
-    return totalBrightness / (data.length / 4);
+    let changedPixels = 0;
+    let boardRegionChanged = 0;
+    const prev = prevFrameDataRef.current;
+
+    if (prev && prev.length === data.length) {
+      const cx = sampleSize / 2;
+      const cy = sampleSize / 2;
+      const boardR = sampleSize * 0.4;
+
+      for (let y = 0; y < sampleSize; y++) {
+        for (let x = 0; x < sampleSize; x++) {
+          const idx = (y * sampleSize + x) * 4;
+          const diff = Math.abs(data[idx] - prev[idx]) +
+                       Math.abs(data[idx + 1] - prev[idx + 1]) +
+                       Math.abs(data[idx + 2] - prev[idx + 2]);
+
+          if (diff > 75) {
+            changedPixels++;
+            const dx = x - cx;
+            const dy = y - cy;
+            if (Math.sqrt(dx * dx + dy * dy) < boardR) {
+              boardRegionChanged++;
+            }
+          }
+        }
+      }
+    }
+
+    prevFrameDataRef.current = new Uint8ClampedArray(data);
+
+    const boardPixelCount = Math.PI * (sampleSize * 0.4) ** 2;
+
+    return {
+      brightness,
+      changedPixelRatio: changedPixels / totalPixels,
+      boardRegionChange: boardPixelCount > 0 ? boardRegionChanged / boardPixelCount : 0,
+    };
   }, []);
 
   const triggerThrowDetectionRef = useRef<() => void>(() => {});
@@ -553,40 +612,54 @@ export function CameraDetectionInput({
       return;
     }
 
-    const currentBrightness = measureBrightness(videoRef.current);
+    const motion = measureMotion(videoRef.current);
     const lastBrightness = lastBrightnessRef.current;
 
     if (lastBrightness !== null) {
-      const brightnessDiff = Math.abs(currentBrightness - lastBrightness);
+      const brightnessDiff = Math.abs(motion.brightness - lastBrightness);
 
-      if (brightnessDiff > 15) {
+      if (motion.changedPixelRatio > 0.6) {
+        motionDetectedRef.current = false;
+        brightnessStableCountRef.current = 0;
+        motionMagnitudeRef.current = 0;
+        lastBrightnessRef.current = motion.brightness;
+        return;
+      }
+
+      const hasSignificantMotion = motion.boardRegionChange > 0.03 || brightnessDiff > 20;
+
+      if (hasSignificantMotion) {
         motionDetectedRef.current = true;
+        motionMagnitudeRef.current = Math.max(motionMagnitudeRef.current, motion.boardRegionChange);
         brightnessStableCountRef.current = 0;
       } else if (motionDetectedRef.current) {
-        if (brightnessDiff < 5) {
+        const isStable = motion.boardRegionChange < 0.008 && brightnessDiff < 4;
+
+        if (isStable) {
           brightnessStableCountRef.current++;
         } else {
-          brightnessStableCountRef.current = 0;
+          brightnessStableCountRef.current = Math.max(0, brightnessStableCountRef.current - 1);
         }
 
-        if (brightnessStableCountRef.current >= 4) {
+        if (brightnessStableCountRef.current >= 6 && motionMagnitudeRef.current > 0.02) {
           throwCooldownRef.current = true;
           brightnessStableCountRef.current = 0;
           motionDetectedRef.current = false;
+          motionMagnitudeRef.current = 0;
           setTimeout(() => {
             throwCooldownRef.current = false;
-          }, 2500);
+          }, 4000);
           triggerThrowDetectionRef.current();
         }
       }
     }
 
-    lastBrightnessRef.current = currentBrightness;
-  }, [isCalibrated, autoDetectEnabled, isDetecting, pendingScore, measureBrightness, remainingDarts]);
+    lastBrightnessRef.current = motion.brightness;
+  }, [isCalibrated, autoDetectEnabled, isDetecting, pendingScore, measureMotion, remainingDarts]);
 
   useEffect(() => {
     if (isActive && isCalibrated && autoDetectEnabled) {
-      autoDetectIntervalRef.current = window.setInterval(checkForDartThrow, 200);
+      autoDetectIntervalRef.current = window.setInterval(checkForDartThrow, 250);
     }
 
     return () => {

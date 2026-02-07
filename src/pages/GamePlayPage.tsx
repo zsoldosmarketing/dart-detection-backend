@@ -6,6 +6,7 @@ import { GameHeader } from '../components/game/GameHeader';
 import { MessageOverlay } from '../components/game/MessageOverlay';
 import { PlayerScoreCards, type PlayerMatchStats } from '../components/game/PlayerScoreCards';
 import { CheckoutSuggestions } from '../components/game/CheckoutSuggestions';
+import { OpponentCameraFeed } from '../components/game/OpponentCameraFeed';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { useConfigStore } from '../stores/configStore';
@@ -1115,6 +1116,15 @@ export function GamePlayPage() {
             </div>
           )}
         </Card>
+      )}
+
+      {!isMyTurn && !currentPlayer?.is_bot && room.mode === 'pvp' && roomId && user && (
+        <OpponentCameraFeed
+          roomId={roomId}
+          userId={user.id}
+          opponentName={currentPlayer ? getPlayerName(currentPlayer) : 'Ellenfel'}
+          isMyTurn={!!isMyTurn}
+        />
       )}
     </div>
   );
