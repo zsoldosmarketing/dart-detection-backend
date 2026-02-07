@@ -1,8 +1,19 @@
 import { Outlet } from 'react-router-dom';
 import { Navigation } from './Navigation';
 import { Header } from './Header';
+import { useAuthStore } from '../../stores/authStore';
 
 export function Layout() {
+  const { user } = useAuthStore();
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-dark-50 via-dark-50 to-dark-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950">
+        <Outlet />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-dark-50 via-dark-50 to-dark-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950">
       <Navigation />
