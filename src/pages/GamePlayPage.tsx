@@ -632,16 +632,12 @@ export function GamePlayPage() {
         setMessage('BUST!');
         soundEffects.playBust();
         voiceCaller.callBust();
-        setTimeout(() => endTurn(true), 1000);
         return;
       }
 
       if (isSuccessfulCheckoutFlag) {
         setMessage('CHECKOUT!');
         soundEffects.playCheckout();
-        setTimeout(() => {
-          handleCheckout();
-        }, 1500);
         return;
       }
     } finally {
@@ -913,8 +909,15 @@ export function GamePlayPage() {
       ? dartQueue[dartQueue.length - 1]
       : currentTurnDarts[currentTurnDarts.length - 1]?.target;
     const isCheckoutReached = lastDartInTurn && isCheckout(currentPlayer.current_score, thrownScore + queuedScore, lastDartInTurn);
+    const isBustDetected = lastDartInTurn && isBust(currentPlayer.current_score, thrownScore + queuedScore, lastDartInTurn);
 
-    if (totalDarts !== 3 && !isCheckoutReached) {
+    if (totalDarts !== 3 && !isCheckoutReached && !isBustDetected) {
+      return;
+    }
+
+    if (isBustDetected && dartQueue.length === 0) {
+      setIsProcessing(true);
+      endTurn(true);
       return;
     }
 
@@ -931,19 +934,14 @@ export function GamePlayPage() {
       const newRemaining = currentPlayer.current_score - newTurnScore;
 
       if (isBust(currentPlayer.current_score, newTurnScore, allDarts[allDarts.length - 1]?.target)) {
-        setMessage('BUST!');
-        soundEffects.playBust();
-        voiceCaller.callBust();
-        setTimeout(() => endTurn(true), 1000);
+        setIsProcessing(true);
+        endTurn(true);
         return;
       }
 
       if (isCheckout(currentPlayer.current_score, newTurnScore, allDarts[allDarts.length - 1]?.target)) {
-        setMessage('CHECKOUT!');
-        soundEffects.playCheckout();
-        setTimeout(() => {
-          handleCheckout();
-        }, 1500);
+        setIsProcessing(true);
+        handleCheckout();
         return;
       }
 
@@ -957,16 +955,13 @@ export function GamePlayPage() {
     const lastDart = currentTurnDarts[currentTurnDarts.length - 1];
 
     if (isCheckout(currentPlayer.current_score, newTurnScore, lastDart?.target)) {
-      setMessage('CHECKOUT!');
-      soundEffects.playCheckout();
-      setTimeout(() => {
-        handleCheckout();
-      }, 1500);
+      setIsProcessing(true);
+      handleCheckout();
       return;
     }
 
     setIsProcessing(true);
-    setTimeout(() => endTurn(false, newRemaining), 300);
+    endTurn(false, newRemaining);
   };
 
   if (isLoading || !room || !gameState) {
@@ -988,7 +983,8 @@ export function GamePlayPage() {
     ? dartQueue[dartQueue.length - 1]
     : currentTurnDarts[currentTurnDarts.length - 1]?.target;
   const isCheckoutReached = currentPlayer && lastDartInTurn && isCheckout(currentPlayer.current_score, thrownScore + queuedScore, lastDartInTurn);
-  const canSubmit = totalDartsInTurn === 3 || isCheckoutReached;
+  const isBustReached = currentPlayer && lastDartInTurn && totalDartsInTurn > 0 && isBust(currentPlayer.current_score, thrownScore + queuedScore, lastDartInTurn);
+  const canSubmit = totalDartsInTurn === 3 || !!isCheckoutReached || !!isBustReached;
 
   const isLocalBackend = getBackendUrlOverride() === 'http://localhost:8000';
 
