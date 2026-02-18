@@ -67,7 +67,6 @@ export function CameraDetectionInput({
   const [isCalibrated, setIsCalibrated] = useState(false);
   const [apiConnected, setApiConnected] = useState(false);
   const apiConnectedRef = useRef(false);
-  const autoStartAttemptedRef = useRef(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -438,50 +437,6 @@ export function CameraDetectionInput({
     };
   }, [cameraStore.calibration, cameraStore.homography, cameraStore.boardResult]);
 
-  useEffect(() => {
-    if (!user || autoStartAttemptedRef.current || isActive || isConnecting) return;
-    if (!cameraStore.wasActive) return;
-
-    const autoStart = async () => {
-      const sessions = await getActiveRemoteCameras();
-      setRemoteCameras(sessions);
-
-      if (sessions.length === 0) return;
-
-      autoStartAttemptedRef.current = true;
-
-      if (cameraStore.lastRemoteCameraId) {
-        const remoteSession = sessions.find(s => s.id === cameraStore.lastRemoteCameraId);
-        if (remoteSession) {
-          await connectToRemoteCamera(remoteSession);
-          setTimeout(() => restoreCalibrationRef.current(), 1000);
-          return;
-        }
-      }
-
-      await connectToRemoteCamera(sessions[0]);
-      setTimeout(() => restoreCalibrationRef.current(), 1000);
-    };
-
-    const timer = setTimeout(autoStart, 300);
-    return () => clearTimeout(timer);
-  }, [user, isActive, isConnecting, cameraStore.wasActive, cameraStore.lastRemoteCameraId, connectToRemoteCamera]);
-
-  useEffect(() => {
-    if (!cameraStore.wasActive || isActive || isConnecting || !user) return;
-    if (remoteCameras.length === 0) return;
-    if (autoStartAttemptedRef.current) return;
-
-    const targetCamera = cameraStore.lastRemoteCameraId
-      ? remoteCameras.find(s => s.id === cameraStore.lastRemoteCameraId) || remoteCameras[0]
-      : remoteCameras[0];
-
-    if (targetCamera) {
-      autoStartAttemptedRef.current = true;
-      connectToRemoteCamera(targetCamera);
-      setTimeout(() => restoreCalibrationRef.current(), 1000);
-    }
-  }, [remoteCameras, cameraStore.wasActive, cameraStore.lastRemoteCameraId, isActive, isConnecting, user, connectToRemoteCamera]);
 
   const measureMotion = useCallback((video: HTMLVideoElement): { brightness: number; changedPixelRatio: number; boardRegionChange: number } => {
     const canvas = document.createElement('canvas');

@@ -159,15 +159,17 @@ export class RemoteCameraProvider {
       });
       await this.peerConnection.setLocalDescription(offer);
 
+      const sessionId = this.session!.id;
+
       await supabase
         .from('remote_camera_sessions')
         .update({ sdp_offer: JSON.stringify(offer) })
-        .eq('id', this.session.id);
+        .eq('id', sessionId);
 
       this.subscribeToSignaling();
       this.startHeartbeat();
 
-      return this.session.id;
+      return sessionId;
     } catch (err) {
       this.onError?.(`Failed to start sharing: ${err}`);
       return null;
@@ -364,9 +366,15 @@ export class RemoteCameraViewer {
 
       this.peerConnection = new RTCPeerConnection(ICE_SERVERS);
 
+      this.remoteStream = new MediaStream();
+
       this.peerConnection.ontrack = (event) => {
-        this.remoteStream = event.streams[0];
-        this.onStream?.(this.remoteStream);
+        if (event.streams && event.streams[0]) {
+          this.remoteStream = event.streams[0];
+        } else {
+          this.remoteStream!.addTrack(event.track);
+        }
+        this.onStream?.(this.remoteStream!);
       };
 
       this.peerConnection.onicecandidate = async (event) => {
@@ -381,6 +389,7 @@ export class RemoteCameraViewer {
 
       this.peerConnection.onconnectionstatechange = () => {
         const state = this.peerConnection?.connectionState;
+        console.log('[RemoteCameraViewer] Connection state:', state);
         if (state === 'connected') {
           this.onStatusChange?.('connected');
         } else if (state === 'disconnected' || state === 'failed') {
@@ -396,6 +405,14 @@ export class RemoteCameraViewer {
       const offer = JSON.parse(session.sdp_offer);
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
 
+      const answer = await this.peerConnection.createAnswer();
+      await this.peerConnection.setLocalDescription(answer);
+
+      await supabase
+        .from('remote_camera_sessions')
+        .update({ sdp_answer: JSON.stringify(answer), status: 'connected' })
+        .eq('id', sessionId);
+
       const { data: candidates } = await supabase
         .from('remote_camera_ice_candidates')
         .select('*')
@@ -404,17 +421,12 @@ export class RemoteCameraViewer {
 
       if (candidates) {
         for (const c of candidates) {
-          await this.peerConnection.addIceCandidate(new RTCIceCandidate(c.candidate));
+          try {
+            await this.peerConnection.addIceCandidate(new RTCIceCandidate(c.candidate));
+          } catch {
+          }
         }
       }
-
-      const answer = await this.peerConnection.createAnswer();
-      await this.peerConnection.setLocalDescription(answer);
-
-      await supabase
-        .from('remote_camera_sessions')
-        .update({ sdp_answer: JSON.stringify(answer) })
-        .eq('id', sessionId);
 
       this.subscribeToSignaling(sessionId);
 
@@ -479,9 +491,15 @@ export class RemoteCameraViewer {
 
       this.peerConnection = new RTCPeerConnection(ICE_SERVERS);
 
+      this.remoteStream = new MediaStream();
+
       this.peerConnection.ontrack = (event) => {
-        this.remoteStream = event.streams[0];
-        this.onStream?.(this.remoteStream);
+        if (event.streams && event.streams[0]) {
+          this.remoteStream = event.streams[0];
+        } else {
+          this.remoteStream!.addTrack(event.track);
+        }
+        this.onStream?.(this.remoteStream!);
       };
 
       this.peerConnection.onicecandidate = async (event) => {
@@ -511,6 +529,14 @@ export class RemoteCameraViewer {
       const offer = JSON.parse(session.sdp_offer);
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
 
+      const answer = await this.peerConnection.createAnswer();
+      await this.peerConnection.setLocalDescription(answer);
+
+      await supabase
+        .from('remote_camera_sessions')
+        .update({ sdp_answer: JSON.stringify(answer) })
+        .eq('id', sessionId);
+
       const { data: candidates } = await supabase
         .from('remote_camera_ice_candidates')
         .select('*')
@@ -525,14 +551,6 @@ export class RemoteCameraViewer {
           }
         }
       }
-
-      const answer = await this.peerConnection.createAnswer();
-      await this.peerConnection.setLocalDescription(answer);
-
-      await supabase
-        .from('remote_camera_sessions')
-        .update({ sdp_answer: JSON.stringify(answer) })
-        .eq('id', sessionId);
 
     } catch (err) {
       this.onStatusChange?.('disconnected');
