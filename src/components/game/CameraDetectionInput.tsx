@@ -730,9 +730,7 @@ export function CameraDetectionInput({
         isFullscreen ? 'flex-1' : 'flex-1 min-h-0'
       }`}>
         {!isActive ? (
-          <div className={`flex flex-col items-center p-4 text-center overflow-y-auto ${
-            isFullscreen ? 'h-full justify-center' : 'justify-start'
-          }`}>
+          <div className="flex flex-col items-center p-4 text-center overflow-y-auto h-full justify-center">
             <div className="mb-3 pt-2">
               {apiConnected ? (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30">
