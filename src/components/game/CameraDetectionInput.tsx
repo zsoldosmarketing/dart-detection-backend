@@ -714,7 +714,7 @@ export function CameraDetectionInput({
 
   const containerClasses = isFullscreen
     ? 'fixed inset-0 z-50 bg-dark-900 flex flex-col'
-    : 'space-y-3';
+    : 'flex flex-col gap-3 min-h-0 h-full';
 
   return (
     <div className={containerClasses} ref={containerRef}>
@@ -727,7 +727,7 @@ export function CameraDetectionInput({
       />
 
       <div className={`relative bg-dark-900 rounded-xl overflow-hidden border border-dark-700 ${
-        isFullscreen ? 'flex-1' : ''
+        isFullscreen ? 'flex-1' : 'flex-1 min-h-0'
       }`}>
         {!isActive ? (
           <div className={`flex flex-col items-center p-4 text-center overflow-y-auto ${
@@ -824,11 +824,11 @@ export function CameraDetectionInput({
             </Button>
           </div>
         ) : (
-          <div className={`relative ${isFullscreen ? 'h-full flex items-center justify-center bg-black' : ''}`}>
+          <div className={`relative ${isFullscreen ? 'h-full flex items-center justify-center bg-black' : 'h-full'}`}>
             <canvas
               ref={canvasRef}
-              className={`${isFullscreen ? 'max-h-full max-w-full object-contain' : 'w-full'}`}
-              style={!isFullscreen ? { aspectRatio: '16/9', objectFit: 'contain' } : undefined}
+              className={`${isFullscreen ? 'max-h-full max-w-full object-contain' : 'w-full h-full object-contain absolute inset-0'}`}
+              style={!isFullscreen ? undefined : undefined}
             />
 
             <div className="absolute top-3 left-3 flex items-center gap-2 min-h-[32px]">
