@@ -84,13 +84,13 @@ function Dartboard() {
       <g opacity="0.6">
         {[
           { x: 185, y: 48, label: '20' },
-          { x: 290, y: 90, label: '6' },
-          { x: 340, y: 195, label: '11' },
-          { x: 290, y: 310, label: '14' },
-          { x: 185, y: 360, label: '19' },
+          { x: 290, y: 90, label: '18' },
+          { x: 340, y: 195, label: '6' },
+          { x: 290, y: 310, label: '2' },
+          { x: 185, y: 360, label: '3' },
           { x: 90, y: 310, label: '7' },
-          { x: 50, y: 195, label: '3' },
-          { x: 90, y: 90, label: '17' },
+          { x: 50, y: 195, label: '11' },
+          { x: 90, y: 90, label: '12' },
         ].map(({ x, y, label }) => (
           <text key={label} x={x} y={y} fill="#94a3b8" fontSize="14" fontWeight="600" fontFamily="Inter">
             {label}
