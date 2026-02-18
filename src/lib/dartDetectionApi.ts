@@ -299,6 +299,10 @@ export function parseScoreToTarget(label: string): DartTarget {
 
 export function captureVideoFrame(video: HTMLVideoElement, quality: number = 0.80): Promise<Blob> {
   return new Promise((resolve, reject) => {
+    if (!video.videoWidth || !video.videoHeight || video.readyState < 2) {
+      reject(new Error('Video not ready'));
+      return;
+    }
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;

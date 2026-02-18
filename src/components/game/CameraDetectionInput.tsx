@@ -196,10 +196,12 @@ export function CameraDetectionInput({
   }, []);
 
   const runBoardDetection = useCallback(async () => {
-    if (!videoRef.current || !apiConnectedRef.current) return;
+    const video = videoRef.current;
+    if (!video || !apiConnectedRef.current) return;
+    if (!video.videoWidth || !video.videoHeight || video.readyState < 2) return;
 
     try {
-      const frameBlob = await captureVideoFrame(videoRef.current);
+      const frameBlob = await captureVideoFrame(video);
       const result = await detectBoard(frameBlob);
 
       if (result && result.board_found) {
@@ -887,6 +889,11 @@ export function CameraDetectionInput({
                   <>
                     <Target className="w-4 h-4 text-green-400" />
                     <span className="text-green-400 text-xs font-medium">Tabla OK</span>
+                  </>
+                ) : !apiConnected ? (
+                  <>
+                    <WifiOff className="w-4 h-4 text-red-400" />
+                    <span className="text-red-400 text-xs font-medium">Backend offline</span>
                   </>
                 ) : (
                   <>
