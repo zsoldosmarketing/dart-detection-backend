@@ -730,31 +730,31 @@ export function CameraDetectionInput({
         isFullscreen ? 'flex-1' : ''
       }`}>
         {!isActive ? (
-          <div className={`flex flex-col items-center justify-center p-8 text-center ${
-            isFullscreen ? 'h-full' : 'min-h-[320px]'
+          <div className={`flex flex-col items-center p-4 text-center overflow-y-auto ${
+            isFullscreen ? 'h-full justify-center' : 'justify-start'
           }`}>
-            <div className="mb-6">
+            <div className="mb-3 pt-2">
               {apiConnected ? (
-                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/30">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30">
                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  <Wifi className="w-4 h-4 text-green-400" />
-                  <span className="text-green-400 text-sm font-medium">Szerver aktiv</span>
+                  <Wifi className="w-3.5 h-3.5 text-green-400" />
+                  <span className="text-green-400 text-xs font-medium">Szerver aktiv</span>
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-3">
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/30">
-                    <RefreshCw className="w-4 h-4 text-amber-400 animate-spin" />
-                    <WifiOff className="w-4 h-4 text-amber-400" />
-                    <span className="text-amber-400 text-sm font-medium">Csatlakozas...</span>
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30">
+                    <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+                    <WifiOff className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="text-amber-400 text-xs font-medium">Csatlakozas...</span>
                   </div>
-                  <span className="text-dark-500 text-xs">{getApiUrl()}</span>
+                  <span className="text-dark-500 text-xs truncate max-w-[200px]">{getApiUrl()}</span>
                   <Button
                     onClick={() => checkConnection(true)}
                     variant="ghost"
                     size="sm"
-                    className="text-blue-400 hover:text-blue-300"
+                    className="text-blue-400 hover:text-blue-300 h-7 text-xs"
                   >
-                    <RefreshCw className="w-4 h-4 mr-2" />
+                    <RefreshCw className="w-3 h-3 mr-1" />
                     Ujraprobalkozas
                   </Button>
                 </div>
@@ -762,33 +762,33 @@ export function CameraDetectionInput({
             </div>
 
             {remoteCameras.length > 0 && (
-              <div className="mb-6 w-full max-w-sm">
-                <div className="flex items-center gap-2 mb-3 justify-center">
-                  <Smartphone className="w-4 h-4 text-green-400" />
-                  <span className="text-sm font-medium text-green-400">Tavoli Kamera Elerheto!</span>
+              <div className="mb-3 w-full max-w-sm">
+                <div className="flex items-center gap-2 mb-2 justify-center">
+                  <Smartphone className="w-3.5 h-3.5 text-green-400" />
+                  <span className="text-xs font-medium text-green-400">Tavoli Kamera Elerheto!</span>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {remoteCameras.map((session) => (
                     <button
                       key={session.id}
                       onClick={() => connectToRemoteCamera(session)}
                       disabled={connectingRemoteId === session.id}
-                      className="w-full text-left p-4 rounded-lg bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 hover:border-green-500/50 transition-all"
+                      className="w-full text-left p-3 rounded-lg bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 hover:border-green-500/50 transition-all"
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Smartphone className="w-5 h-5 text-green-400" />
+                        <div className="flex items-center gap-2">
+                          <Smartphone className="w-4 h-4 text-green-400 flex-shrink-0" />
                           <div>
-                            <div className="font-medium text-white">{session.device_name}</div>
+                            <div className="font-medium text-white text-sm">{session.device_name}</div>
                             <div className="text-xs text-dark-400">
                               {session.status === 'waiting' ? 'Varakozik kapcsolodasra...' : 'Kapcsolodva'}
                             </div>
                           </div>
                         </div>
                         {connectingRemoteId === session.id ? (
-                          <Loader2 className="w-5 h-5 text-green-400 animate-spin" />
+                          <Loader2 className="w-4 h-4 text-green-400 animate-spin flex-shrink-0" />
                         ) : (
-                          <div className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-medium">
+                          <div className="px-2 py-1 rounded-full bg-green-500/20 text-green-400 text-xs font-medium flex-shrink-0">
                             Csatlakozas
                           </div>
                         )}
@@ -796,7 +796,7 @@ export function CameraDetectionInput({
                     </button>
                   ))}
                 </div>
-                <div className="my-4 flex items-center gap-3">
+                <div className="my-3 flex items-center gap-3">
                   <div className="flex-1 h-px bg-dark-600" />
                   <span className="text-dark-500 text-xs">vagy</span>
                   <div className="flex-1 h-px bg-dark-600" />
@@ -804,24 +804,21 @@ export function CameraDetectionInput({
               </div>
             )}
 
-            <div className="relative mb-6">
+            <div className="relative mb-3">
               <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-xl animate-pulse" />
-              <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-dark-700 to-dark-800 border-2 border-dark-600 flex items-center justify-center">
-                <Camera className="w-10 h-10 text-dark-400" />
+              <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-dark-700 to-dark-800 border-2 border-dark-600 flex items-center justify-center">
+                <Camera className="w-7 h-7 text-dark-400" />
               </div>
             </div>
 
-            <h3 className="text-lg font-semibold text-white mb-2">Kamera Felismeres v3</h3>
-            <p className="text-dark-400 mb-6 max-w-sm">
-              Valodi tabla detektalas homography-val. Az overlay a backend altal visszakuldott pontokat rajzolja.
-            </p>
+            <h3 className="text-base font-semibold text-white mb-1">Kamera Felismeres</h3>
 
             <Button
               onClick={() => startCamera()}
               disabled={isConnecting || !apiConnected}
-              size="lg"
-              className="px-8 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-500/25"
-              leftIcon={isConnecting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+              size="sm"
+              className="px-6 mt-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-500/25"
+              leftIcon={isConnecting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
             >
               {isConnecting ? 'Inditás...' : 'Helyi Kamera Inditas'}
             </Button>
