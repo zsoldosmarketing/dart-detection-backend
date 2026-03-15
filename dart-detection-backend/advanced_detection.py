@@ -1,24 +1,25 @@
 import cv2
 import numpy as np
 import math
-from typing import List, Optional, Tuple, Dict
-from dataclasses import dataclass
-from collections import deque
+from typing import Optional, Tuple, List, Dict, Any
+from dataclasses import dataclass, field
+
 
 @dataclass
 class DartDetection:
-    x: int
-    y: int
-    score: str
+    x: float
+    y: float
     confidence: float
-    dart_id: Optional[int] = None
+    score: str = ""
+    method: str = ""
+
 
 @dataclass
 class DetectionResult:
-    darts: List[DartDetection]
-    total_confidence: float
-    method: str
-    message: str
+    darts: List[DartDetection] = field(default_factory=list)
+    method: str = ""
+    confidence: float = 0.0
+
 
 DARTBOARD_SEGMENTS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5]
 
@@ -31,355 +32,232 @@ RADIUS_RATIOS = {
     "outer_double": 1.0,
 }
 
+
 class AdvancedDartDetection:
-    def __init__(self, calibration: Dict):
-        self.calibration = calibration
-        self.detection_history = deque(maxlen=10)
-        self.next_dart_id = 0
+    def __init__(self, calibration_data: Dict[str, Any]):
+        self.cx = float(calibration_data.get("center_x", 0))
+        self.cy = float(calibration_data.get("center_y", 0))
+        self.radius = float(calibration_data.get("radius", 100))
+        self.rotation_offset = float(calibration_data.get("rotation_offset", -9.0))
 
-    def preprocess_for_detection(self, image: np.ndarray) -> np.ndarray:
-        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
-        l = clahe.apply(l)
-        enhanced = cv2.merge([l, a, b])
-        enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+    def detect_multiple_darts(
+        self,
+        after: np.ndarray,
+        before: np.ndarray
+    ) -> DetectionResult:
+        darts = []
 
-        denoised = cv2.fastNlMeansDenoisingColored(enhanced, None, 6, 6, 7, 21)
-        return denoised
+        diff_darts = self._detect_by_diff(before, after)
+        darts.extend(diff_darts)
 
-    def get_score_from_position(self, x: int, y: int) -> Tuple[str, float]:
-        if self.calibration["center_x"] is None:
-            return "UNCALIBRATED", 0.0
+        color_darts = self._detect_by_dart_color(before, after)
+        darts.extend(color_darts)
 
-        cx = self.calibration["center_x"]
-        cy = self.calibration["center_y"]
-        r = self.calibration["radius"]
+        merged = self._cluster_and_merge(darts)
+        merged.sort(key=lambda d: d.confidence, reverse=True)
 
-        dx = x - cx
-        dy = cy - y
-        distance = math.sqrt(dx * dx + dy * dy)
-        distance_ratio = distance / r
+        return DetectionResult(
+            darts=merged[:3],
+            method="multi_method",
+            confidence=merged[0].confidence if merged else 0.0
+        )
 
-        if distance_ratio > RADIUS_RATIOS["outer_double"] * 1.15:
-            return "MISS", max(0.5, 0.95 - (distance_ratio - RADIUS_RATIOS["outer_double"]) * 2)
+    def _detect_by_diff(
+        self, before: np.ndarray, after: np.ndarray
+    ) -> List[DartDetection]:
+        if before.shape != after.shape:
+            h = min(before.shape[0], after.shape[0])
+            w = min(before.shape[1], after.shape[1])
+            before = cv2.resize(before, (w, h))
+            after = cv2.resize(after, (w, h))
+
+        b_blur = cv2.GaussianBlur(before, (5, 5), 1.5)
+        a_blur = cv2.GaussianBlur(after, (5, 5), 1.5)
+
+        diff = cv2.absdiff(a_blur, b_blur)
+        gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+
+        thresh_val = max(20, int(np.percentile(gray, 93)))
+        _, thresh = cv2.threshold(gray, thresh_val, 255, cv2.THRESH_BINARY)
+
+        k_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        k_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        mask = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, k_close)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k_open)
+
+        board_mask = np.zeros_like(mask)
+        cv2.circle(board_mask, (int(self.cx), int(self.cy)), int(self.radius * 1.1), 255, -1)
+        mask = cv2.bitwise_and(mask, board_mask)
+
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        results = []
+
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area < 40 or area > 35000:
+                continue
+            pts = c.reshape(-1, 2).astype(float)
+            dists = np.sqrt((pts[:, 0] - self.cx) ** 2 + (pts[:, 1] - self.cy) ** 2)
+            tip_idx = np.argmin(dists)
+            tx, ty = pts[tip_idx]
+            tip_dist = dists[tip_idx]
+            if tip_dist > self.radius * 1.08:
+                continue
+
+            x, y, w, h = cv2.boundingRect(c)
+            elongation = max(w, h) / (min(w, h) + 1)
+            perimeter = cv2.arcLength(c, True)
+            circularity = 4 * math.pi * area / (perimeter ** 2 + 1e-5)
+
+            conf = 0.28
+            conf += min(0.20, area / 5000.0)
+            if 1.2 < elongation < 7.0:
+                conf += 0.10
+            conf += min(0.12, circularity * 0.12)
+            if tip_dist < self.radius * 0.9:
+                conf += 0.08
+            conf = min(0.88, conf)
+
+            results.append(DartDetection(
+                x=float(tx), y=float(ty),
+                confidence=conf, method="diff"
+            ))
+
+        return results
+
+    def _detect_by_dart_color(
+        self, before: np.ndarray, after: np.ndarray
+    ) -> List[DartDetection]:
+        if before.shape != after.shape:
+            h = min(before.shape[0], after.shape[0])
+            w = min(before.shape[1], after.shape[1])
+            after = cv2.resize(after, (w, h))
+
+        h_img, w_img = after.shape[:2]
+        hsv = cv2.cvtColor(after, cv2.COLOR_BGR2HSV)
+
+        gray_m = cv2.inRange(hsv, np.array([0, 0, 80]), np.array([180, 40, 220]))
+        silver_m = cv2.inRange(hsv, np.array([0, 0, 150]), np.array([180, 30, 255]))
+        metal_mask = cv2.bitwise_or(gray_m, silver_m)
+
+        diff = cv2.absdiff(after, cv2.GaussianBlur(before, (5, 5), 1.5))
+        diff_gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+        _, diff_thresh = cv2.threshold(diff_gray, 15, 255, cv2.THRESH_BINARY)
+
+        combined = cv2.bitwise_and(metal_mask, diff_thresh)
+
+        board_mask = np.zeros((h_img, w_img), dtype=np.uint8)
+        cv2.circle(board_mask, (int(self.cx), int(self.cy)), int(self.radius * 1.1), 255, -1)
+        combined = cv2.bitwise_and(combined, board_mask)
+
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, k)
+
+        contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        results = []
+
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area < 30 or area > 20000:
+                continue
+            M = cv2.moments(c)
+            if M["m00"] == 0:
+                continue
+            ccx = M["m10"] / M["m00"]
+            ccy = M["m01"] / M["m00"]
+            dist = math.sqrt((ccx - self.cx) ** 2 + (ccy - self.cy) ** 2)
+            if dist > self.radius * 1.05:
+                continue
+
+            x, y, w, h = cv2.boundingRect(c)
+            elongation = max(w, h) / (min(w, h) + 1)
+            conf = 0.25
+            if 1.5 < elongation < 8.0:
+                conf += 0.15
+            conf += min(0.15, area / 4000.0)
+            if dist < self.radius * 0.85:
+                conf += 0.05
+            conf = min(0.75, conf)
+
+            results.append(DartDetection(
+                x=ccx, y=ccy,
+                confidence=conf, method="color"
+            ))
+
+        return results
+
+    def _cluster_and_merge(
+        self, darts: List[DartDetection], cluster_radius: float = 25.0
+    ) -> List[DartDetection]:
+        if not darts:
+            return []
+
+        merged = []
+        used = [False] * len(darts)
+
+        darts.sort(key=lambda d: d.confidence, reverse=True)
+
+        for i, d in enumerate(darts):
+            if used[i]:
+                continue
+            cluster = [d]
+            used[i] = True
+            for j in range(i + 1, len(darts)):
+                if used[j]:
+                    continue
+                dist = math.sqrt((d.x - darts[j].x) ** 2 + (d.y - darts[j].y) ** 2)
+                if dist < cluster_radius:
+                    cluster.append(darts[j])
+                    used[j] = True
+
+            if len(cluster) == 1:
+                merged.append(cluster[0])
+            else:
+                total_conf = sum(c.confidence for c in cluster)
+                wx = sum(c.x * c.confidence for c in cluster) / total_conf
+                wy = sum(c.y * c.confidence for c in cluster) / total_conf
+                best_conf = max(c.confidence for c in cluster)
+                boost = min(0.10, (len(cluster) - 1) * 0.04)
+                methods = "+".join(set(c.method for c in cluster))
+                merged.append(DartDetection(
+                    x=wx, y=wy,
+                    confidence=min(0.95, best_conf + boost),
+                    method=methods
+                ))
+
+        return merged
+
+    def validate_detection(self, dart: DartDetection) -> bool:
+        dist = math.sqrt((dart.x - self.cx) ** 2 + (dart.y - self.cy) ** 2)
+        if dist > self.radius * 1.08:
+            return False
+        if dart.confidence < 0.25:
+            return False
+        return True
+
+    def get_score(self, dart: DartDetection) -> Tuple[str, int]:
+        dx = dart.x - self.cx
+        dy = self.cy - dart.y
+        dist = math.sqrt(dx ** 2 + dy ** 2)
+        dist_ratio = dist / (self.radius + 1e-5)
+
+        if dist_ratio > 1.03:
+            return "MISS", 0
+        if dist_ratio <= RADIUS_RATIOS["double_bull"]:
+            return "D-BULL", 50
+        if dist_ratio <= RADIUS_RATIOS["single_bull"]:
+            return "BULL", 25
 
         angle = math.degrees(math.atan2(dx, dy))
         if angle < 0:
             angle += 360
-
-        if distance_ratio <= RADIUS_RATIOS["double_bull"]:
-            return "D-BULL", 0.98
-
-        if distance_ratio <= RADIUS_RATIOS["single_bull"]:
-            return "BULL", 0.96
-
-        segment = self._get_segment_from_angle(angle)
-
-        if RADIUS_RATIOS["inner_triple"] <= distance_ratio <= RADIUS_RATIOS["outer_triple"]:
-            confidence = 0.92 - abs(distance_ratio - (RADIUS_RATIOS["inner_triple"] + RADIUS_RATIOS["outer_triple"]) / 2) * 2
-            return f"T{segment}", max(0.8, confidence)
-
-        if RADIUS_RATIOS["inner_double"] <= distance_ratio <= RADIUS_RATIOS["outer_double"]:
-            confidence = 0.92 - abs(distance_ratio - (RADIUS_RATIOS["inner_double"] + RADIUS_RATIOS["outer_double"]) / 2) * 2
-            return f"D{segment}", max(0.8, confidence)
-
-        return f"{segment}", 0.88
-
-    def _get_segment_from_angle(self, angle: float) -> int:
-        adjusted_angle = (angle + self.calibration["rotation_offset"]) % 360
-        segment_index = int(adjusted_angle / 18) % 20
-        return DARTBOARD_SEGMENTS[segment_index]
-
-    def detect_darts_difference(self, current_image: np.ndarray,
-                               reference_image: np.ndarray) -> List[Tuple[int, int, float]]:
-        curr_proc = self.preprocess_for_detection(current_image)
-        ref_proc = self.preprocess_for_detection(reference_image)
-
-        diff = cv2.absdiff(curr_proc, ref_proc)
-
-        gray_diff = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-
-        _, thresh = cv2.threshold(gray_diff, 18, 255, cv2.THRESH_BINARY)
-
-        kernel = np.ones((3, 3), np.uint8)
-        thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=2)
-        thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
-
-        kernel_dilate = np.ones((5, 5), np.uint8)
-        thresh = cv2.dilate(thresh, kernel_dilate, iterations=1)
-
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        dart_candidates = []
-
-        for contour in contours:
-            area = cv2.contourArea(contour)
-
-            if area < 50 or area > 12000:
-                continue
-
-            x, y, w, h = cv2.boundingRect(contour)
-            aspect_ratio = max(w, h) / (min(w, h) + 1)
-
-            if aspect_ratio > 5.0:
-                continue
-
-            perimeter = cv2.arcLength(contour, True)
-            circularity = 4 * math.pi * area / (perimeter * perimeter) if perimeter > 0 else 0
-
-            M = cv2.moments(contour)
-            if M["m00"] == 0:
-                continue
-
-            cx = int(M["m10"] / M["m00"])
-            cy = int(M["m01"] / M["m00"])
-
-            if self.calibration["center_x"] is not None:
-                board_cx = self.calibration["center_x"]
-                board_cy = self.calibration["center_y"]
-                board_r = self.calibration["radius"]
-
-                dist_to_board = math.sqrt((cx - board_cx)**2 + (cy - board_cy)**2)
-
-                if dist_to_board > board_r * 1.2:
-                    continue
-
-            points = contour.reshape(-1, 2)
-
-            if self.calibration["center_x"] is not None:
-                board_cx = self.calibration["center_x"]
-                board_cy = self.calibration["center_y"]
-
-                distances = np.sqrt((points[:, 0] - board_cx)**2 + (points[:, 1] - board_cy)**2)
-                tip_idx = np.argmin(distances)
-                tip_x, tip_y = points[tip_idx]
-            else:
-                tip_x, tip_y = cx, cy
-
-            confidence = 0.5
-            confidence += min(0.15, area / 1000)
-            confidence += circularity * 0.2
-            confidence += (1 / (aspect_ratio + 1)) * 0.15
-
-            dart_candidates.append((int(tip_x), int(tip_y), min(0.95, confidence)))
-
-        dart_candidates = self._filter_close_detections(dart_candidates)
-
-        return dart_candidates
-
-    def detect_darts_color(self, image: np.ndarray) -> List[Tuple[int, int, float]]:
-        proc = self.preprocess_for_detection(image)
-
-        hsv = cv2.cvtColor(proc, cv2.COLOR_BGR2HSV)
-        gray = cv2.cvtColor(proc, cv2.COLOR_BGR2GRAY)
-
-        lower_metal1 = np.array([0, 0, 120])
-        upper_metal1 = np.array([180, 50, 255])
-        metal_mask = cv2.inRange(hsv, lower_metal1, upper_metal1)
-
-        lower_metal2 = np.array([0, 0, 80])
-        upper_metal2 = np.array([180, 40, 200])
-        metal_mask2 = cv2.inRange(hsv, lower_metal2, upper_metal2)
-
-        edges = cv2.Canny(gray, 40, 120)
-
-        metal_mask = cv2.bitwise_or(metal_mask, metal_mask2)
-        metal_with_edges = cv2.bitwise_and(metal_mask, edges)
-
-        kernel = np.ones((3, 3), np.uint8)
-        metal_with_edges = cv2.morphologyEx(metal_with_edges, cv2.MORPH_CLOSE, kernel)
-
-        contours, _ = cv2.findContours(metal_with_edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        dart_candidates = []
-
-        for contour in contours:
-            area = cv2.contourArea(contour)
-
-            if area < 30 or area > 5000:
-                continue
-
-            x, y, w, h = cv2.boundingRect(contour)
-            aspect_ratio = max(w, h) / (min(w, h) + 1)
-
-            if aspect_ratio < 1.2:
-                continue
-
-            M = cv2.moments(contour)
-            if M["m00"] == 0:
-                continue
-
-            cx = int(M["m10"] / M["m00"])
-            cy = int(M["m01"] / M["m00"])
-
-            if self.calibration["center_x"] is not None:
-                board_cx = self.calibration["center_x"]
-                board_cy = self.calibration["center_y"]
-                board_r = self.calibration["radius"]
-
-                dist_to_board = math.sqrt((cx - board_cx)**2 + (cy - board_cy)**2)
-
-                if dist_to_board > board_r * 1.2:
-                    continue
-
-            points = contour.reshape(-1, 2)
-
-            if self.calibration["center_x"] is not None:
-                board_cx = self.calibration["center_x"]
-                board_cy = self.calibration["center_y"]
-
-                distances = np.sqrt((points[:, 0] - board_cx)**2 + (points[:, 1] - board_cy)**2)
-                tip_idx = np.argmin(distances)
-                tip_x, tip_y = points[tip_idx]
-            else:
-                tip_x, tip_y = cx, cy
-
-            confidence = 0.4 + min(0.3, area / 1000) + (aspect_ratio / 10)
-
-            dart_candidates.append((int(tip_x), int(tip_y), min(0.85, confidence)))
-
-        return dart_candidates
-
-    def _filter_close_detections(self, candidates: List[Tuple[int, int, float]],
-                                 min_distance: int = 30) -> List[Tuple[int, int, float]]:
-        if len(candidates) <= 1:
-            return candidates
-
-        filtered = []
-        candidates_sorted = sorted(candidates, key=lambda x: x[2], reverse=True)
-
-        for candidate in candidates_sorted:
-            x, y, conf = candidate
-            too_close = False
-
-            for fx, fy, fconf in filtered:
-                dist = math.sqrt((x - fx)**2 + (y - fy)**2)
-                if dist < min_distance:
-                    too_close = True
-                    break
-
-            if not too_close:
-                filtered.append(candidate)
-
-        return filtered
-
-    def detect_multiple_darts(self, current_image: np.ndarray,
-                             reference_image: Optional[np.ndarray] = None) -> DetectionResult:
-        all_candidates = []
-
-        if reference_image is not None:
-            diff_darts = self.detect_darts_difference(current_image, reference_image)
-            all_candidates.extend([(x, y, conf, "difference") for x, y, conf in diff_darts])
-
-        color_darts = self.detect_darts_color(current_image)
-        all_candidates.extend([(x, y, conf * 0.9, "color") for x, y, conf in color_darts])
-
-        if not all_candidates:
-            return DetectionResult(
-                darts=[],
-                total_confidence=0.0,
-                method="No detection",
-                message="Nem talaltam dartot"
-            )
-
-        clusters = self._cluster_detections(all_candidates)
-
-        final_darts = []
-        methods_used = set()
-
-        for cluster in clusters:
-            if not cluster:
-                continue
-
-            weighted_x = sum(x * conf for x, y, conf, method in cluster)
-            weighted_y = sum(y * conf for x, y, conf, method in cluster)
-            total_conf = sum(conf for x, y, conf, method in cluster)
-
-            final_x = int(weighted_x / total_conf)
-            final_y = int(weighted_y / total_conf)
-
-            avg_confidence = total_conf / len(cluster)
-            multi_method_bonus = 0.1 if len(set(m for _, _, _, m in cluster)) > 1 else 0
-            final_confidence = min(0.98, avg_confidence + multi_method_bonus)
-
-            score, score_conf = self.get_score_from_position(final_x, final_y)
-            final_confidence = final_confidence * 0.7 + score_conf * 0.3
-
-            dart = DartDetection(
-                x=final_x,
-                y=final_y,
-                score=score,
-                confidence=final_confidence,
-                dart_id=self.next_dart_id
-            )
-            self.next_dart_id += 1
-
-            final_darts.append(dart)
-
-            for _, _, _, method in cluster:
-                methods_used.add(method)
-
-        final_darts.sort(key=lambda d: d.confidence, reverse=True)
-
-        if len(final_darts) > 3:
-            final_darts = final_darts[:3]
-
-        total_confidence = sum(d.confidence for d in final_darts) / max(1, len(final_darts))
-
-        methods_str = ", ".join(methods_used)
-        message = f"{len(final_darts)} dart detektalva ({methods_str})"
-
-        return DetectionResult(
-            darts=final_darts,
-            total_confidence=total_confidence,
-            method=methods_str,
-            message=message
-        )
-
-    def _cluster_detections(self, candidates: List[Tuple[int, int, float, str]],
-                           cluster_distance: int = 35) -> List[List[Tuple[int, int, float, str]]]:
-        if not candidates:
-            return []
-
-        candidates_sorted = sorted(candidates, key=lambda x: x[2], reverse=True)
-
-        clusters = []
-
-        for candidate in candidates_sorted:
-            x, y, conf, method = candidate
-            added_to_cluster = False
-
-            for cluster in clusters:
-                cluster_x = sum(cx for cx, cy, cconf, cm in cluster) / len(cluster)
-                cluster_y = sum(cy for cx, cy, cconf, cm in cluster) / len(cluster)
-
-                dist = math.sqrt((x - cluster_x)**2 + (y - cluster_y)**2)
-
-                if dist < cluster_distance:
-                    cluster.append(candidate)
-                    added_to_cluster = True
-                    break
-
-            if not added_to_cluster:
-                clusters.append([candidate])
-
-        return clusters
-
-    def validate_detection(self, dart: DartDetection) -> bool:
-        if self.calibration["center_x"] is None:
-            return True
-
-        cx = self.calibration["center_x"]
-        cy = self.calibration["center_y"]
-        r = self.calibration["radius"]
-
-        dist = math.sqrt((dart.x - cx)**2 + (dart.y - cy)**2)
-
-        if dist > r * 1.2:
-            return False
-
-        if dart.confidence < 0.3:
-            return False
-
-        return True
+        adjusted = (angle + self.rotation_offset) % 360
+        idx = int(adjusted / 18) % 20
+        segment = DARTBOARD_SEGMENTS[idx]
+
+        if RADIUS_RATIOS["inner_triple"] <= dist_ratio <= RADIUS_RATIOS["outer_triple"]:
+            return f"T{segment}", segment * 3
+        elif RADIUS_RATIOS["inner_double"] <= dist_ratio <= RADIUS_RATIOS["outer_double"]:
+            return f"D{segment}", segment * 2
+        else:
+            return f"{segment}", segment
