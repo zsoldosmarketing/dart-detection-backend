@@ -37,6 +37,10 @@ const ProgramEnrollmentPage = lazy(() => import('./pages/ProgramEnrollmentPage')
 const ProgramDetailPage = lazy(() => import('./pages/ProgramDetailPage').then(m => ({ default: m.ProgramDetailPage })));
 const PartyGamesPage = lazy(() => import('./pages/PartyGamesPage').then(m => ({ default: m.PartyGamesPage })));
 const CricketGamePage = lazy(() => import('./pages/CricketGamePage').then(m => ({ default: m.CricketGamePage })));
+const HalveItGamePage = lazy(() => import('./pages/HalveItGamePage').then(m => ({ default: m.HalveItGamePage })));
+const ShanghaiGamePage = lazy(() => import('./pages/ShanghaiGamePage').then(m => ({ default: m.ShanghaiGamePage })));
+const KnockoutGamePage = lazy(() => import('./pages/KnockoutGamePage').then(m => ({ default: m.KnockoutGamePage })));
+const KillerGamePage = lazy(() => import('./pages/KillerGamePage').then(m => ({ default: m.KillerGamePage })));
 const PlayerProfilesPage = lazy(() => import('./pages/PlayerProfilesPage').then(m => ({ default: m.PlayerProfilesPage })));
 const AITrainerPage = lazy(() => import('./pages/AITrainerPage').then(m => ({ default: m.AITrainerPage })));
 
@@ -176,6 +180,10 @@ function App() {
             <Route path="programs/:enrollmentId" element={<ProtectedRoute><ProgramDetailPage /></ProtectedRoute>} />
             <Route path="party-games" element={<ProtectedRoute><PartyGamesPage /></ProtectedRoute>} />
             <Route path="party-game/cricket" element={<ProtectedRoute><CricketGamePage /></ProtectedRoute>} />
+            <Route path="party-game/halve-it" element={<ProtectedRoute><HalveItGamePage /></ProtectedRoute>} />
+            <Route path="party-game/shanghai" element={<ProtectedRoute><ShanghaiGamePage /></ProtectedRoute>} />
+            <Route path="party-game/knockout" element={<ProtectedRoute><KnockoutGamePage /></ProtectedRoute>} />
+            <Route path="party-game/killer" element={<ProtectedRoute><KillerGamePage /></ProtectedRoute>} />
             <Route path="player-profiles" element={<ProtectedRoute><PlayerProfilesPage /></ProtectedRoute>} />
             <Route path="ai-trainer" element={<ProtectedRoute><AITrainerPage /></ProtectedRoute>} />
 

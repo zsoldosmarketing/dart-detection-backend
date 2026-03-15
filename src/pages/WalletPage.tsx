@@ -119,8 +119,8 @@ export function WalletPage() {
           <Wallet className="w-5 h-5 text-warning-600 dark:text-warning-400" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-dark-900 dark:text-white">Penztarca</h1>
-          <p className="text-dark-500 dark:text-dark-400">Token egyenleg es tranzakciok</p>
+          <h1 className="text-2xl font-bold text-dark-900 dark:text-white">Pénztárca</h1>
+          <p className="text-dark-500 dark:text-dark-400">Token egyenleg és tranzakciók</p>
         </div>
       </div>
 
@@ -169,13 +169,13 @@ export function WalletPage() {
 
       <Card className="overflow-hidden">
         <div className="p-4 border-b border-dark-200 dark:border-dark-700">
-          <h3 className="font-semibold text-dark-900 dark:text-white">Tranzakcio tortenet</h3>
+          <h3 className="font-semibold text-dark-900 dark:text-white">Tranzakció történet</h3>
         </div>
 
         {transactions.length === 0 ? (
           <div className="p-8 text-center">
             <Clock className="w-12 h-12 text-dark-400 mx-auto mb-4" />
-            <p className="text-dark-500">Meg nincs tranzakciod.</p>
+            <p className="text-dark-500">Még nincs tranzakciód.</p>
           </div>
         ) : (
           <div className="divide-y divide-dark-200 dark:divide-dark-700">

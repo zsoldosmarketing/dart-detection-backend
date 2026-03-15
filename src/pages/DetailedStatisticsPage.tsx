@@ -438,15 +438,15 @@ export function DetailedStatisticsPage() {
       <div className="flex gap-2 pt-2">
         <button
           onClick={() => navigate('/game-history')}
-          className="flex-1 py-2.5 px-4 bg-success-500 hover:bg-success-600 text-white rounded-lg font-semibold transition-colors text-sm"
+          className="flex-1 py-2.5 px-4 bg-dark-100 hover:bg-dark-200 dark:bg-dark-700 dark:hover:bg-dark-600 text-dark-700 dark:text-dark-200 rounded-lg font-semibold transition-colors text-sm"
         >
-          Folytatni
+          Meccs előzmények
         </button>
         <button
-          onClick={() => navigate('/game-history')}
-          className="flex-1 py-2.5 px-4 bg-error-500 hover:bg-error-600 text-white rounded-lg font-semibold transition-colors text-sm"
+          onClick={() => navigate('/statistics')}
+          className="flex-1 py-2.5 px-4 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-semibold transition-colors text-sm"
         >
-          Töröl
+          Statisztikák
         </button>
       </div>
     </div>

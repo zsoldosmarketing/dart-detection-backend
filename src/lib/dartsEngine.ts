@@ -404,7 +404,7 @@ export function getSetupSuggestions(
   dartsLeft: number = 3,
   preferredDoubles: number[] = [20, 16, 8, 10, 12, 18, 14, 6, 4, 2]
 ): SetupSuggestion[] {
-  if (remaining <= 170) return [];
+  if (remaining > 170 || remaining < 2) return [];
 
   const suggestions: SetupSuggestion[] = [];
   const targets: DartTarget[] = ['T20', 'T19', 'T18', 'T17', 'BULL'];

@@ -91,6 +91,9 @@ export function AIGoalsPanel() {
       setShowForm(false);
       setForm({ title: '', description: '', goal_type: 'average', target_value: '', unit: 'pont', deadline: '' });
       fetchGoals();
+    } else {
+      console.error('Goal save error:', error);
+      alert('Hiba a cél mentésekor. Kérlek próbáld újra.');
     }
     setSaving(false);
   };

@@ -26,8 +26,28 @@ export function CricketGamePage() {
   const [dartQueue, setDartQueue] = useState<DartTarget[]>([]);
 
   useEffect(() => {
-    const players = ['Player 1', 'Player 2'];
-    const state = createCricketGame(players, { cutthroat: false, pointsMode: true });
+    let players: string[] = [];
+    let options = { cutthroat: false, pointsMode: true };
+
+    try {
+      const raw = sessionStorage.getItem('partyGameData');
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (Array.isArray(data.players) && data.players.length >= 2) {
+          players = data.players;
+        }
+        if (data.options?.cricketCutthroat !== undefined) {
+          options.cutthroat = data.options.cricketCutthroat;
+        }
+      }
+    } catch {
+    }
+
+    if (players.length < 2) {
+      players = ['Játékos 1', 'Játékos 2'];
+    }
+
+    const state = createCricketGame(players, options);
     setGameState(state);
   }, []);
 

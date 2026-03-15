@@ -63,7 +63,7 @@ const plans = [
     name: 'Csapat',
     price: 4990,
     features: [
-      'Minden Pro funkcio',
+      'Minden Pro funkció',
       '5 felhasználó',
       'Csapat statisztikák',
       'Saját tornák',
@@ -77,6 +77,7 @@ export function SubscriptionPage() {
   const { user } = useAuthStore();
   const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [upgradeToast, setUpgradeToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -97,6 +98,16 @@ export function SubscriptionPage() {
 
     setSubscription(data);
     setIsLoading(false);
+  };
+
+  const handlePlanSelect = (plan: typeof plans[0]) => {
+    if (plan.price === 0) {
+      setUpgradeToast('Az ingyenes csomagra való visszaváltáshoz kérj segítséget a támogatástól.');
+      setTimeout(() => setUpgradeToast(null), 4000);
+      return;
+    }
+    setUpgradeToast(`A ${plan.name} csomag aktiválásához fizetési integráció szükséges. Kérj segítséget az adminisztrátortól.`);
+    setTimeout(() => setUpgradeToast(null), 4000);
   };
 
   const getStatusBadge = (status: string) => {
@@ -121,6 +132,11 @@ export function SubscriptionPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-20 md:pb-6">
+      {upgradeToast && (
+        <div className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-50 bg-dark-900 dark:bg-dark-100 text-white dark:text-dark-900 px-5 py-3 rounded-xl shadow-xl max-w-sm text-sm text-center animate-fade-in">
+          {upgradeToast}
+        </div>
+      )}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-primary-500/10 dark:bg-primary-500/20 flex items-center justify-center">
           <CreditCard className="w-5 h-5 text-primary-600 dark:text-primary-400" />
@@ -232,8 +248,9 @@ export function SubscriptionPage() {
               <Button
                 variant={plan.popular ? 'primary' : 'outline'}
                 className="w-full"
+                onClick={() => handlePlanSelect(plan)}
               >
-                {plan.price === 0 ? 'Downgrade' : 'Választás'}
+                {plan.price === 0 ? 'Visszaváltás' : 'Csomag választása'}
               </Button>
             )}
           </Card>
@@ -242,31 +259,31 @@ export function SubscriptionPage() {
 
       <Card className="p-6">
         <h3 className="font-semibold text-dark-900 dark:text-white mb-4">
-          Gyakori kerdesek
+          Gyakori kérdések
         </h3>
         <div className="space-y-4">
           <div>
             <h4 className="font-medium text-dark-900 dark:text-white">
-              Hogyan mondhatom le az elofizetesem?
+              Hogyan mondhatom le az előfizetésem?
             </h4>
             <p className="text-sm text-dark-500 mt-1">
-              Az elofizetesed barmikor lemondhatod a beallitasok menuben. A lemondas utan az aktualis szamlazasi ciklus vegeig hasznalhatod a Pro funkciókat.
+              Az előfizetésedet bármikor lemondhatod a profil oldalon. A lemondás után az aktuális számlázási ciklus végéig használhatod a Pro funkciókat.
             </p>
           </div>
           <div>
             <h4 className="font-medium text-dark-900 dark:text-white">
-              Milyen fizetesi modokat fogadtok el?
+              Milyen fizetési módokat fogadtok el?
             </h4>
             <p className="text-sm text-dark-500 mt-1">
-              Bankkartyas fizetes (Visa, Mastercard) es PayPal. Minden fizetes biztonsagos SSL titkositassal tortenik.
+              Bankkártyás fizetés (Visa, Mastercard) és PayPal. Minden fizetés biztonságos SSL titkosítással történik.
             </p>
           </div>
           <div>
             <h4 className="font-medium text-dark-900 dark:text-white">
-              Van penzvisszateritesi garancia?
+              Van pénzvisszatérítési garancia?
             </h4>
             <p className="text-sm text-dark-500 mt-1">
-              Igen, 14 napos penzvisszateritesi garanciat biztositunk minden uj elofizetesre.
+              Igen, 14 napos pénzvisszatérítési garanciát biztosítunk minden új előfizetésre.
             </p>
           </div>
         </div>
