@@ -9,6 +9,7 @@ import {
   User,
   Settings,
   Swords,
+  Sparkles,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { t } from '../../lib/i18n';
@@ -168,6 +169,12 @@ export function Navigation() {
                 <span className={desktopAccent(isActive('/arena'))} />
                 <Swords className="w-5 h-5" />
                 <span className="font-medium text-sm">{t('nav.arena')}</span>
+              </NavLink>
+
+              <NavLink to="/ai-trainer" className={desktopLinkClass(isActive('/ai-trainer'))}>
+                <span className={desktopAccent(isActive('/ai-trainer'))} />
+                <Sparkles className="w-5 h-5" />
+                <span className="font-medium text-sm">AI Edző</span>
               </NavLink>
 
               <NavLink to="/clubs" className={desktopLinkClass(isActive('/clubs'))}>

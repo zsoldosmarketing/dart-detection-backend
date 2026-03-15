@@ -37,6 +37,7 @@ const ProgramDetailPage = lazy(() => import('./pages/ProgramDetailPage').then(m 
 const PartyGamesPage = lazy(() => import('./pages/PartyGamesPage').then(m => ({ default: m.PartyGamesPage })));
 const CricketGamePage = lazy(() => import('./pages/CricketGamePage').then(m => ({ default: m.CricketGamePage })));
 const PlayerProfilesPage = lazy(() => import('./pages/PlayerProfilesPage').then(m => ({ default: m.PlayerProfilesPage })));
+const AITrainerPage = lazy(() => import('./pages/AITrainerPage').then(m => ({ default: m.AITrainerPage })));
 
 const CRMLayout = lazy(() => import('./pages/crm/CRMLayout').then(m => ({ default: m.CRMLayout })));
 const CRMDashboard = lazy(() => import('./pages/crm/CRMDashboard').then(m => ({ default: m.CRMDashboard })));
@@ -46,6 +47,7 @@ const CRMPushPage = lazy(() => import('./pages/crm/CRMPushPage').then(m => ({ de
 const CRMAuditPage = lazy(() => import('./pages/crm/CRMAuditPage').then(m => ({ default: m.CRMAuditPage })));
 const CRMHealthPage = lazy(() => import('./pages/crm/CRMHealthPage').then(m => ({ default: m.CRMHealthPage })));
 const CRMGDPRPage = lazy(() => import('./pages/crm/CRMGDPRPage').then(m => ({ default: m.CRMGDPRPage })));
+const CRMAIPage = lazy(() => import('./pages/crm/CRMAIPage').then(m => ({ default: m.CRMAIPage })));
 
 function PageLoader() {
   return (
@@ -143,6 +145,7 @@ function App() {
             <Route path="party-games" element={<ProtectedRoute><PartyGamesPage /></ProtectedRoute>} />
             <Route path="party-game/cricket" element={<ProtectedRoute><CricketGamePage /></ProtectedRoute>} />
             <Route path="player-profiles" element={<ProtectedRoute><PlayerProfilesPage /></ProtectedRoute>} />
+            <Route path="ai-trainer" element={<ProtectedRoute><AITrainerPage /></ProtectedRoute>} />
 
             <Route path="crm" element={<ProtectedRoute adminOnly><CRMLayout /></ProtectedRoute>}>
               <Route index element={<CRMDashboard />} />
@@ -156,6 +159,7 @@ function App() {
               <Route path="audit" element={<CRMAuditPage />} />
               <Route path="health" element={<CRMHealthPage />} />
               <Route path="gdpr" element={<CRMGDPRPage />} />
+              <Route path="ai" element={<CRMAIPage />} />
             </Route>
           </Route>
 

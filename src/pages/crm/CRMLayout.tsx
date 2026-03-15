@@ -11,6 +11,7 @@ import {
   FileText,
   Activity,
   Shield,
+  Sparkles,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { t } from '../../lib/i18n';
@@ -27,6 +28,7 @@ const crmNavItems = [
   { path: '/crm/audit', label: t('crm.audit'), icon: FileText },
   { path: '/crm/health', label: t('crm.health'), icon: Activity },
   { path: '/crm/gdpr', label: t('crm.gdpr'), icon: Shield },
+  { path: '/crm/ai', label: 'AI Edző', icon: Sparkles },
 ];
 
 export function CRMLayout() {
