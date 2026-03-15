@@ -23,6 +23,20 @@ const CONTEXT_ACTIONS: Record<string, { action: string; label: string }> = {
   game: { action: 'analyze', label: 'Meccs elemzés' },
   training: { action: 'suggest_drills', label: 'Edzési javaslat' },
   dashboard: { action: 'weekly_summary', label: 'Heti összefoglaló' },
+  statistics: { action: 'analyze', label: 'Statisztika elemzés' },
+  tournament: { action: 'motivate', label: 'Torna tipp' },
+  profile: { action: 'weekly_summary', label: 'Fejlődési áttekintés' },
+  general: { action: 'analyze', label: 'Gyors elemzés' },
+};
+
+const PROACTIVE_NUDGES: Record<string, string> = {
+  game: 'Kész a meccsre? Az edződ tud segíteni a mai stratégiában!',
+  training: 'Jó edzést! Kérdezd az edződöt melyik drillt érdemes ma csinálni.',
+  dashboard: 'Az edződ figyeli a fejlődésedet — szeretnél egy gyors áttekintést?',
+  statistics: 'Látom a statisztikáidat — szeretnél egy részletes elemzést?',
+  tournament: 'Tornán vagy? Segíthetek a stratégiában és a mentális felkészüléssel!',
+  profile: 'Nézed a profilodat? Megmutatom hol fejlődhetsz a legtöbbet!',
+  general: 'Miben segíthetek ma? Kérdezz bármit a darts edző-tól!',
 };
 
 const PROACTIVE_DELAY_MS = 90000;
@@ -77,16 +91,8 @@ export function FloatingAICoach({ context }: FloatingAICoachProps) {
     proactiveTimerRef.current = setTimeout(async () => {
       const ctx = contextRef.current;
       if (!ctx || isOpen) return;
-
-      const nudges: Record<string, string> = {
-        game: 'Kész a meccsre? Az edződ tud segíteni a mai stratégiában!',
-        training: 'Jó edzést! Kérdezd az edződöt melyik drillt érdemes ma csinálni.',
-        dashboard: 'Az edződ figyeli a fejlődésedet — szeretnél egy gyors áttekintést?',
-      };
-
-      if (nudges[ctx]) {
-        setProactiveMessage(nudges[ctx]);
-      }
+      const nudge = PROACTIVE_NUDGES[ctx];
+      if (nudge) setProactiveMessage(nudge);
     }, PROACTIVE_DELAY_MS);
 
     return () => {

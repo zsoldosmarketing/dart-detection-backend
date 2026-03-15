@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from 'react';
+import { useEffect, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
@@ -8,6 +8,7 @@ import { useConfigStore } from './stores/configStore';
 import { useNotificationStore } from './stores/notificationStore';
 import { PushNotificationModal } from './components/ui/PushNotificationModal';
 import { voiceSettingsSync } from './lib/voiceSettingsSync';
+import { supabase } from './lib/supabase';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -68,11 +69,37 @@ function PlaceholderPage({ title }: { title: string }) {
   );
 }
 
+const PROACTIVE_SESSION_KEY = 'ai_proactive_last_run';
+
+async function triggerProactiveAI() {
+  const lastRun = localStorage.getItem(PROACTIVE_SESSION_KEY);
+  const now = Date.now();
+  if (lastRun && now - parseInt(lastRun) < 12 * 60 * 60 * 1000) return;
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/proactive-ai`;
+    fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+    }).then(() => {
+      localStorage.setItem(PROACTIVE_SESSION_KEY, String(now));
+    }).catch(() => {});
+  } catch {
+  }
+}
+
 function App() {
   const { initialize, isLoading: authLoading, user } = useAuthStore();
   const { setTheme, theme } = useThemeStore();
   const { fetchConfig } = useConfigStore();
   const { fetchNotifications, subscribeToNotifications, unsubscribeFromNotifications } = useNotificationStore();
+  const proactiveTriggeredRef = useRef(false);
 
   useEffect(() => {
     initialize();
@@ -88,8 +115,13 @@ function App() {
       fetchNotifications();
       subscribeToNotifications(user.id);
       voiceSettingsSync.subscribeToChanges();
+      if (!proactiveTriggeredRef.current) {
+        proactiveTriggeredRef.current = true;
+        setTimeout(() => triggerProactiveAI(), 5000);
+      }
     } else {
       unsubscribeFromNotifications();
+      proactiveTriggeredRef.current = false;
     }
 
     return () => {

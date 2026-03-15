@@ -5,10 +5,13 @@ import { FloatingAICoach } from '../ai/FloatingAICoach';
 import { useAuthStore } from '../../stores/authStore';
 
 function getPageContext(pathname: string): string | undefined {
-  if (pathname.startsWith('/game') || pathname.startsWith('/arena')) return 'game';
+  if (pathname.startsWith('/game') || pathname.startsWith('/arena') || pathname.startsWith('/pvp')) return 'game';
   if (pathname.startsWith('/training')) return 'training';
   if (pathname === '/' || pathname === '/dashboard') return 'dashboard';
-  return undefined;
+  if (pathname.startsWith('/statistics') || pathname.startsWith('/match-stats')) return 'statistics';
+  if (pathname.startsWith('/tournaments')) return 'tournament';
+  if (pathname.startsWith('/profile')) return 'profile';
+  return 'general';
 }
 
 export function Layout() {

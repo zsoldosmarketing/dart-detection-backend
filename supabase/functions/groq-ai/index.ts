@@ -197,6 +197,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (action === "game_result" || action === "training_result") {
+      EdgeRuntime.waitUntil(
+        syncGoalProgress(supabaseAdmin, user.id, stats)
+      );
+    }
+
     return new Response(
       JSON.stringify({ message: aiContent, conversation_id: convId, tokens_used: tokensUsed }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -208,6 +214,45 @@ Deno.serve(async (req: Request) => {
     });
   }
 });
+
+async function syncGoalProgress(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  stats: Record<string, unknown> | null
+) {
+  try {
+    if (!stats) return;
+    const { data: goals } = await supabase
+      .from("ai_goals")
+      .select("id, goal_type, target_value, current_value")
+      .eq("user_id", userId)
+      .eq("status", "active");
+
+    if (!goals?.length) return;
+
+    for (const goal of goals) {
+      const newValue = getStatValue(stats, goal.goal_type as string);
+      if (newValue <= 0) continue;
+      if (Math.abs(newValue - (goal.current_value as number || 0)) < 0.01) continue;
+
+      const updates: Record<string, unknown> = { current_value: newValue };
+      if (newValue >= (goal.target_value as number)) {
+        updates.status = "completed";
+        updates.completed_at = new Date().toISOString();
+        await supabase.from("ai_insights").insert({
+          user_id: userId,
+          insight_type: "milestone",
+          title: "Cél elérve!",
+          content: `Gratulálok! Elérted a célodat: sikerült ${newValue.toFixed(1)} ${goal.goal_type === "average" ? "átlagot" : goal.goal_type === "checkout" ? "% kiszáló arányt" : "győzelmet"} elérni.`,
+          is_read: false,
+        });
+      }
+
+      await supabase.from("ai_goals").update(updates).eq("id", goal.id);
+    }
+  } catch {
+  }
+}
 
 async function tryAutoGenerateGoal(
   supabase: ReturnType<typeof createClient>,

@@ -14,6 +14,8 @@ import {
   Pause,
   Crosshair,
   Swords,
+  Sparkles,
+  ChevronUp,
 } from 'lucide-react';
 import { Card, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -116,6 +118,8 @@ export function DashboardPage() {
   const [opponentNames, setOpponentNames] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [aiInsight, setAiInsight] = useState<{ title: string; content: string; insight_type: string } | null>(null);
+  const [isAIInsightExpanded, setIsAIInsightExpanded] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -255,6 +259,18 @@ export function DashboardPage() {
     }
 
     setIsLoading(false);
+
+    const { data: latestInsight } = await supabase
+      .from('ai_insights')
+      .select('title, content, insight_type')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (latestInsight) {
+      setAiInsight(latestInsight);
+    }
   };
 
   const handleResumeGame = async (gameId: string) => {
@@ -329,6 +345,34 @@ export function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {aiInsight && (
+        <div className="animate-slide-up stagger-2" style={{ animationFillMode: 'both' }}>
+          <div
+            className="group relative overflow-hidden rounded-2xl border border-primary-200/60 dark:border-primary-800/40 bg-gradient-to-r from-primary-50 to-primary-100/50 dark:from-primary-950/40 dark:to-primary-900/20 cursor-pointer"
+            onClick={() => setIsAIInsightExpanded(v => !v)}
+          >
+            <div className="flex items-start gap-3 px-4 py-3">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shrink-0 mt-0.5 shadow-md shadow-primary-500/20">
+                <Sparkles className="w-4 h-4 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-xs font-semibold text-primary-600 dark:text-primary-400">DartsCoach AI</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-600 dark:text-primary-400 font-medium">{aiInsight.insight_type}</span>
+                </div>
+                <p className="text-sm font-medium text-dark-800 dark:text-dark-100">{aiInsight.title}</p>
+                {isAIInsightExpanded && (
+                  <p className="text-xs text-dark-600 dark:text-dark-300 mt-2 leading-relaxed whitespace-pre-wrap">{aiInsight.content}</p>
+                )}
+              </div>
+              <div className="shrink-0 text-primary-400 dark:text-primary-600 mt-1">
+                {isAIInsightExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up stagger-2" style={{ animationFillMode: 'both' }}>
         <Card className="relative overflow-hidden">
