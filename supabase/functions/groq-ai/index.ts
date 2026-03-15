@@ -34,10 +34,7 @@ Deno.serve(async (req: Request) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const {
-      data: { user },
-      error: authError,
-    } = await userSupabase.auth.getUser();
+    const { data: { user }, error: authError } = await userSupabase.auth.getUser();
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -46,7 +43,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { message, conversation_id, action = "chat" } = body;
+    const { message, conversation_id, action = "chat", context, game_result } = body;
 
     const { data: configs } = await supabaseAdmin
       .from("app_config")
@@ -56,10 +53,7 @@ Deno.serve(async (req: Request) => {
     const configMap: Record<string, unknown> = {};
     (configs || []).forEach((c: { key: string; value_json: unknown }) => {
       try {
-        configMap[c.key] =
-          typeof c.value_json === "string"
-            ? JSON.parse(c.value_json)
-            : c.value_json;
+        configMap[c.key] = typeof c.value_json === "string" ? JSON.parse(c.value_json) : c.value_json;
       } catch {
         configMap[c.key] = c.value_json;
       }
@@ -68,91 +62,51 @@ Deno.serve(async (req: Request) => {
     const groqApiKey = configMap["groq_api_key"] as string;
     if (!groqApiKey || groqApiKey.trim() === "") {
       return new Response(
-        JSON.stringify({
-          error:
-            "A Groq API kulcs nincs beállítva. Kérj egy adminisztrátortól segítséget.",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ error: "A Groq API kulcs nincs beállítva. Kérj egy adminisztrátortól segítséget." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const model =
-      (configMap["groq_model"] as string) || "llama-3.3-70b-versatile";
+    const model = (configMap["groq_model"] as string) || "llama-3.3-70b-versatile";
     const aiEnabled = configMap["ai_enabled"] !== false;
-
     if (!aiEnabled) {
       return new Response(
         JSON.stringify({ error: "Az AI edző funkció jelenleg ki van kapcsolva." }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const [statsRes, profileRes, recentMatchesRes, goalsRes, trainingsRes] =
-      await Promise.all([
-        supabaseAdmin
-          .from("player_statistics_summary")
-          .select("*")
-          .eq("player_id", user.id)
-          .maybeSingle(),
-        supabaseAdmin
-          .from("user_profile")
-          .select(
-            "display_name, username, skill_rating, total_games_played, total_wins, average_score"
-          )
-          .eq("id", user.id)
-          .maybeSingle(),
-        supabaseAdmin
-          .from("match_statistics")
-          .select(
-            "game_mode, won, match_average, legs_won, legs_lost, highest_checkout, created_at"
-          )
-          .eq("player_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(10),
-        supabaseAdmin
-          .from("ai_goals")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("status", "active"),
-        supabaseAdmin
-          .from("training_sessions")
-          .select("status, score, created_at, drills(name_key)")
-          .eq("user_id", user.id)
-          .eq("status", "completed")
-          .order("created_at", { ascending: false })
-          .limit(5),
-      ]);
+    const [statsRes, profileRes, recentMatchesRes, goalsRes, trainingsRes, insightsRes] = await Promise.all([
+      supabaseAdmin.from("player_statistics_summary").select("*").eq("player_id", user.id).maybeSingle(),
+      supabaseAdmin.from("user_profile").select("display_name, username, skill_rating, total_games_played, total_wins, average_score").eq("id", user.id).maybeSingle(),
+      supabaseAdmin.from("match_statistics").select("game_mode, won, match_average, legs_won, legs_lost, highest_checkout, created_at").eq("player_id", user.id).order("created_at", { ascending: false }).limit(10),
+      supabaseAdmin.from("ai_goals").select("*").eq("user_id", user.id).eq("status", "active"),
+      supabaseAdmin.from("training_sessions").select("status, score, created_at, drills(name_key)").eq("user_id", user.id).eq("status", "completed").order("created_at", { ascending: false }).limit(5),
+      supabaseAdmin.from("ai_insights").select("id, title, insight_type, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(3),
+    ]);
 
     const stats = statsRes.data;
     const profile = profileRes.data;
     const recentMatches = recentMatchesRes.data || [];
     const goals = goalsRes.data || [];
     const recentTrainings = trainingsRes.data || [];
+    const recentInsights = insightsRes.data || [];
 
-    const basePrompt =
-      (configMap["ai_system_prompt"] as string) || buildDefaultSystemPrompt();
-    const contextStr = buildPlayerContext(
-      profile,
-      stats,
-      recentMatches,
-      recentTrainings,
-      goals
-    );
+    const basePrompt = (configMap["ai_system_prompt"] as string) || buildDefaultSystemPrompt();
+    const contextStr = buildPlayerContext(profile, stats, recentMatches, recentTrainings, goals);
     const systemPrompt = `${basePrompt}\n\n${contextStr}`;
 
     let convId = conversation_id;
 
-    if (!convId && action === "chat") {
-      const shortTitle = message?.substring(0, 60) || "Új chat";
+    if (!convId && (action === "chat" || action === "greeting" || action === "game_result")) {
+      const titleMap: Record<string, string> = {
+        greeting: "AI Edző üdvözlés",
+        game_result: "Meccs utáni elemzés",
+        chat: message?.substring(0, 60) || "Új chat",
+      };
       const { data: newConv } = await supabaseAdmin
         .from("ai_conversations")
-        .insert({ user_id: user.id, title: shortTitle })
+        .insert({ user_id: user.id, title: titleMap[action] || message?.substring(0, 60) || "Új chat" })
         .select()
         .single();
       convId = newConv?.id;
@@ -169,8 +123,7 @@ Deno.serve(async (req: Request) => {
       historyMessages = history || [];
     }
 
-    const userMessage = message || buildActionPrompt(action, profile, stats);
-
+    const userMessage = message || buildActionPrompt(action, profile, stats, context, game_result, recentInsights);
     historyMessages.push({ role: "user", content: userMessage });
 
     if (convId) {
@@ -202,10 +155,7 @@ Deno.serve(async (req: Request) => {
       const errText = await groqResponse.text();
       return new Response(
         JSON.stringify({ error: `Groq API hiba: ${errText}` }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -214,34 +164,36 @@ Deno.serve(async (req: Request) => {
     const tokensUsed = groqData.usage?.total_tokens || 0;
 
     if (convId) {
-      await supabaseAdmin.from("ai_messages").insert({
-        conversation_id: convId,
-        role: "assistant",
-        content: aiContent,
-      });
-
-      await supabaseAdmin
-        .from("ai_conversations")
-        .update({ last_message_at: new Date().toISOString() })
-        .eq("id", convId);
+      await Promise.all([
+        supabaseAdmin.from("ai_messages").insert({
+          conversation_id: convId,
+          role: "assistant",
+          content: aiContent,
+        }),
+        supabaseAdmin.from("ai_conversations").update({ last_message_at: new Date().toISOString() }).eq("id", convId),
+      ]);
     }
 
-    if (action === "analyze") {
+    if (action === "analyze" || action === "game_result") {
+      const insightType = action === "game_result" ? "performance" : "recommendation";
+      const insightTitle = action === "game_result" ? "Meccs utáni elemzés" : "Teljesítményelemzés";
       await supabaseAdmin.from("ai_insights").insert({
         user_id: user.id,
-        insight_type: "performance",
-        title: "Heti teljesítményelemzés",
+        insight_type: insightType,
+        title: insightTitle,
         content: aiContent,
         is_read: false,
       });
     }
 
+    if (action === "chat" && message) {
+      EdgeRuntime.waitUntil(
+        tryAutoGenerateGoal(supabaseAdmin, user.id, message, aiContent, profile, stats, groqApiKey, model)
+      );
+    }
+
     return new Response(
-      JSON.stringify({
-        message: aiContent,
-        conversation_id: convId,
-        tokens_used: tokensUsed,
-      }),
+      JSON.stringify({ message: aiContent, conversation_id: convId, tokens_used: tokensUsed }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
@@ -252,46 +204,143 @@ Deno.serve(async (req: Request) => {
   }
 });
 
+async function tryAutoGenerateGoal(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  userMessage: string,
+  aiResponse: string,
+  profile: Record<string, unknown> | null,
+  stats: Record<string, unknown> | null,
+  apiKey: string,
+  model: string
+) {
+  try {
+    const goalKeywords = ["cél", "szeretnék", "el akarok", "javítani", "elérni", "megcélzom", "szeretnék elér", "célom", "próbálok", "akarok"];
+    const hasGoalIntent = goalKeywords.some(kw => userMessage.toLowerCase().includes(kw));
+    if (!hasGoalIntent) return;
+
+    const { data: existingGoals } = await supabase.from("ai_goals").select("id").eq("user_id", userId).eq("status", "active").limit(10);
+    if ((existingGoals?.length || 0) >= 5) return;
+
+    const extractPrompt = `A felhasználó ezt mondta: "${userMessage}"
+
+Az AI válaszolt: "${aiResponse}"
+
+Ha ez egy konkrét, mérhető célt tartalmaz (pl. átlag javítás, kiszálló %, győzelmek stb.), adj vissza egy JSON objektumot ezzel a struktúrával:
+{"should_create": true, "title": "rövid cím", "goal_type": "average|checkout|wins|streak|custom", "target_value": 65.0, "unit": "pont|%|győzelem|meccs", "description": "leírás"}
+
+Ha nincs konkrét mérhető cél, adj vissza: {"should_create": false}
+
+Csak valid JSON-t adj vissza, semmi mást.`;
+
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: extractPrompt }],
+        max_tokens: 200,
+        temperature: 0.2,
+      }),
+    });
+
+    if (!res.ok) return;
+    const data = await res.json();
+    const raw = data.choices?.[0]?.message?.content || "";
+
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return;
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed.should_create || !parsed.title || !parsed.target_value) return;
+
+    const currentValue = getStatValue(stats, parsed.goal_type);
+
+    await supabase.from("ai_goals").insert({
+      user_id: userId,
+      title: parsed.title,
+      description: parsed.description || "",
+      goal_type: parsed.goal_type || "custom",
+      target_value: parseFloat(parsed.target_value),
+      current_value: currentValue,
+      unit: parsed.unit || "",
+      status: "active",
+      ai_generated: true,
+    });
+  } catch {
+  }
+}
+
+function getStatValue(stats: Record<string, unknown> | null, goalType: string): number {
+  if (!stats) return 0;
+  switch (goalType) {
+    case "average": return (stats.lifetime_average as number) || 0;
+    case "checkout": return (stats.lifetime_checkout_percentage as number) || 0;
+    case "wins": return (stats.lifetime_wins as number) || 0;
+    default: return 0;
+  }
+}
+
 function buildDefaultSystemPrompt(): string {
-  return `Te egy profi darts edző és személyes trainer vagy a DartsTraining platformon. A neved DartsCoach AI.
+  return `Te egy profi darts edző és személyes AI trainer vagy a DartsTraining platformon. A neved DartsCoach AI.
 
-A te szereped:
-- Személyes edzőként viselkedj: biztató, konkrét és adatvezérelt
-- Elemezd a játékos teljesítményének trendjeit a valós statisztikák alapján
-- Javasolj konkrét gyakorlatokat és edzéseket, hivatkozz a platform drill-jeire
-- Segíts célokat meghatározni és nyomon követni
-- Taktikai tanácsokat adj a fejlődéshez
-- Ünnepeld a győzelmeket, bátorítsd vereség után
-- Személyre szabott edzésterveket készíts
+SZEREPED ÉS SZEMÉLYISÉGED:
+- Autonóm személyes edző vagy — proaktív, motiváló, adatvezérelt
+- Nemcsak válaszolsz, hanem önállóan figyelsz, tanulsz és fejlődsz a játékossal
+- Pontosan ismered a játékos statisztikáit és azok alapján személyre szabott tanácsokat adsz
+- Ünnepeld a sikereket, bátorítsd vereség után, állítsd be a fokozatot a játékos szintjéhez
+- Ha a játékos célokat említ, automatikusan segíts őket meghatározni és nyomon követni
+- Generálj edzésterveket a statisztikák alapján, ne várj kérésre
+- Figyelj a trendekre: javulás, visszaesés, erősségek, gyengeségek
 
-Fontos szabályok:
+FONTOS SZABÁLYOK:
 - Mindig magyarul válaszolj
-- Légy meleg, professzionális és motiváló
-- Ha konkrét számokra hivatkozol, pontosan használd az adatokat
-- Válaszaid legyenek tömörek de informatívak (max 3-4 bekezdés)
-- Használj pozitív, motiváló hangsziget`;
+- Légy meleg, közvetlen és motiváló — mint egy valódi személyi edző
+- Konkrét adatokra hivatkozz ha van (átlag, kiszálló %, stb.)
+- Válaszaid legyenek tömörek de informatívak (2-4 bekezdés)
+- Javasold proaktívan ha valamit érdemes tenni (pl. "Javaslom hogy ma próbáld ki a...")
+- Ha célokat, terveket emleget a játékos, segíts formalizálni őket konkrét számokkal
+- Emlékezz az előző üzenetekre és hivatkozz rájuk`;
 }
 
 function buildActionPrompt(
   action: string,
   profile: Record<string, unknown> | null,
-  stats: Record<string, unknown> | null
+  stats: Record<string, unknown> | null,
+  context?: string,
+  gameResult?: Record<string, unknown>,
+  recentInsights?: Record<string, unknown>[]
 ): string {
-  const name =
-    (profile?.display_name as string) ||
-    (profile?.username as string) ||
-    "Játékos";
+  const name = (profile?.display_name as string) || (profile?.username as string) || "Játékos";
+  const avg = stats ? ((stats.lifetime_average as number) || 0).toFixed(1) : "—";
+  const winPct = stats ? ((stats.lifetime_win_percentage as number) || 0).toFixed(0) : "—";
+
   switch (action) {
+    case "greeting": {
+      const ctxMap: Record<string, string> = {
+        game: `${name} éppen játszani készül. Mondj egy rövid, motiváló üdvözlést és egy konkrét tippet a mai meccshez az ő statisztikái alapján (átlag: ${avg}, győzelmi arány: ${winPct}%).`,
+        training: `${name} edzésre készül. Adj egy rövid, energizáló üdvözlést és egy konkrét edzési fókuszt a mai napra a statisztikái alapján.`,
+        dashboard: `${name} éppen belépett az alkalmazásba. Adj egy meleg, személyes üdvözlést, emeld ki a legfontosabb teljesítménymutatóját, és javasolj egy konkrét következő lépést. Légy tömör (2-3 mondat).`,
+      };
+      return ctxMap[context || ""] || `Üdvözöld ${name}-t melegen, és adj egy rövid, motiváló összefoglalót a legfontosabb statisztikájáról és egy konkrét mai tennivalóról.`;
+    }
     case "analyze":
-      return `Elemezd ${name} legutóbbi teljesítményét a rendelkezésre álló statisztikák alapján. Adj részletes visszajelzést és konkrét javaslatokat a fejlődéshez.`;
+      return `Elemezd részletesen ${name} teljesítményét a statisztikák alapján. Emeld ki: erősségek, fejlesztendő területek, trend (javul vagy romlik?), és adj 2-3 konkrét, megvalósítható javaslatot. Legyen cselekvésorientált.`;
     case "suggest_drills":
-      return `Javasolj konkrét gyakorlatokat ${name} számára a jelenlegi szintje és statisztikái alapján. Magyarázd el miért épp ezeket és hogyan kell végezni.`;
+      return `Javasolj konkrét gyakorlatokat ${name} számára a jelenlegi szintje és statisztikái alapján. Magyarázd el miért épp ezeket, és adj egy mini edzéstervet a mai napra.`;
     case "weekly_summary":
-      return `Készíts egy motiváló heti összefoglalót ${name} számára. Emeld ki a pozitív fejlődést és adj irányvonalat a következő hétre.`;
+      return `Készíts egy motiváló heti összefoglalót ${name} számára. Emeld ki a pozitív fejlődést, azonosíts mintákat, és adj irányvonalat a következő hétre 2-3 konkrét céllal.`;
     case "generate_plan":
-      return `Készíts egy 7 napos személyre szabott edzéstervet ${name} számára a statisztikái és szintje alapján. Adj napokra lebontott, konkrét feladatokat.`;
+      return `Készíts egy részletes, 7 napos személyre szabott edzéstervet ${name} számára a statisztikái és szintje alapján. Adj napokra lebontott, konkrét feladatokat. Magyarázd el az edzés logikáját és hogy miért ezt a struktúrát választottad.`;
+    case "game_result": {
+      if (gameResult) {
+        const result = gameResult.won ? "megnyerte" : "elvesztette";
+        return `${name} most ${result} a meccsét. Eredmény: ${gameResult.legs_won || 0}-${gameResult.legs_lost || 0} leg, átlag: ${(gameResult.match_average as number || 0).toFixed(1)}. Adj egy rövid, személyes visszajelzést: mi ment jól, min lehet javítani, és egy motiváló zárás.`;
+      }
+      return `Elemezd ${name} legutóbbi meccsét és adj visszajelzést.`;
+    }
     default:
-      return `Üdvözöld ${name}-t és adj egy rövid, motiváló összefoglalót a jelenlegi teljesítményéről!`;
+      return `Üdvözöld ${name}-t és adj egy rövid, motiváló összefoglalót.`;
   }
 }
 
@@ -304,12 +353,9 @@ function buildPlayerContext(
 ): string {
   if (!profile) return "";
 
-  const name =
-    (profile.display_name as string) ||
-    (profile.username as string) ||
-    "Játékos";
+  const name = (profile.display_name as string) || (profile.username as string) || "Játékos";
   const lines = [
-    `## Játékos profil: ${name}`,
+    `## Játékos: ${name}`,
     `- Skill szint: ${(profile.skill_rating as number) || 0}/100`,
     `- Összes meccs: ${(profile.total_games_played as number) || 0}`,
     `- Győzelmek: ${(profile.total_wins as number) || 0}`,
@@ -317,24 +363,12 @@ function buildPlayerContext(
 
   if (stats) {
     lines.push(`\n## Lifetime statisztikák:`);
-    lines.push(
-      `- Átlag: ${((stats.lifetime_average as number) || 0).toFixed(1)}`
-    );
-    lines.push(
-      `- Legjobb átlag: ${((stats.lifetime_best_average as number) || 0).toFixed(1)}`
-    );
-    lines.push(
-      `- Első 9 nyíl: ${((stats.first_nine_average as number) || 0).toFixed(1)}`
-    );
-    lines.push(
-      `- Győzelmi arány: ${((stats.lifetime_win_percentage as number) || 0).toFixed(0)}%`
-    );
-    lines.push(
-      `- Kiszálló %: ${((stats.lifetime_checkout_percentage as number) || 0).toFixed(1)}%`
-    );
-    lines.push(
-      `- Highest checkout: ${(stats.lifetime_highest_checkout as number) || 0}`
-    );
+    lines.push(`- Átlag: ${((stats.lifetime_average as number) || 0).toFixed(1)}`);
+    lines.push(`- Legjobb átlag: ${((stats.lifetime_best_average as number) || 0).toFixed(1)}`);
+    lines.push(`- Első 9 nyíl átlag: ${((stats.first_nine_average as number) || 0).toFixed(1)}`);
+    lines.push(`- Győzelmi arány: ${((stats.lifetime_win_percentage as number) || 0).toFixed(0)}%`);
+    lines.push(`- Kiszálló %: ${((stats.lifetime_checkout_percentage as number) || 0).toFixed(1)}%`);
+    lines.push(`- Legmagasabb kiszálló: ${(stats.lifetime_highest_checkout as number) || 0}`);
     lines.push(`- 180-asok: ${(stats.lifetime_180s as number) || 0}`);
   }
 
@@ -342,32 +376,16 @@ function buildPlayerContext(
     lines.push(`\n## Legutóbbi ${recentMatches.length} meccs:`);
     recentMatches.forEach((m) => {
       const avg = ((m.match_average as number) || 0).toFixed(1);
-      const result = m.won ? "✓ Győzelem" : "✗ Vereség";
-      lines.push(
-        `- ${result} | Átlag: ${avg} | Leg: ${m.legs_won}-${m.legs_lost} | Mód: ${m.game_mode}`
-      );
+      const result = m.won ? "Győzelem" : "Vereség";
+      lines.push(`- ${result} | Átlag: ${avg} | Leg: ${m.legs_won}-${m.legs_lost} | Mód: ${m.game_mode}`);
     });
-
-    const winRate =
-      recentMatches.length > 0
-        ? (
-            (recentMatches.filter((m) => m.won).length /
-              recentMatches.length) *
-            100
-          ).toFixed(0)
-        : 0;
-    const avgScore =
-      recentMatches.length > 0
-        ? (
-            recentMatches.reduce(
-              (s, m) => s + ((m.match_average as number) || 0),
-              0
-            ) / recentMatches.length
-          ).toFixed(1)
-        : 0;
-    lines.push(
-      `- Forma: ${winRate}% győzelmi arány, ${avgScore} átlagos meccsen`
-    );
+    const winRate = recentMatches.length > 0
+      ? ((recentMatches.filter(m => m.won).length / recentMatches.length) * 100).toFixed(0)
+      : 0;
+    const avgScore = recentMatches.length > 0
+      ? (recentMatches.reduce((s, m) => s + ((m.match_average as number) || 0), 0) / recentMatches.length).toFixed(1)
+      : 0;
+    lines.push(`- Jelenlegi forma: ${winRate}% győzelmi arány, ${avgScore} átlagos meccsátlag`);
   }
 
   if (recentTrainings.length > 0) {
@@ -379,19 +397,13 @@ function buildPlayerContext(
   }
 
   if (goals.length > 0) {
-    lines.push(`\n## Aktív célok:`);
+    lines.push(`\n## Aktív célok (AI által generált + saját):`);
     goals.forEach((g) => {
-      const pct =
-        (g.target_value as number) > 0
-          ? (
-              (((g.current_value as number) || 0) /
-                (g.target_value as number)) *
-              100
-            ).toFixed(0)
-          : 0;
-      lines.push(
-        `- ${g.title}: ${g.current_value}/${g.target_value} ${g.unit} (${pct}%)`
-      );
+      const pct = (g.target_value as number) > 0
+        ? (((g.current_value as number) || 0) / (g.target_value as number) * 100).toFixed(0)
+        : 0;
+      const aiTag = g.ai_generated ? " [AI]" : "";
+      lines.push(`- ${g.title}${aiTag}: ${g.current_value}/${g.target_value} ${g.unit} (${pct}%)`);
     });
   }
 

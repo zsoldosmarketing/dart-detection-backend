@@ -1,10 +1,22 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Navigation } from './Navigation';
 import { Header } from './Header';
+import { FloatingAICoach } from '../ai/FloatingAICoach';
 import { useAuthStore } from '../../stores/authStore';
+
+function getPageContext(pathname: string): string | undefined {
+  if (pathname.startsWith('/game') || pathname.startsWith('/arena')) return 'game';
+  if (pathname.startsWith('/training')) return 'training';
+  if (pathname === '/' || pathname === '/dashboard') return 'dashboard';
+  return undefined;
+}
 
 export function Layout() {
   const { user } = useAuthStore();
+  const location = useLocation();
+
+  const isAITrainerPage = location.pathname.startsWith('/ai-trainer');
+  const pageContext = getPageContext(location.pathname);
 
   if (!user) {
     return (
@@ -23,6 +35,7 @@ export function Layout() {
           <Outlet />
         </div>
       </main>
+      {!isAITrainerPage && <FloatingAICoach context={pageContext} />}
     </div>
   );
 }
