@@ -162,23 +162,23 @@ export function ChallengesPage() {
           <Flame className="w-5 h-5 text-secondary-600 dark:text-secondary-400" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-dark-900 dark:text-white">Kihivasok</h1>
-          <p className="text-dark-500 dark:text-dark-400">Teljesits kihivasokat es szerezz jutalmakat</p>
+          <h1 className="text-2xl font-bold text-dark-900 dark:text-white">Kihívások</h1>
+          <p className="text-dark-500 dark:text-dark-400">Teljesíts kihívásokat és szerezz jutalmakat</p>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
         <Card className="p-4 text-center">
           <p className="text-3xl font-bold text-dark-900 dark:text-white">{challenges.length}</p>
-          <p className="text-sm text-dark-500">Osszes</p>
+          <p className="text-sm text-dark-500">Összes</p>
         </Card>
         <Card className="p-4 text-center">
           <p className="text-3xl font-bold text-warning-500">{activeChallenges}</p>
-          <p className="text-sm text-dark-500">Aktiv</p>
+          <p className="text-sm text-dark-500">Aktív</p>
         </Card>
         <Card className="p-4 text-center">
           <p className="text-3xl font-bold text-success-500">{completedChallenges}</p>
-          <p className="text-sm text-dark-500">Teljesitett</p>
+          <p className="text-sm text-dark-500">Teljesített</p>
         </Card>
       </div>
 
@@ -194,7 +194,7 @@ export function ChallengesPage() {
                 : 'bg-dark-100 dark:bg-dark-700 text-dark-600 dark:text-dark-300 hover:bg-dark-200 dark:hover:bg-dark-600'
             )}
           >
-            {f === 'all' ? 'Mind' : f === 'active' ? 'Aktiv' : 'Teljesitett'}
+            {f === 'all' ? 'Mind' : f === 'active' ? 'Aktív' : 'Teljesített'}
           </button>
         ))}
       </div>
@@ -205,8 +205,8 @@ export function ChallengesPage() {
             <Flame className="w-12 h-12 text-dark-400 mx-auto mb-4" />
             <p className="text-dark-500">
               {filter === 'completed'
-                ? 'Meg nincs teljesitett kihivasod.'
-                : 'Nincs elerheto kihivas.'}
+                ? 'Még nincs teljesített kihívásod.'
+                : 'Nincs elérhető kihívás.'}
             </p>
           </Card>
         ) : (

@@ -112,7 +112,7 @@ export function CricketGamePage() {
               {gameState.players.find((p) => p.id === gameState.winner)?.name} nyert!
             </h2>
             <Button className="mt-4" onClick={() => navigate('/game')}>
-              Uj jatek
+              Új játék
             </Button>
           </div>
         </Card>
@@ -126,8 +126,8 @@ export function CricketGamePage() {
                 <thead>
                   <tr className="border-b border-dark-200 dark:border-dark-700">
                     <th className="py-3 px-4 text-left font-semibold text-dark-600 dark:text-dark-300">
-                      Jatekos
-                    </th>
+                      Játékos
+</th>
                     {CRICKET_NUMBERS.map((num) => (
                       <th key={num} className="py-3 px-2 text-center font-bold text-dark-900 dark:text-white">
                         {num === 25 ? 'B' : num}
@@ -184,7 +184,7 @@ export function CricketGamePage() {
           <Card className="mt-4">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-sm text-dark-500 dark:text-dark-400">Aktualis jatekos</p>
+                <p className="text-sm text-dark-500 dark:text-dark-400">Aktuális játékos</p>
                 <h3 className="text-xl font-bold text-dark-900 dark:text-white">{currentPlayer.name}</h3>
               </div>
               <div className="text-right">

@@ -1119,7 +1119,7 @@ export function GamePlayPage() {
         <OpponentCameraFeed
           roomId={roomId}
           userId={user.id}
-          opponentName={currentPlayer ? getPlayerName(currentPlayer) : 'Ellenfel'}
+          opponentName={currentPlayer ? getPlayerName(currentPlayer) : 'Ellenfél'}
           isMyTurn={!!isMyTurn}
         />
       )}

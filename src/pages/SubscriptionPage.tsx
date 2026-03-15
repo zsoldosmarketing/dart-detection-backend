@@ -38,9 +38,9 @@ const plans = [
     price: 0,
     features: [
       'Alap gyakorlatok',
-      'Bot elleni jatekok',
-      'Alap statisztikak',
-      '3 napi kihivas',
+      'Bot elleni játékok',
+      'Alap statisztikák',
+      '3 napi kihívás',
     ],
   },
   {
@@ -49,13 +49,13 @@ const plans = [
     price: 1990,
     popular: true,
     features: [
-      'Minden gyakorlat es program',
-      'Korlatlan jatekok',
-      'Reszletes statisztikak',
-      'Minden kihivas',
-      'Klubok es tornak',
-      'Nincs reklam',
-      'Prioritasos tamogatas',
+      'Minden gyakorlat és program',
+      'Korlátlan játékok',
+      'Részletes statisztikák',
+      'Minden kihívás',
+      'Klubok és tornák',
+      'Nincs reklám',
+      'Prioritásos támogatás',
     ],
   },
   {
@@ -64,11 +64,11 @@ const plans = [
     price: 4990,
     features: [
       'Minden Pro funkcio',
-      '5 felhasznalo',
-      'Csapat statisztikak',
-      'Sajat tornak',
-      'API hozzaferes',
-      'Dedikalt tamogatas',
+      '5 felhasználó',
+      'Csapat statisztikák',
+      'Saját tornák',
+      'API hozzáférés',
+      'Dedikált támogatás',
     ],
   },
 ];
@@ -101,10 +101,10 @@ export function SubscriptionPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'active': return <Badge variant="success">Aktiv</Badge>;
-      case 'trial': return <Badge variant="warning">Probaidoszak</Badge>;
+      case 'active': return <Badge variant="success">Aktív</Badge>;
+      case 'trial': return <Badge variant="warning">Próbaidőszak</Badge>;
       case 'cancelled': return <Badge variant="error">Lemondva</Badge>;
-      case 'expired': return <Badge variant="error">Lejart</Badge>;
+      case 'expired': return <Badge variant="error">Lejárt</Badge>;
       default: return <Badge>Ingyenes</Badge>;
     }
   };
@@ -233,7 +233,7 @@ export function SubscriptionPage() {
                 variant={plan.popular ? 'primary' : 'outline'}
                 className="w-full"
               >
-                {plan.price === 0 ? 'Downgrade' : 'Valasztas'}
+                {plan.price === 0 ? 'Downgrade' : 'Választás'}
               </Button>
             )}
           </Card>

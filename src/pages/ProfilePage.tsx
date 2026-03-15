@@ -215,7 +215,7 @@ export function ProfilePage() {
               </div>
 
               <h2 className="text-xl font-semibold text-dark-900 dark:text-white mt-4">
-                {profile?.display_name || profile?.username || 'Jatekos'}
+                {profile?.display_name || profile?.username || 'Játékos'}
               </h2>
               <p className="text-dark-500 dark:text-dark-400 text-sm">
                 @{profile?.username || 'username'}

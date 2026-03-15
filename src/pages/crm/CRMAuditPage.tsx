@@ -1,22 +1,5 @@
 import { useState, useEffect } from 'react';
-import {
-  FileText,
-  Search,
-  Filter,
-  Calendar,
-  User,
-  Shield,
-  Settings,
-  Trash2,
-  Edit,
-  Eye,
-  LogIn,
-  LogOut,
-  CreditCard,
-  Download,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react';
+import { FileText, Search, Filter, Calendar, User, Shield, Settings, Trash2, CreditCard as Edit, Eye, LogIn, LogOut, CreditCard, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { Card } from '../../components/ui/Card';
@@ -170,7 +153,7 @@ export function CRMAuditPage() {
             Audit Naplo
           </h1>
           <p className="text-dark-500 dark:text-dark-400 mt-1">
-            Rendszertevekenysgek es felhasznaloi muveletek nyomon kovetese
+            Rendszertevékenységek és felhasználói műveletek nyomon követése
           </p>
         </div>
         <Button
@@ -205,11 +188,11 @@ export function CRMAuditPage() {
             <span className={`text-sm font-medium ${
               category === cat ? 'text-primary-600' : 'text-dark-700 dark:text-dark-300'
             }`}>
-              {cat === 'all' && 'Osszes'}
-              {cat === 'auth' && 'Azonositas'}
+              {cat === 'all' && 'Összes'}
+              {cat === 'auth' && 'Azonosítás'}
               {cat === 'data' && 'Adatok'}
               {cat === 'admin' && 'Admin'}
-              {cat === 'payment' && 'Fizetes'}
+              {cat === 'payment' && 'Fizetés'}
             </span>
           </button>
         ))}
@@ -219,7 +202,7 @@ export function CRMAuditPage() {
         <div className="flex flex-col md:flex-row gap-4 mb-6">
           <div className="flex-1">
             <Input
-              placeholder="Kereses felhasznalo, esemeny..."
+              placeholder="Keresés felhasználó, esemény..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               leftIcon={<Search className="w-4 h-4" />}
@@ -245,10 +228,10 @@ export function CRMAuditPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-dark-200 dark:border-dark-700">
-                <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Idopont</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Felhasznalo</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Esemeny</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Eroforras</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Időpont</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Felhasználó</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Esemény</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Erőforrás</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Statusz</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">IP</th>
                 <th className="text-right py-3 px-4 text-sm font-medium text-dark-500"></th>

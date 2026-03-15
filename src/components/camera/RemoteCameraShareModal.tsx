@@ -215,12 +215,12 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
               {status === 'connected' ? (
                 <>
                   <Wifi className="w-3 h-3 text-green-400" />
-                  <span className="text-green-400 text-xs font-medium">Kapcsolodva</span>
+                  <span className="text-green-400 text-xs font-medium">Kapcsolódva</span>
                 </>
               ) : (
                 <>
                   <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                  <span className="text-green-400 text-xs font-medium">Aktiv</span>
+                  <span className="text-green-400 text-xs font-medium">Aktív</span>
                 </>
               )}
             </div>
@@ -306,7 +306,7 @@ export function RemoteCameraShareModal({ isOpen, onClose }: RemoteCameraShareMod
           {status === 'idle' && (
             <div className="text-center py-12">
               <Loader2 className="w-12 h-12 mx-auto mb-4 text-blue-400 animate-spin" />
-              <p className="text-white">Betoltes...</p>
+              <p className="text-white">Betöltés...</p>
             </div>
           )}
         </div>

@@ -270,17 +270,17 @@ export function TournamentDetailPage() {
             )}
             {userEntry && userEntry.status === 'registered' && tournament.status === 'registration' && (
               <Button variant="outline" onClick={handleWithdraw}>
-                Visszalepes
+                Visszalépés
               </Button>
             )}
             {userEntry && (
-              <Badge variant="success" className="ml-2">Regisztralt</Badge>
+              <Badge variant="success" className="ml-2">Regisztrált</Badge>
             )}
             {user && tournament.created_by === user.id &&
              (tournament.status === 'draft' || tournament.status === 'registration') && (
               <Button variant="outline" onClick={handleDelete} className="text-error-600 hover:bg-error-50 dark:hover:bg-error-950">
                 <Trash2 className="w-4 h-4 mr-2" />
-                Torles
+                Törlés
               </Button>
             )}
           </div>
@@ -295,7 +295,7 @@ export function TournamentDetailPage() {
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-dark-400" />
               <div>
-                <p className="text-xs text-dark-400">Kezdes</p>
+                <p className="text-xs text-dark-400">Kezdés</p>
                 <p className="text-sm font-medium text-dark-900 dark:text-white">
                   {format(new Date(tournament.starts_at), 'MMM d, HH:mm', { locale: hu })}
                 </p>
@@ -305,7 +305,7 @@ export function TournamentDetailPage() {
           <div className="flex items-center gap-2">
             <Target className="w-4 h-4 text-dark-400" />
             <div>
-              <p className="text-xs text-dark-400">Formatum</p>
+              <p className="text-xs text-dark-400">Formátum</p>
               <p className="text-sm font-medium text-dark-900 dark:text-white">
                 {tournament.legs_per_match} leg / meccs
               </p>
@@ -352,7 +352,7 @@ export function TournamentDetailPage() {
             </h3>
             <div className="space-y-3">
               <div className="flex justify-between">
-                <span className="text-dark-500">Jatek tipus</span>
+                <span className="text-dark-500">Játék típus</span>
                 <span className="font-medium text-dark-900 dark:text-white">
                   {tournament.game_type.toUpperCase()}
                 </span>
@@ -370,10 +370,10 @@ export function TournamentDetailPage() {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-dark-500">Formatum</span>
+                <span className="text-dark-500">Formátum</span>
                 <span className="font-medium text-dark-900 dark:text-white">
-                  {tournament.format === 'single_elimination' ? 'Egyenes kieseses' :
-                   tournament.format === 'double_elimination' ? 'Dupla kieseses' : 'Kormekkozos'}
+                  {tournament.format === 'single_elimination' ? 'Egyenes kieséses' :
+                   tournament.format === 'double_elimination' ? 'Dupla kieséses' : 'Körmérkőzés'}
                 </span>
               </div>
             </div>
@@ -502,7 +502,7 @@ export function TournamentDetailPage() {
                       <Badge variant="error">Kiesett</Badge>
                     )}
                     {entry.status === 'registered' && (
-                      <Badge variant="success">Regisztralt</Badge>
+                      <Badge variant="success">Regisztrált</Badge>
                     )}
                   </div>
                 </div>

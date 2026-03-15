@@ -145,7 +145,7 @@ export function CRMGDPRPage() {
       email: exportEmail,
       exportedAt: new Date().toISOString(),
       profile: {
-        display_name: 'Teszt Felhasznalo',
+        display_name: 'Teszt Felhasználó',
         created_at: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
       },
       games: [
@@ -189,9 +189,9 @@ export function CRMGDPRPage() {
       case 'export':
         return <Badge variant="primary">Export</Badge>;
       case 'delete':
-        return <Badge variant="error">Torles</Badge>;
+        return <Badge variant="error">Törlés</Badge>;
       case 'rectification':
-        return <Badge variant="warning">Modositas</Badge>;
+        return <Badge variant="warning">Módosítás</Badge>;
     }
   };
 
@@ -230,7 +230,7 @@ export function CRMGDPRPage() {
             GDPR Kezelés
           </h1>
           <p className="text-dark-500 dark:text-dark-400 mt-1">
-            Adatvedelmi kerelmek es hozzajarulasok kezelese
+            Adatvédelmi kérelmek és hozzájárulások kezelése
           </p>
         </div>
       </div>
@@ -270,7 +270,7 @@ export function CRMGDPRPage() {
               <Shield className="w-5 h-5 text-primary-600" />
             </div>
             <div>
-              <p className="text-sm text-dark-500">Aktiv hozzajarulasok</p>
+              <p className="text-sm text-dark-500">Aktív hozzájárulások</p>
               <p className="text-xl font-bold text-dark-900 dark:text-white">
                 {stats.totalConsents}
               </p>
@@ -290,8 +290,8 @@ export function CRMGDPRPage() {
                 : 'border-transparent text-dark-500 hover:text-dark-700 dark:hover:text-dark-300'
             }`}
           >
-            {tab === 'requests' && 'Adatkerelmek'}
-            {tab === 'consents' && 'Hozzajarulasok'}
+            {tab === 'requests' && 'Adatkérelmek'}
+            {tab === 'consents' && 'Hozzájárulások'}
             {tab === 'export' && 'Adat export'}
           </button>
         ))}
@@ -301,10 +301,10 @@ export function CRMGDPRPage() {
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-dark-900 dark:text-white">
-              Adatkerelmek
+              Adatkérelmek
             </h3>
             <Input
-              placeholder="Kereses..."
+              placeholder="Keresés..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               leftIcon={<Search className="w-4 h-4" />}
@@ -357,14 +357,14 @@ export function CRMGDPRPage() {
                           size="sm"
                           onClick={() => handleProcessRequest(request.id, 'approve')}
                         >
-                          Jovahagyas
+                          Jóváhagyás
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => handleProcessRequest(request.id, 'reject')}
                         >
-                          Elutasitas
+                          Elutasítás
                         </Button>
                       </>
                     )}
@@ -383,10 +383,10 @@ export function CRMGDPRPage() {
         <Card>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-dark-900 dark:text-white">
-              Hozzajarulasok nyilvantartasa
+              Hozzájárulások nyilvántartása
             </h3>
             <Input
-              placeholder="Kereses email..."
+              placeholder="Keresés email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               leftIcon={<Search className="w-4 h-4" />}
@@ -399,9 +399,9 @@ export function CRMGDPRPage() {
               <thead>
                 <tr className="border-b border-dark-200 dark:border-dark-700">
                   <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Email</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Tipus</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Allapot</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Datum</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Típus</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Állapot</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">Dátum</th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-dark-500">IP</th>
                 </tr>
               </thead>
@@ -442,11 +442,11 @@ export function CRMGDPRPage() {
         <div className="grid gap-6">
           <Card>
             <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-4">
-              Felhasznaloi adatok exportalasa
+              Felhasználói adatok exportálása
             </h3>
             <p className="text-dark-500 dark:text-dark-400 mb-4">
-              Add meg a felhasznalo email cimet, akinek az adatait exportalni szeretned.
-              Az export tartalmazza az osszes szemelyes adatot a GDPR eloirasainak megfeleloen.
+              Add meg a felhasználó email címét, akinek az adatait exportálni szeretnéd.
+              Az export tartalmazza az összes személyes adatot a GDPR előírásainak megfelelően.
             </p>
 
             <div className="flex gap-3">
@@ -464,7 +464,7 @@ export function CRMGDPRPage() {
                 isLoading={isExporting}
                 disabled={!exportEmail}
               >
-                Exportalas
+                Exportálás
               </Button>
             </div>
           </Card>
@@ -475,10 +475,10 @@ export function CRMGDPRPage() {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                { icon: User, title: 'Profil adatok', desc: 'Nev, email, regisztracio datuma' },
-                { icon: FileText, title: 'Jatek elozmenyek', desc: 'Minden jatekszam es eredmeny' },
-                { icon: Shield, title: 'Hozzajarulasok', desc: 'Marketing, analytics engedelyek' },
-                { icon: Clock, title: 'Aktivitas naplo', desc: 'Bejelentkezesek, muveletek' },
+                { icon: User, title: 'Profil adatok', desc: 'Név, email, regisztráció dátuma' },
+                { icon: FileText, title: 'Játék előzmények', desc: 'Minden játékszám és eredmény' },
+                { icon: Shield, title: 'Hozzájárulások', desc: 'Marketing, analytics engedélyek' },
+                { icon: Clock, title: 'Aktivitás napló', desc: 'Bejelentkezések, műveletek' },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-dark-50 dark:bg-dark-800">
                   <div className="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">

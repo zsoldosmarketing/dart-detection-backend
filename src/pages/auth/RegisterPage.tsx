@@ -28,17 +28,17 @@ export function RegisterPage() {
     }
 
     if (password.length < 6) {
-      setError('A jelszonak legalabb 6 karakter hosszunak kell lennie');
+      setError('A jelszónak legalább 6 karakter hosszúnak kell lennie');
       return;
     }
 
     if (username.length < 3) {
-      setError('A felhasznalonevnek legalabb 3 karakter hosszunak kell lennie');
+      setError('A felhasználónévnek legalább 3 karakter hosszúnak kell lennie');
       return;
     }
 
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-      setError('A felhasznalonev csak betűket, számokat és aláhúzást tartalmazhat');
+      setError('A felhasználónév csak betűket, számokat és aláhúzást tartalmazhat');
       return;
     }
 
@@ -52,7 +52,7 @@ export function RegisterPage() {
         .maybeSingle();
 
       if (existingUser) {
-        setError('Ez a felhasznalonev mar foglalt. Valassz egy masikat!');
+        setError('Ez a felhasználónév már foglalt. Válassz egy másikat!');
         setIsLoading(false);
         return;
       }
@@ -67,7 +67,7 @@ export function RegisterPage() {
         } else if (signUpError.message.includes('already registered') || signUpError.message.includes('User already registered')) {
           setError('Ez az email cím már regisztrálva van. Jelentkezz be vagy használj másik email címet!');
         } else if (signUpError.message.includes('duplicate') || signUpError.message.includes('unique') || signUpError.message.includes('user_profile_username_key')) {
-          setError('Ez a felhasznalonev mar foglalt. Valassz egy masikat!');
+          setError('Ez a felhasználónév már foglalt. Válassz egy másikat!');
         } else if (signUpError.message.toLowerCase().includes('email')) {
           setError('Hibás email formátum vagy az email már használatban van.');
         } else {
@@ -118,7 +118,7 @@ export function RegisterPage() {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="felhasznalonev"
+              placeholder="felhasználónév"
               required
               autoComplete="username"
             />

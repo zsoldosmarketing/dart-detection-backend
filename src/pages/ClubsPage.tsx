@@ -143,13 +143,13 @@ export function ClubsPage() {
 
       <div>
         <h2 className="text-lg font-semibold text-dark-900 dark:text-white mb-4">
-          {joinedClubs.length > 0 ? 'Tobbi klub' : 'Osszes klub'} ({otherClubs.length})
+          {joinedClubs.length > 0 ? 'Többi klub' : 'Összes klub'} ({otherClubs.length})
         </h2>
         {otherClubs.length === 0 ? (
           <Card className="text-center py-12">
             <Users className="w-12 h-12 text-dark-400 mx-auto mb-4" />
             <p className="text-dark-500 dark:text-dark-400">
-              {searchQuery ? 'Nincs talalat' : 'Meg nincsenek klubok'}
+              {searchQuery ? 'Nincs találat' : 'Még nincsenek klubok'}
             </p>
           </Card>
         ) : (
@@ -332,13 +332,13 @@ function CreateClubModal({ onClose, onCreated }: CreateClubModalProps) {
 
           <div>
             <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
-              Csatlakozasi szabaly
+              Csatlakozási szabály
             </label>
             <div className="space-y-2">
               {[
-                { value: 'open', label: 'Nyitott', desc: 'Barki csatlakozhat' },
-                { value: 'request', label: 'Kerelmes', desc: 'Elfogadas szukseges' },
-                { value: 'invite', label: 'Csak meghivassal', desc: 'Csak meghivott tagok' },
+                { value: 'open', label: 'Nyitott', desc: 'Bárki csatlakozhat' },
+                { value: 'request', label: 'Kérelmes', desc: 'Elfogadás szükséges' },
+                { value: 'invite', label: 'Csak meghívással', desc: 'Csak meghívott tagok' },
               ].map((option) => (
                 <button
                   key={option.value}

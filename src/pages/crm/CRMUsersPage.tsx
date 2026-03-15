@@ -110,15 +110,15 @@ export function CRMUsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-dark-900 dark:text-white">Felhasznalok</h1>
-          <p className="text-dark-500">{totalCount} regisztralt felhasznalo</p>
+          <h1 className="text-2xl font-bold text-dark-900 dark:text-white">Felhasználók</h1>
+          <p className="text-dark-500">{totalCount} regisztrált felhasználó</p>
         </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1 flex gap-2">
           <Input
-            placeholder="Kereses nev vagy email alapjan..."
+            placeholder="Keresés név vagy email alapján..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
@@ -141,7 +141,7 @@ export function CRMUsersPage() {
                   : 'bg-dark-100 dark:bg-dark-700 text-dark-600 dark:text-dark-300'
               )}
             >
-              {f === 'all' ? 'Mind' : f === 'admin' ? 'Admin' : 'Aktiv'}
+              {f === 'all' ? 'Mind' : f === 'admin' ? 'Admin' : 'Aktív'}
             </button>
           ))}
         </div>
@@ -159,7 +159,7 @@ export function CRMUsersPage() {
                 <thead className="bg-dark-50 dark:bg-dark-800 border-b border-dark-200 dark:border-dark-700">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase tracking-wider">
-                      Felhasznalo
+                      Felhasználó
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase tracking-wider">
                       Statisztika
@@ -168,10 +168,10 @@ export function CRMUsersPage() {
                       Skill
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase tracking-wider">
-                      Regisztracio
+                      Regisztráció
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase tracking-wider">
-                      Szerepkor
+                      Szerepkör
                     </th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-dark-500 uppercase tracking-wider">
                       Muveletek

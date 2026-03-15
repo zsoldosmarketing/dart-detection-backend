@@ -112,18 +112,18 @@ export function CRMHealthPage() {
     ];
 
     const mockMetrics: SystemMetric[] = [
-      { name: 'CPU hasznalat', value: 34, max: 100, unit: '%', trend: 'stable' },
-      { name: 'Memoria', value: 2.4, max: 4, unit: 'GB', trend: 'up' },
-      { name: 'Tarolo', value: 45, max: 100, unit: 'GB', trend: 'up' },
-      { name: 'Aktiv kapcsolatok', value: 127, max: 500, unit: '', trend: 'down' },
-      { name: 'Keresek/mp', value: 245, max: 1000, unit: 'req/s', trend: 'stable' },
-      { name: 'Atlagos valaszido', value: 48, max: 200, unit: 'ms', trend: 'stable' },
+      { name: 'CPU használat', value: 34, max: 100, unit: '%', trend: 'stable' },
+      { name: 'Memória', value: 2.4, max: 4, unit: 'GB', trend: 'up' },
+      { name: 'Tárhely', value: 45, max: 100, unit: 'GB', trend: 'up' },
+      { name: 'Aktív kapcsolatok', value: 127, max: 500, unit: '', trend: 'down' },
+      { name: 'Kérések/mp', value: 245, max: 1000, unit: 'req/s', trend: 'stable' },
+      { name: 'Átlagos válaszidő', value: 48, max: 200, unit: 'ms', trend: 'stable' },
     ];
 
     const mockIncidents: RecentIncident[] = [
       {
         id: '1',
-        title: 'Real-time szolgaltatas lassulas',
+        title: 'Real-time szolgáltatás lassulás',
         severity: 'medium',
         status: 'monitoring',
         startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
@@ -139,7 +139,7 @@ export function CRMHealthPage() {
       },
       {
         id: '3',
-        title: 'API rate limit tullepes',
+        title: 'API rate limit túllépés',
         severity: 'low',
         status: 'resolved',
         startedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
@@ -187,7 +187,7 @@ export function CRMHealthPage() {
       case 'low':
         return <Badge variant="default">Alacsony</Badge>;
       case 'medium':
-        return <Badge variant="warning">Kozepes</Badge>;
+        return <Badge variant="warning">Közepes</Badge>;
       case 'high':
         return <Badge variant="error">Magas</Badge>;
       case 'critical':
@@ -198,11 +198,11 @@ export function CRMHealthPage() {
   const getIncidentStatusBadge = (status: RecentIncident['status']) => {
     switch (status) {
       case 'investigating':
-        return <Badge variant="error">Vizsgalat</Badge>;
+        return <Badge variant="error">Vizsgálat</Badge>;
       case 'identified':
-        return <Badge variant="warning">Azonositva</Badge>;
+        return <Badge variant="warning">Azonosítva</Badge>;
       case 'monitoring':
-        return <Badge variant="primary">Megfigyeles</Badge>;
+        return <Badge variant="primary">Megfigyelés</Badge>;
       case 'resolved':
         return <Badge variant="success">Megoldva</Badge>;
     }
@@ -227,7 +227,7 @@ export function CRMHealthPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-dark-900 dark:text-white">
-            Rendszer allapot
+            Rendszer állapot
           </h1>
           <p className="text-dark-500 dark:text-dark-400 mt-1">
             Utolso frissites: {format(lastRefresh, 'HH:mm:ss', { locale: hu })}
@@ -239,7 +239,7 @@ export function CRMHealthPage() {
           onClick={handleRefresh}
           disabled={isRefreshing}
         >
-          Frissites
+          Frissítés
         </Button>
       </div>
 
@@ -394,7 +394,7 @@ export function CRMHealthPage() {
             <Zap className="w-5 h-5 text-blue-600" />
           </div>
           <p className="text-2xl font-bold text-dark-900 dark:text-white">48ms</p>
-          <p className="text-sm text-dark-500">Atlag valaszido</p>
+          <p className="text-sm text-dark-500">Átlag válaszidő</p>
         </Card>
 
         <Card padding="sm" className="text-center">
@@ -402,7 +402,7 @@ export function CRMHealthPage() {
             <Wifi className="w-5 h-5 text-primary-600" />
           </div>
           <p className="text-2xl font-bold text-dark-900 dark:text-white">127</p>
-          <p className="text-sm text-dark-500">Aktiv kapcsolatok</p>
+          <p className="text-sm text-dark-500">Aktív kapcsolatok</p>
         </Card>
 
         <Card padding="sm" className="text-center">

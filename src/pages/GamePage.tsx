@@ -425,7 +425,7 @@ export function GamePage() {
       <div>
         <h1 className="text-2xl font-bold text-dark-900 dark:text-white">{t('nav.games')}</h1>
         <p className="text-dark-500 dark:text-dark-400 mt-1">
-          Valassz jatekmódot es inditsd el a meccset
+          Válassz játékmódot és indítsd el a meccset
         </p>
       </div>
 
@@ -434,7 +434,7 @@ export function GamePage() {
           <div className="flex items-center gap-2 mb-4">
             <Clock className="w-5 h-5 text-warning-600" />
             <span className="font-semibold text-dark-900 dark:text-white">
-              Folyamatban levo jatekok ({inProgressGames.length})
+              Folyamatban lévő játékok ({inProgressGames.length})
             </span>
           </div>
           <div className="overflow-y-auto max-h-[40vh] scroll-list pr-1 space-y-2">
@@ -472,7 +472,7 @@ export function GamePage() {
                     <div className="mt-3 pt-3 border-t border-dark-200/50 dark:border-dark-700/40 animate-in">
                       <div className="grid grid-cols-3 gap-2 mb-3">
                         <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
-                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Mod</p>
+                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Mód</p>
                           <p className="text-sm font-bold text-dark-900 dark:text-white capitalize">
                             {game.mode === 'bot' ? t('game.mode_bot') : game.mode === 'pvp' ? t('game.mode_pvp') : t('game.mode_local')}
                           </p>
@@ -486,7 +486,7 @@ export function GamePage() {
                           </div>
                         )}
                         <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
-                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Kezdes</p>
+                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Kezdés</p>
                           <p className="text-sm font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
                             {new Date(game.created_at).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' })}
                           </p>
@@ -500,11 +500,11 @@ export function GamePage() {
                           className="text-error-500 hover:text-error-600 flex-1"
                         >
                           <Trash2 className="w-4 h-4 mr-1" />
-                          Torles
+                          Törlés
                         </Button>
                         <Link to={`/game/${game.id}`} className="flex-1">
                           <Button size="sm" leftIcon={<Play className="w-4 h-4" />} className="w-full">
-                            Folytatas
+                            Folytatás
                           </Button>
                         </Link>
                       </div>
@@ -783,7 +783,7 @@ export function GamePage() {
                   >
                     <span className="font-medium">{t(`bot.${diff}`)}</span>
                     <p className="text-xs mt-1 opacity-75">
-                      Atlag: ~{BOT_PRESETS[diff].scoringMean}
+                      Átlag: ~{BOT_PRESETS[diff].scoringMean}
                     </p>
                   </button>
                 ))}
@@ -833,7 +833,7 @@ export function GamePage() {
                 className="flex items-center gap-2 text-sm text-primary-600 dark:text-primary-400 hover:underline"
               >
                 <Settings className="w-4 h-4" />
-                Halado beallitasok
+                Haladó beállítások
                 <ChevronRight className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
               </button>
 
@@ -856,7 +856,7 @@ export function GamePage() {
 
         {mode === 'local' && (
           <Card>
-            <CardTitle>Helyi jatekosok</CardTitle>
+            <CardTitle>Helyi játékosok</CardTitle>
             <div className="mt-4 space-y-4">
               <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800">
                 <div className="flex items-center gap-3">
@@ -895,7 +895,7 @@ export function GamePage() {
                       ) : player.isRegistered ? (
                         <div>
                           <p className="font-medium text-dark-900 dark:text-white">{player.name}</p>
-                          <p className="text-xs text-success-600 dark:text-success-400">Regisztralt jatekos</p>
+                          <p className="text-xs text-success-600 dark:text-success-400">Regisztrált játékos</p>
                         </div>
                       ) : (
                         <input
@@ -963,7 +963,7 @@ export function GamePage() {
                         className="flex items-center gap-1 text-xs text-primary-600 dark:text-primary-400 hover:underline"
                       >
                         <UserPlus className="w-3 h-3" />
-                        Regisztralt jatekos keresese
+                        Regisztrált játékos keresése
                       </button>
                     )}
 
@@ -972,7 +972,7 @@ export function GamePage() {
                         onClick={() => clearRegisteredPlayer(index)}
                         className="w-full py-1.5 text-xs text-dark-500 hover:text-error-500"
                       >
-                        Regisztracio torlese
+                        Regisztráció törlése
                       </button>
                     )}
                   </div>
@@ -997,7 +997,7 @@ export function GamePage() {
                       type="text"
                       value={playerSearch}
                       onChange={(e) => setPlayerSearch(e.target.value)}
-                      placeholder="Kereses felhasznalonev alapjan..."
+                      placeholder="Keresés felhasználónév alapján..."
                       className="flex-1 px-3 py-2 text-sm rounded-lg border border-dark-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-900 dark:text-white"
                       autoFocus
                     />

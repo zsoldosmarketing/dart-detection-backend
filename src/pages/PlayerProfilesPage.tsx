@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Check, X, Target } from 'lucide-react';
+import { Plus, CreditCard as Edit2, Trash2, Check, X, Target } from 'lucide-react';
 import { Card, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -173,17 +173,17 @@ export function PlayerProfilesPage() {
         <div>
           <h1 className="text-2xl font-bold text-dark-900 dark:text-white">Darts profilok</h1>
           <p className="text-dark-500 dark:text-dark-400 mt-1">
-            Kulonbozo dart felszerelesekhez kulonbozo profilok
+            Különböző dart felszerelésekhez különböző profilok
           </p>
         </div>
         <Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => setShowCreateForm(true)}>
-          Uj profil
+          Új profil
         </Button>
       </div>
 
       {showCreateForm && (
         <Card>
-          <CardTitle>Uj profil letrehozasa</CardTitle>
+          <CardTitle>Új profil létrehozása</CardTitle>
           <div className="mt-4 space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
               <Input
@@ -193,7 +193,7 @@ export function PlayerProfilesPage() {
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />
               <Input
-                label="Leiras"
+                label="Leírás"
                 placeholder="pl. 24g tungsten"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -202,7 +202,7 @@ export function PlayerProfilesPage() {
 
             <div className="grid md:grid-cols-3 gap-4">
               <Input
-                label="Dart sulya"
+                label="Dart súlya"
                 placeholder="pl. 24g"
                 value={formData.dart_weight}
                 onChange={(e) => setFormData({ ...formData, dart_weight: e.target.value })}
@@ -267,10 +267,10 @@ export function PlayerProfilesPage() {
 
             <div className="flex justify-end gap-2 pt-4">
               <Button variant="ghost" onClick={() => { setShowCreateForm(false); resetForm(); }}>
-                Megse
+                Mégse
               </Button>
               <Button onClick={handleCreate} disabled={!formData.name.trim()}>
-                Letrehozas
+                Létrehozás
               </Button>
             </div>
           </div>
@@ -282,10 +282,10 @@ export function PlayerProfilesPage() {
           <Target className="w-12 h-12 text-dark-300 dark:text-dark-600 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-dark-900 dark:text-white">Meg nincs profilod</h3>
           <p className="text-dark-500 dark:text-dark-400 mt-1 mb-4">
-            Hozz letre profilokat kulonbozo darts felszereleseidhez
+            Hozz létre profilokat különböző darts felszereléseidhez
           </p>
           <Button onClick={() => setShowCreateForm(true)} leftIcon={<Plus className="w-4 h-4" />}>
-            Elso profil letrehozasa
+            Első profil létrehozása
           </Button>
         </Card>
       ) : (
@@ -300,7 +300,7 @@ export function PlayerProfilesPage() {
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
                   <Input
-                    label="Leiras"
+                    label="Leírás"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   />
@@ -393,11 +393,11 @@ export function PlayerProfilesPage() {
                   <div className="mt-4 pt-4 border-t border-dark-100 dark:border-dark-700">
                     <div className="grid grid-cols-3 gap-2 text-center text-sm">
                       <div>
-                        <p className="text-dark-500 dark:text-dark-400">Jatekok</p>
+                        <p className="text-dark-500 dark:text-dark-400">Játékok</p>
                         <p className="font-semibold text-dark-900 dark:text-white">{profile.stats?.games_played || 0}</p>
                       </div>
                       <div>
-                        <p className="text-dark-500 dark:text-dark-400">Atlag</p>
+                        <p className="text-dark-500 dark:text-dark-400">Átlag</p>
                         <p className="font-semibold text-dark-900 dark:text-white">{profile.stats?.avg_score?.toFixed(1) || '0.0'}</p>
                       </div>
                       <div>
@@ -414,7 +414,7 @@ export function PlayerProfilesPage() {
                       className="w-full mt-4"
                       onClick={() => handleSetDefault(profile.id)}
                     >
-                      Beallitas alapertelmezettkent
+                      Beállítás alapértelmezettként
                     </Button>
                   )}
                 </>

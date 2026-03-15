@@ -205,7 +205,7 @@ export function DashboardPage() {
         activities.push({
           id: session.id,
           type: 'training',
-          title: session.drills?.name_key ? t(session.drills.name_key) : 'Edzes',
+          title: session.drills?.name_key ? t(session.drills.name_key) : 'Edzés',
           subtitle: `${session.score || 0} pont`,
           date: session.created_at,
         });
@@ -320,11 +320,11 @@ export function DashboardPage() {
         </div>
         <div className="flex gap-3">
           <Link to="/training">
-            <Button leftIcon={<Target className="w-4 h-4" />}>Edzes</Button>
+            <Button leftIcon={<Target className="w-4 h-4" />}>Edzés</Button>
           </Link>
           <Link to="/game">
             <Button variant="outline" leftIcon={<Gamepad2 className="w-4 h-4" />}>
-              Jatek
+              Játék
             </Button>
           </Link>
         </div>
@@ -335,7 +335,7 @@ export function DashboardPage() {
           <div className="absolute top-3 right-3 p-2 rounded-lg bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400">
             <TrendingUp className="w-5 h-5" />
           </div>
-          <p className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wide">Match atlag</p>
+          <p className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wide">Match átlag</p>
           <p className="text-2xl font-bold text-dark-900 dark:text-white mt-1" style={{ fontVariantNumeric: 'tabular-nums' }}>
             {playerStats?.lifetime_average?.toFixed(1) || profile?.average_score?.toFixed(1) || '0.0'}
           </p>
@@ -345,7 +345,7 @@ export function DashboardPage() {
           <div className="absolute top-3 right-3 p-2 rounded-lg bg-secondary-50 dark:bg-secondary-900/20 text-secondary-600 dark:text-secondary-400">
             <Crosshair className="w-5 h-5" />
           </div>
-          <p className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wide">Elso 9</p>
+          <p className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wide">Első 9</p>
           <p className="text-2xl font-bold text-dark-900 dark:text-white mt-1" style={{ fontVariantNumeric: 'tabular-nums' }}>
             {playerStats?.first_nine_average?.toFixed(1) || '0.0'}
           </p>
@@ -355,7 +355,7 @@ export function DashboardPage() {
           <div className="absolute top-3 right-3 p-2 rounded-lg bg-success-50 dark:bg-success-900/20 text-success-600 dark:text-success-400">
             <Trophy className="w-5 h-5" />
           </div>
-          <p className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wide">Gyozelmi arany</p>
+          <p className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wide">Győzelmi arány</p>
           <p className="text-2xl font-bold text-dark-900 dark:text-white mt-1" style={{ fontVariantNumeric: 'tabular-nums' }}>
             {playerStats?.lifetime_win_percentage
               ? `${playerStats.lifetime_win_percentage.toFixed(0)}%`
@@ -381,7 +381,7 @@ export function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Pause className="w-5 h-5 text-warning-600" />
-              <CardTitle>Felbehagyott jatekok</CardTitle>
+              <CardTitle>Félbehagyott játékok</CardTitle>
             </div>
             <Badge variant="warning">{pausedGames.length}</Badge>
           </div>
@@ -403,7 +403,7 @@ export function DashboardPage() {
                       <div className="flex items-center gap-2 text-xs text-dark-500 dark:text-dark-400">
                         <Clock className="w-3 h-3" />
                         <span>
-                          {game.paused_by_me ? 'Te szuneteltetted' : 'Ellenfel szuneteltette'}
+                          {game.paused_by_me ? 'Te szüneteltetted' : 'Ellenfél szüneteltette'}
                         </span>
                         <span>•</span>
                         <span>{format(new Date(game.paused_at), 'PPp', { locale: hu })}</span>
@@ -416,7 +416,7 @@ export function DashboardPage() {
                     leftIcon={<Play className="w-4 h-4" />}
                     onClick={() => handleResumeGame(game.game_id)}
                   >
-                    Folytatas
+                    Folytatás
                   </Button>
                 </div>
               </div>
@@ -427,10 +427,10 @@ export function DashboardPage() {
 
       <div className="animate-slide-up stagger-4" style={{ animationFillMode: 'both' }}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-dark-900 dark:text-white">Legutobbi meccsek</h2>
+          <h2 className="text-lg font-semibold text-dark-900 dark:text-white">Legutóbbi meccsek</h2>
           <Link to="/profile/history">
             <Button variant="ghost" size="sm" rightIcon={<ChevronRight className="w-4 h-4" />}>
-              Osszes
+              Összes
             </Button>
           </Link>
         </div>
@@ -492,7 +492,7 @@ export function DashboardPage() {
                           {match.game_type}
                         </Badge>
                         <Badge variant={match.won ? 'success' : 'error'} size="sm">
-                          {match.won ? 'Gyozelem' : 'Vereseg'}
+                          {match.won ? 'Győzelem' : 'Vereség'}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-3 text-sm text-dark-500 dark:text-dark-400 sm:hidden mb-1">
@@ -500,14 +500,14 @@ export function DashboardPage() {
                       </div>
                       <div className="flex items-center gap-4 text-sm">
                         <span className="text-dark-600 dark:text-dark-300">
-                          Atlag: <span className="font-semibold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>{match.match_average?.toFixed(1) || '0.0'}</span>
+                          Átlag: <span className="font-semibold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>{match.match_average?.toFixed(1) || '0.0'}</span>
                         </span>
                         <span className="text-dark-600 dark:text-dark-300">
                           Legek: <span className="font-semibold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>{match.legs_won}-{match.legs_lost}</span>
                         </span>
                         {match.highest_checkout > 0 && (
                           <span className="text-dark-600 dark:text-dark-300">
-                            Kiszallo: <span className="font-semibold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>{match.highest_checkout}</span>
+                            Kiszálló: <span className="font-semibold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>{match.highest_checkout}</span>
                           </span>
                         )}
                       </div>
@@ -532,13 +532,13 @@ export function DashboardPage() {
                           </p>
                         </div>
                         <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
-                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Kiszallok</p>
+                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Kiszállók</p>
                           <p className="text-base font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
                             {match.checkouts_hit || 0}
                           </p>
                         </div>
                         <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
-                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Mod</p>
+                          <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Mód</p>
                           <p className="text-base font-bold text-dark-900 dark:text-white capitalize">
                             {match.game_mode === 'bot' ? t('game.mode_bot') : match.game_mode === 'pvp' ? t('game.mode_pvp') : t('game.mode_local')}
                           </p>
@@ -556,7 +556,7 @@ export function DashboardPage() {
       <div className="grid lg:grid-cols-2 gap-6 animate-slide-up stagger-5" style={{ animationFillMode: 'both' }}>
         <Card>
           <div className="flex items-center justify-between">
-            <CardTitle>Aktiv edzesek</CardTitle>
+            <CardTitle>Aktív edzések</CardTitle>
             <Link to="/training">
               <Button variant="ghost" size="sm" rightIcon={<ChevronRight className="w-4 h-4" />}>
                 Gyakorlatok
@@ -571,12 +571,12 @@ export function DashboardPage() {
             ) : activeTrainings.length === 0 ? (
               <div>
                 <p className="text-dark-500 dark:text-dark-400 text-sm mb-3">
-                  Nincs aktiv edzes. Kezdj egy gyakorlatot!
+                  Nincs aktív edzés. Kezdj egy gyakorlatot!
                 </p>
                 {activePrograms.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-dark-600 dark:text-dark-400 uppercase">
-                      Aktiv programok
+                      Aktív programok
                     </p>
                     {activePrograms.map((enrollment) => (
                       <Link
@@ -618,7 +618,7 @@ export function DashboardPage() {
                       </p>
                     </div>
                     <Badge variant="primary" size="sm">
-                      Folyamatban
+                      Folyamatban lévő
                     </Badge>
                   </div>
                 </Link>
@@ -629,10 +629,10 @@ export function DashboardPage() {
 
         <Card>
           <div className="flex items-center justify-between">
-            <CardTitle>Aktiv programok</CardTitle>
+            <CardTitle>Aktív programok</CardTitle>
             <Link to="/programs">
               <Button variant="ghost" size="sm" rightIcon={<ChevronRight className="w-4 h-4" />}>
-                Osszes
+                Összes
               </Button>
             </Link>
           </div>
@@ -643,7 +643,7 @@ export function DashboardPage() {
               </div>
             ) : activePrograms.length === 0 ? (
               <p className="text-dark-500 dark:text-dark-400 text-sm">
-                Nincs aktiv program. Kezdj egy uj programot!
+                Nincs aktív program. Kezdj egy új programot!
               </p>
             ) : (
               activePrograms.map((enrollment) => (

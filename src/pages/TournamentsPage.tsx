@@ -294,7 +294,7 @@ function TournamentCard({ tournament, isRegistered, onRegister, onDelete, curren
         )}
         {tournament.status === 'completed' && (
           <Button variant="ghost" rightIcon={<ChevronRight className="w-4 h-4" />}>
-            Eredmenyek
+            Eredmények
           </Button>
         )}
         {currentUserId &&
@@ -423,7 +423,7 @@ function CreateTournamentModal({ onClose, onCreated }: CreateTournamentModalProp
             </div>
             <div>
               <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-1.5">
-                Max jatekosok
+                Max játékosok
               </label>
               <select
                 value={maxPlayers}
@@ -432,7 +432,7 @@ function CreateTournamentModal({ onClose, onCreated }: CreateTournamentModalProp
               >
                 {[4, 8, 16, 32].map((n) => (
                   <option key={n} value={n}>
-                    {n} jatekos
+                    {n} játékos
                   </option>
                 ))}
               </select>

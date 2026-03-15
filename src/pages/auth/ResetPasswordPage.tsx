@@ -77,10 +77,10 @@ export function ResetPasswordPage() {
               Ervenytelen link
             </h2>
             <p className="text-dark-500 dark:text-dark-400 mb-6">
-              Ez a jelszo visszaallitasi link ervenytelen vagy lejart.
+              Ez a jelszó visszaállítási link érvénytelen vagy lejárt.
             </p>
             <Link to="/forgot-password">
-              <Button className="w-full">Uj link kerese</Button>
+              <Button className="w-full">Új link kérése</Button>
             </Link>
           </div>
         </div>
@@ -123,7 +123,7 @@ export function ResetPasswordPage() {
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <Input
-                  label="Uj jelszo"
+                  label="Új jelszó"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

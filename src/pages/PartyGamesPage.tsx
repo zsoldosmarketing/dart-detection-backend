@@ -32,7 +32,7 @@ const GAME_MODES: GameMode[] = [
   {
     id: 'cricket',
     name: 'Cricket',
-    description: 'Zarj le a szamokat es szerezz pontokat! A klasszikus darts jatek.',
+    description: 'Zárd le a számokat és szerezz pontokat! A klasszikus darts játék.',
     icon: <Target className="w-6 h-6" />,
     minPlayers: 2,
     maxPlayers: 8,
@@ -41,7 +41,7 @@ const GAME_MODES: GameMode[] = [
   {
     id: 'halve-it',
     name: 'Halve-It',
-    description: 'Talalj celba minden korben, kulonben feleződik a pontod!',
+    description: 'Találj célba minden körben, különben feleződik a pontod!',
     icon: <Zap className="w-6 h-6" />,
     minPlayers: 2,
     maxPlayers: 8,
@@ -68,7 +68,7 @@ const GAME_MODES: GameMode[] = [
   {
     id: 'shanghai',
     name: 'Shanghai',
-    description: 'Menj vegig az osszes szamon. Shanghai = azonnali győzelem!',
+    description: 'Menj végig az összes számon. Shanghai = azonnali győzelem!',
     icon: <MapPin className="w-6 h-6" />,
     minPlayers: 2,
     maxPlayers: 8,
@@ -112,7 +112,7 @@ export function PartyGamesPage() {
   const handleStartGame = () => {
     if (!selectedGame) return;
 
-    const names = playerNames.map((name, idx) => name.trim() || `Jatekos ${idx + 1}`);
+    const names = playerNames.map((name, idx) => name.trim() || `Játékos ${idx + 1}`);
 
     const gameData = {
       type: selectedGame,
@@ -136,9 +136,9 @@ export function PartyGamesPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-dark-900 dark:text-white">Party Jatekok</h1>
+        <h1 className="text-2xl font-bold text-dark-900 dark:text-white">Party Játékok</h1>
         <p className="text-dark-500 dark:text-dark-400 mt-1">
-          Valassz egy jatekmodot es hivd meg barátaidat!
+          Válassz egy játékmódot és hívd meg barátaidat!
         </p>
       </div>
 
@@ -167,14 +167,14 @@ export function PartyGamesPage() {
                 {game.icon}
               </div>
               <Badge variant={getDifficultyColor(game.difficulty) as any} size="sm">
-                {game.difficulty === 'easy' ? 'Konnyu' : game.difficulty === 'medium' ? 'Kozepes' : 'Nehez'}
+                {game.difficulty === 'easy' ? 'Könnyű' : game.difficulty === 'medium' ? 'Közepes' : 'Nehéz'}
               </Badge>
             </div>
             <h3 className="font-bold text-dark-900 dark:text-white mt-4 text-lg">{game.name}</h3>
             <p className="text-sm text-dark-500 dark:text-dark-400 mt-1">{game.description}</p>
             <div className="flex items-center gap-2 mt-3 text-xs text-dark-400">
               <Users className="w-3 h-3" />
-              <span>{game.minPlayers}-{game.maxPlayers} jatekos</span>
+              <span>{game.minPlayers}-{game.maxPlayers} játékos</span>
             </div>
           </button>
         ))}
@@ -184,13 +184,13 @@ export function PartyGamesPage() {
         <Card>
           <CardTitle className="flex items-center gap-2">
             {selectedGameMode.icon}
-            {selectedGameMode.name} beallitasok
+            {selectedGameMode.name} beállítások
           </CardTitle>
 
           <div className="mt-6 space-y-6">
             <div>
               <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-3">
-                Jatekosok szama
+                Játékosok száma
               </label>
               <div className="flex items-center gap-4">
                 <button
@@ -215,13 +215,13 @@ export function PartyGamesPage() {
 
             <div>
               <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-3">
-                Jatekos nevek
+                Játékos nevek
               </label>
               <div className="grid sm:grid-cols-2 gap-3">
                 {playerNames.map((name, idx) => (
                   <Input
                     key={idx}
-                    placeholder={`Jatekos ${idx + 1}`}
+                    placeholder={`Játékos ${idx + 1}`}
                     value={name}
                     onChange={(e) => handlePlayerNameChange(idx, e.target.value)}
                   />
@@ -234,7 +234,7 @@ export function PartyGamesPage() {
                 <div>
                   <p className="font-medium text-dark-900 dark:text-white">Cutthroat mod</p>
                   <p className="text-sm text-dark-500 dark:text-dark-400">
-                    Pontokat az ellenfelek kapjak
+                    Pontokat az ellenfelek kapják
                   </p>
                 </div>
                 <button
@@ -255,7 +255,7 @@ export function PartyGamesPage() {
             {selectedGame === 'killer' && (
               <div>
                 <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-3">
-                  Eletek szama
+                  Életek száma
                 </label>
                 <div className="flex gap-2">
                   {[3, 4, 5].map((lives) => (
@@ -268,7 +268,7 @@ export function PartyGamesPage() {
                           : 'bg-dark-100 dark:bg-dark-700 text-dark-600 dark:text-dark-400 hover:bg-dark-200 dark:hover:bg-dark-600'
                       }`}
                     >
-                      {lives} elet
+                      {lives} élet
                     </button>
                   ))}
                 </div>
@@ -278,7 +278,7 @@ export function PartyGamesPage() {
             {selectedGame === 'shanghai' && (
               <div>
                 <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-3">
-                  Korok szama
+                  Körök száma
                 </label>
                 <div className="flex gap-2">
                   {[7, 10, 15, 20].map((rounds) => (
@@ -304,7 +304,7 @@ export function PartyGamesPage() {
                 leftIcon={<Play className="w-5 h-5" />}
                 onClick={handleStartGame}
               >
-                Jatek inditasa
+                Játék indítása
               </Button>
             </div>
           </div>

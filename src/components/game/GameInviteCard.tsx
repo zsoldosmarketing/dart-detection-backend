@@ -100,10 +100,10 @@ export function GameInviteCard({ invite, onRespond }: GameInviteCardProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <h3 className="font-semibold text-dark-900 dark:text-white">
-              Jatek meghivo
+              Játék meghívó
             </h3>
             {isExpired ? (
-              <Badge variant="error" size="sm">Lejart</Badge>
+              <Badge variant="error" size="sm">Lejárt</Badge>
             ) : (
               <Badge variant="warning" size="sm">Fuggo</Badge>
             )}
@@ -121,7 +121,7 @@ export function GameInviteCard({ invite, onRespond }: GameInviteCardProps) {
                 <User className="w-5 h-5" />
               )}
               <span className="font-medium">{invite.inviter?.display_name || 'Ismeretlen'}</span>
-              <span>meghivott egy jatekra</span>
+              <span>meghívott egy játékra</span>
             </div>
             {invite.inviter?.pvp_average !== null && invite.inviter?.pvp_average !== undefined && (
               <div className="flex items-center gap-1 text-xs text-dark-500 dark:text-dark-400 ml-7">

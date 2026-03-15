@@ -442,13 +442,13 @@ export function StatisticsPage() {
                 <div className="w-8 h-8 rounded-lg bg-primary-500/10 flex items-center justify-center">
                   <Target className="w-4 h-4 text-primary-600 dark:text-primary-400" />
                 </div>
-                <span className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wider">Match atlag</span>
+                <span className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wider">Match átlag</span>
               </div>
               <div className="flex items-end gap-2">
                 <span className="stat-value text-3xl font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
                   {agg.avgMatchAverage.toFixed(1)}
                 </span>
-                <span className="text-xs text-dark-400 dark:text-dark-500 mb-1">3-nyil atlag</span>
+                <span className="text-xs text-dark-400 dark:text-dark-500 mb-1">3-nyíl átlag</span>
               </div>
               {agg.gamesPlayed >= 2 && (
                 <div className="flex items-center gap-1 mt-2">
@@ -478,16 +478,16 @@ export function StatisticsPage() {
                 <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
                   <Zap className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                 </div>
-                <span className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wider">Elso 9 nyil</span>
+                <span className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wider">Első 9 nyíl</span>
               </div>
               <div className="flex items-end gap-2">
                 <span className="stat-value text-3xl font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
                   {agg.avgFirstNine.toFixed(1)}
                 </span>
-                <span className="text-xs text-dark-400 dark:text-dark-500 mb-1">atlag</span>
+                <span className="text-xs text-dark-400 dark:text-dark-500 mb-1">átlag</span>
               </div>
               <div className="mt-2">
-                <span className="text-xs text-dark-400">{legStats.length} leg alapjan</span>
+                <span className="text-xs text-dark-400">{legStats.length} leg alapján</span>
               </div>
             </Card>
 
@@ -497,7 +497,7 @@ export function StatisticsPage() {
                 <div className="w-8 h-8 rounded-lg bg-success-500/10 flex items-center justify-center">
                   <Trophy className="w-4 h-4 text-success-600 dark:text-success-400" />
                 </div>
-                <span className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wider">Gyozelmi arany</span>
+                <span className="text-xs font-medium text-dark-500 dark:text-dark-400 uppercase tracking-wider">Győzelmi arány</span>
               </div>
               <div className="flex items-end gap-2">
                 <span className="stat-value text-3xl font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
@@ -523,10 +523,10 @@ export function StatisticsPage() {
                 <span className="stat-value text-3xl font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
                   {agg.bestLegAverage.toFixed(1)}
                 </span>
-                <span className="text-xs text-dark-400 dark:text-dark-500 mb-1">atlag</span>
+                <span className="text-xs text-dark-400 dark:text-dark-500 mb-1">átlag</span>
               </div>
               <div className="mt-2">
-                <span className="text-xs text-dark-400">Szemelyes rekord ({periodLabel})</span>
+                <span className="text-xs text-dark-400">Személyes rekord ({periodLabel})</span>
               </div>
             </Card>
           </div>
@@ -535,7 +535,7 @@ export function StatisticsPage() {
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-primary-500" />
-                <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Heti aktivitas</h2>
+                <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Heti aktivitás</h2>
               </div>
               <span className="text-sm text-dark-400">
                 {activityByDay.reduce((sum, d) => sum + d.matches, 0)} meccs ezen a heten
@@ -587,10 +587,10 @@ export function StatisticsPage() {
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
                 <Flame className="w-5 h-5 text-amber-500" />
-                <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Pontozasi bontasa</h2>
+                <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Pontozási bontása</h2>
               </div>
               <span className="text-sm text-dark-400" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                Ossz: {scoringBreakdown.totalScoring} magas kor
+                Össz: {scoringBreakdown.totalScoring} magas kör
               </span>
             </div>
 
@@ -651,12 +651,12 @@ export function StatisticsPage() {
             <Card padding="none" className="p-6">
               <div className="flex items-center gap-2 mb-6">
                 <Crosshair className="w-5 h-5 text-primary-500" />
-                <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Celzasi pontossag</h2>
+                <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Célzási pontosság</h2>
               </div>
               <div className="space-y-5">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-dark-700 dark:text-dark-300">Duplak</span>
+                    <span className="text-sm font-medium text-dark-700 dark:text-dark-300">Duplák</span>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-dark-400" style={{ fontVariantNumeric: 'tabular-nums' }}>
                         {agg.totalDoublesHit}/{agg.totalDoublesThrown}
@@ -676,7 +676,7 @@ export function StatisticsPage() {
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-dark-700 dark:text-dark-300">Triplak</span>
+                    <span className="text-sm font-medium text-dark-700 dark:text-dark-300">Triplák</span>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-dark-400" style={{ fontVariantNumeric: 'tabular-nums' }}>
                         {agg.totalTriplesHit}/{agg.totalTriplesThrown}
@@ -696,7 +696,7 @@ export function StatisticsPage() {
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-dark-700 dark:text-dark-300">Kiszallok</span>
+                    <span className="text-sm font-medium text-dark-700 dark:text-dark-300">Kiszállók</span>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-dark-400" style={{ fontVariantNumeric: 'tabular-nums' }}>
                         {agg.totalCheckoutsHit}/{agg.totalCheckoutAttempts}
@@ -719,7 +719,7 @@ export function StatisticsPage() {
             <Card padding="none" className="p-6 flex flex-col">
               <div className="flex items-center gap-2 mb-6">
                 <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Kiszallo reszletek</h2>
+                <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Kiszálló részletek</h2>
               </div>
               <div className="flex-1 flex flex-col items-center justify-center">
                 <div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 mb-4">
@@ -730,7 +730,7 @@ export function StatisticsPage() {
                     <span className="text-[9px] font-bold text-emerald-600/60 uppercase tracking-widest">Max</span>
                   </div>
                 </div>
-                <p className="text-sm font-medium text-dark-700 dark:text-dark-300">Legmagasabb kiszallo</p>
+                <p className="text-sm font-medium text-dark-700 dark:text-dark-300">Legmagasabb kiszálló</p>
               </div>
               <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-dark-100 dark:border-dark-700">
                 <div className="text-center">
@@ -743,13 +743,13 @@ export function StatisticsPage() {
                   <span className="stat-value text-lg font-bold text-dark-900 dark:text-white block" style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {agg.totalCheckoutAttempts}
                   </span>
-                  <span className="text-[10px] text-dark-400 uppercase">Kiserlet</span>
+                  <span className="text-[10px] text-dark-400 uppercase">Kísérlet</span>
                 </div>
                 <div className="text-center">
                   <span className="stat-value text-lg font-bold text-dark-900 dark:text-white block" style={{ fontVariantNumeric: 'tabular-nums' }}>
                     {checkoutRate}%
                   </span>
-                  <span className="text-[10px] text-dark-400 uppercase">Arany</span>
+                  <span className="text-[10px] text-dark-400 uppercase">Arány</span>
                 </div>
               </div>
             </Card>
@@ -765,7 +765,7 @@ export function StatisticsPage() {
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm text-dark-500">Gyozelmi arany</span>
+                    <span className="text-sm text-dark-500">Győzelmi arány</span>
                     <span className="text-sm font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {botWinRate}%
                     </span>
@@ -782,19 +782,19 @@ export function StatisticsPage() {
                     <span className="stat-value text-lg font-bold text-dark-900 dark:text-white block" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {agg.botWins}
                     </span>
-                    <span className="text-[10px] text-dark-400 uppercase">Gyozelem</span>
+                    <span className="text-[10px] text-dark-400 uppercase">Győzelem</span>
                   </div>
                   <div className="bg-dark-50 dark:bg-dark-700/50 rounded-lg p-3 text-center">
                     <span className="stat-value text-lg font-bold text-dark-900 dark:text-white block" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {agg.botGames - agg.botWins}
                     </span>
-                    <span className="text-[10px] text-dark-400 uppercase">Vereseg</span>
+                    <span className="text-[10px] text-dark-400 uppercase">Vereség</span>
                   </div>
                   <div className="bg-dark-50 dark:bg-dark-700/50 rounded-lg p-3 text-center">
                     <span className="stat-value text-lg font-bold text-dark-900 dark:text-white block" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {agg.botAverage.toFixed(1)}
                     </span>
-                    <span className="text-[10px] text-dark-400 uppercase">Atlag</span>
+                    <span className="text-[10px] text-dark-400 uppercase">Átlag</span>
                   </div>
                 </div>
               </div>
@@ -803,13 +803,13 @@ export function StatisticsPage() {
             <Card padding="none" className="p-6">
               <div className="flex items-center gap-2 mb-5">
                 <Users className="w-5 h-5 text-teal-500" />
-                <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Jatekos ellen (PVP)</h2>
+                <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Játékos ellen (PVP)</h2>
                 <Badge variant="default" size="sm">{agg.pvpGames} meccs</Badge>
               </div>
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm text-dark-500">Gyozelmi arany</span>
+                    <span className="text-sm text-dark-500">Győzelmi arány</span>
                     <span className="text-sm font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {pvpWinRate}%
                     </span>
@@ -826,19 +826,19 @@ export function StatisticsPage() {
                     <span className="stat-value text-lg font-bold text-dark-900 dark:text-white block" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {agg.pvpWins}
                     </span>
-                    <span className="text-[10px] text-dark-400 uppercase">Gyozelem</span>
+                    <span className="text-[10px] text-dark-400 uppercase">Győzelem</span>
                   </div>
                   <div className="bg-dark-50 dark:bg-dark-700/50 rounded-lg p-3 text-center">
                     <span className="stat-value text-lg font-bold text-dark-900 dark:text-white block" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {agg.pvpGames - agg.pvpWins}
                     </span>
-                    <span className="text-[10px] text-dark-400 uppercase">Vereseg</span>
+                    <span className="text-[10px] text-dark-400 uppercase">Vereség</span>
                   </div>
                   <div className="bg-dark-50 dark:bg-dark-700/50 rounded-lg p-3 text-center">
                     <span className="stat-value text-lg font-bold text-dark-900 dark:text-white block" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       {agg.pvpAverage.toFixed(1)}
                     </span>
-                    <span className="text-[10px] text-dark-400 uppercase">Atlag</span>
+                    <span className="text-[10px] text-dark-400 uppercase">Átlag</span>
                   </div>
                 </div>
               </div>
@@ -849,12 +849,12 @@ export function StatisticsPage() {
             <Card padding="none" className="p-6">
               <div className="flex items-center gap-2 mb-5">
                 <Swords className="w-5 h-5 text-dark-500" />
-                <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Bot vs PVP osszehasonlitas</h2>
+                <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Bot vs PVP összehasonlítás</h2>
               </div>
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-dark-500">Gyozelmi arany</span>
+                    <span className="text-sm text-dark-500">Győzelmi arány</span>
                     <div className="flex items-center gap-4 text-xs" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       <span className="text-primary-600 dark:text-primary-400 font-bold">Bot {botWinRate}%</span>
                       <span className="text-teal-600 dark:text-teal-400 font-bold">PVP {pvpWinRate}%</span>
@@ -877,7 +877,7 @@ export function StatisticsPage() {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-dark-500">Match atlag</span>
+                    <span className="text-sm text-dark-500">Match átlag</span>
                     <div className="flex items-center gap-4 text-xs" style={{ fontVariantNumeric: 'tabular-nums' }}>
                       <span className="text-primary-600 dark:text-primary-400 font-bold">Bot {agg.botAverage.toFixed(1)}</span>
                       <span className="text-teal-600 dark:text-teal-400 font-bold">PVP {agg.pvpAverage.toFixed(1)}</span>
@@ -937,7 +937,7 @@ export function StatisticsPage() {
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-sm font-semibold text-dark-800 dark:text-dark-200">{sector}</span>
                           <span className="text-sm font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                            {hits} talalat
+                            {hits} találat
                           </span>
                         </div>
                         <div className="h-2 bg-dark-100 dark:bg-dark-700 rounded-full overflow-hidden">
@@ -959,7 +959,7 @@ export function StatisticsPage() {
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">
                   <Clock className="w-5 h-5 text-primary-500" />
-                  <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Meccs elozmeny</h2>
+                  <h2 className="section-title text-lg font-semibold text-dark-900 dark:text-white">Meccs előzmény</h2>
                 </div>
                 <Badge variant="default" size="sm">Utolso {matchHistory.length}</Badge>
               </div>
@@ -967,13 +967,13 @@ export function StatisticsPage() {
                 <table className="w-full min-w-[640px]">
                   <thead>
                     <tr className="border-b border-dark-100 dark:border-dark-700">
-                      <th className="text-left text-xs font-semibold text-dark-400 uppercase tracking-wider px-6 py-3">Datum</th>
-                      <th className="text-left text-xs font-semibold text-dark-400 uppercase tracking-wider px-3 py-3">Tipus</th>
-                      <th className="text-center text-xs font-semibold text-dark-400 uppercase tracking-wider px-3 py-3">Eredmeny</th>
-                      <th className="text-right text-xs font-semibold text-dark-400 uppercase tracking-wider px-3 py-3">Atlag</th>
+                      <th className="text-left text-xs font-semibold text-dark-400 uppercase tracking-wider px-6 py-3">Dátum</th>
+                      <th className="text-left text-xs font-semibold text-dark-400 uppercase tracking-wider px-3 py-3">Típus</th>
+                      <th className="text-center text-xs font-semibold text-dark-400 uppercase tracking-wider px-3 py-3">Eredmény</th>
+                      <th className="text-right text-xs font-semibold text-dark-400 uppercase tracking-wider px-3 py-3">Átlag</th>
                       <th className="text-center text-xs font-semibold text-dark-400 uppercase tracking-wider px-3 py-3">Legek</th>
-                      <th className="text-right text-xs font-semibold text-dark-400 uppercase tracking-wider px-3 py-3">Kiszallo</th>
-                      <th className="text-right text-xs font-semibold text-dark-400 uppercase tracking-wider px-6 py-3">Ellenfel</th>
+                      <th className="text-right text-xs font-semibold text-dark-400 uppercase tracking-wider px-3 py-3">Kiszálló</th>
+                      <th className="text-right text-xs font-semibold text-dark-400 uppercase tracking-wider px-6 py-3">Ellenfél</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-dark-50 dark:divide-dark-700/50">
@@ -995,9 +995,9 @@ export function StatisticsPage() {
                         </td>
                         <td className="px-3 py-3 text-center">
                           {match.won ? (
-                            <Badge variant="success" size="sm">Gyozelem</Badge>
+                            <Badge variant="success" size="sm">Győzelem</Badge>
                           ) : (
-                            <Badge variant="error" size="sm">Vereseg</Badge>
+                            <Badge variant="error" size="sm">Vereség</Badge>
                           )}
                         </td>
                         <td className="px-3 py-3 text-right">
@@ -1030,7 +1030,7 @@ export function StatisticsPage() {
                             ) : (
                               <span className="inline-flex items-center gap-1">
                                 <Users className="w-3.5 h-3.5" />
-                                Jatekos
+                                Játékos
                               </span>
                             )}
                           </span>
@@ -1051,7 +1051,7 @@ export function StatisticsPage() {
                 </div>
                 <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-2">Nincs adat</h3>
                 <p className="text-sm text-dark-500 dark:text-dark-400 max-w-sm">
-                  Meg nincs statisztikat ebben az idoszakban. Jatssz nehany meccset, hogy megjelenjenek az adatok!
+                  Még nincs statisztika ebben az időszakban. Játssz néhány meccset, hogy megjelenjenek az adatok!
                 </p>
               </div>
             </Card>

@@ -1,22 +1,5 @@
 import { useState, useEffect } from 'react';
-import {
-  Bell,
-  Send,
-  Plus,
-  Users,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Edit,
-  Trash2,
-  Eye,
-  Filter,
-  Search,
-  Calendar,
-  Target,
-  ChevronDown,
-  BarChart3,
-} from 'lucide-react';
+import { Bell, Send, Plus, Users, Clock, CheckCircle, XCircle, CreditCard as Edit, Trash2, Eye, Filter, Search, Calendar, Target, ChevronDown, BarChart3 } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { Card } from '../../components/ui/Card';
@@ -61,8 +44,8 @@ export function CRMPushPage() {
     const mockCampaigns: Campaign[] = [
       {
         id: '1',
-        title: 'Uj kihivas elerheto!',
-        body: 'Probald ki az uj heti kihivast es nyerj extra tokeneket!',
+        title: 'Új kihívás elérhető!',
+        body: 'Próbáld ki az új heti kihívást és nyerj extra tokeneket!',
         category: 'game',
         target_audience: 'all_users',
         scheduled_at: null,
@@ -106,8 +89,8 @@ export function CRMPushPage() {
       },
       {
         id: '4',
-        title: 'Udvozlunk uj tagunk!',
-        body: 'Koszonjuk, hogy csatlakoztál! Kezdd el az edzest most!',
+        title: 'Üdvözlünk új tagunk!',
+        body: 'Köszönjük, hogy csatlakoztál! Kezdd el az edzést most!',
         category: 'system',
         target_audience: 'new_users',
         scheduled_at: null,
@@ -128,13 +111,13 @@ export function CRMPushPage() {
   const getStatusBadge = (status: Campaign['status']) => {
     switch (status) {
       case 'draft':
-        return <Badge variant="default">Piszkozat</Badge>;
+        return <Badge variant="default">Piszkózat</Badge>;
       case 'scheduled':
-        return <Badge variant="warning">Utemezve</Badge>;
+        return <Badge variant="warning">Ütemezve</Badge>;
       case 'sending':
-        return <Badge variant="primary">Kuldes...</Badge>;
+        return <Badge variant="primary">Küldés...</Badge>;
       case 'sent':
-        return <Badge variant="success">Elkuldve</Badge>;
+        return <Badge variant="success">Elküldve</Badge>;
       case 'failed':
         return <Badge variant="error">Sikertelen</Badge>;
     }
@@ -143,17 +126,17 @@ export function CRMPushPage() {
   const getAudienceLabel = (audience: string) => {
     switch (audience) {
       case 'all_users':
-        return 'Minden felhasznalo';
+        return 'Minden felhasználó';
       case 'free_users':
-        return 'Ingyenes felhasznalok';
+        return 'Ingyenes felhasználók';
       case 'premium_users':
-        return 'Premium felhasznalok';
+        return 'Premium felhasználók';
       case 'new_users':
-        return 'Uj felhasznalok';
+        return 'Új felhasználók';
       case 'inactive_users':
-        return 'Inaktiv felhasznalok';
+        return 'Inaktív felhasználók';
       case 'tournament_participants':
-        return 'Torna resztvevok';
+        return 'Torna résztvevők';
       default:
         return audience;
     }
@@ -191,10 +174,10 @@ export function CRMPushPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-dark-900 dark:text-white">
-            Push Kampanyok
+            Push Kampányok
           </h1>
           <p className="text-dark-500 dark:text-dark-400 mt-1">
-            Push ertesitesek kezelese es kuldese
+            Push értesítések kezelése és küldése
           </p>
         </div>
         <Button
@@ -202,7 +185,7 @@ export function CRMPushPage() {
           leftIcon={<Plus className="w-4 h-4" />}
           onClick={() => setShowCreateModal(true)}
         >
-          Uj kampany
+          Új kampány
         </Button>
       </div>
 
@@ -213,7 +196,7 @@ export function CRMPushPage() {
               <Bell className="w-5 h-5 text-primary-600" />
             </div>
             <div>
-              <p className="text-sm text-dark-500">Osszes</p>
+              <p className="text-sm text-dark-500">Összes</p>
               <p className="text-xl font-bold text-dark-900 dark:text-white">{stats.total}</p>
             </div>
           </div>
@@ -225,7 +208,7 @@ export function CRMPushPage() {
               <Edit className="w-5 h-5 text-dark-500" />
             </div>
             <div>
-              <p className="text-sm text-dark-500">Piszkozat</p>
+              <p className="text-sm text-dark-500">Piszkózat</p>
               <p className="text-xl font-bold text-dark-900 dark:text-white">{stats.draft}</p>
             </div>
           </div>
@@ -237,7 +220,7 @@ export function CRMPushPage() {
               <Clock className="w-5 h-5 text-amber-600" />
             </div>
             <div>
-              <p className="text-sm text-dark-500">Utemezve</p>
+              <p className="text-sm text-dark-500">Ütemezve</p>
               <p className="text-xl font-bold text-dark-900 dark:text-white">{stats.scheduled}</p>
             </div>
           </div>
@@ -249,7 +232,7 @@ export function CRMPushPage() {
               <CheckCircle className="w-5 h-5 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-dark-500">Elkuldve</p>
+              <p className="text-sm text-dark-500">Elküldve</p>
               <p className="text-xl font-bold text-dark-900 dark:text-white">{stats.sent}</p>
             </div>
           </div>
@@ -270,16 +253,16 @@ export function CRMPushPage() {
                 }`}
               >
                 {tab === 'all' && 'Mind'}
-                {tab === 'draft' && 'Piszkozat'}
-                {tab === 'scheduled' && 'Utemezve'}
-                {tab === 'sent' && 'Elkuldve'}
+                {tab === 'draft' && 'Piszkózat'}
+                {tab === 'scheduled' && 'Ütemezve'}
+                {tab === 'sent' && 'Elküldve'}
               </button>
             ))}
           </div>
 
           <div className="flex-1">
             <Input
-              placeholder="Kereses..."
+              placeholder="Keresés..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               leftIcon={<Search className="w-4 h-4" />}
@@ -393,18 +376,18 @@ function CampaignRow({ campaign, onEdit, getStatusBadge, getAudienceLabel }: Cam
         <div className="border-t border-dark-200 dark:border-dark-700 p-4 bg-dark-50 dark:bg-dark-800/50">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div>
-              <p className="text-xs text-dark-500 mb-1">Celcsoport</p>
+              <p className="text-xs text-dark-500 mb-1">Célcsoport</p>
               <p className="text-sm font-medium text-dark-900 dark:text-white">
                 {getAudienceLabel(campaign.target_audience)}
               </p>
             </div>
             <div>
-              <p className="text-xs text-dark-500 mb-1">Kategoria</p>
+              <p className="text-xs text-dark-500 mb-1">Kategória</p>
               <Badge variant="secondary">{campaign.category}</Badge>
             </div>
             {campaign.scheduled_at && (
               <div>
-                <p className="text-xs text-dark-500 mb-1">Utemezve</p>
+                <p className="text-xs text-dark-500 mb-1">Ütemezve</p>
                 <p className="text-sm font-medium text-dark-900 dark:text-white">
                   {format(new Date(campaign.scheduled_at), 'yyyy.MM.dd HH:mm', { locale: hu })}
                 </p>
@@ -412,7 +395,7 @@ function CampaignRow({ campaign, onEdit, getStatusBadge, getAudienceLabel }: Cam
             )}
             {campaign.sent_at && (
               <div>
-                <p className="text-xs text-dark-500 mb-1">Elkuldve</p>
+                <p className="text-xs text-dark-500 mb-1">Elküldve</p>
                 <p className="text-sm font-medium text-dark-900 dark:text-white">
                   {format(new Date(campaign.sent_at), 'yyyy.MM.dd HH:mm', { locale: hu })}
                 </p>
@@ -441,27 +424,27 @@ function CampaignRow({ campaign, onEdit, getStatusBadge, getAudienceLabel }: Cam
             {campaign.status === 'draft' && (
               <>
                 <Button variant="primary" size="sm" leftIcon={<Send className="w-4 h-4" />}>
-                  Kuldes
+                  Küldés
                 </Button>
                 <Button variant="outline" size="sm" leftIcon={<Clock className="w-4 h-4" />}>
-                  Utemez
+                  Ütemez
                 </Button>
               </>
             )}
             {campaign.status === 'scheduled' && (
               <Button variant="outline" size="sm" leftIcon={<XCircle className="w-4 h-4" />}>
-                Megse
+                Mégse
               </Button>
             )}
             <Button variant="ghost" size="sm" leftIcon={<Edit className="w-4 h-4" />} onClick={onEdit}>
-              Szerkeszt
+              Szerkesztés
             </Button>
             <Button variant="ghost" size="sm" leftIcon={<Eye className="w-4 h-4" />}>
-              Reszletek
+              Részletek
             </Button>
             {campaign.status === 'draft' && (
               <Button variant="ghost" size="sm" leftIcon={<Trash2 className="w-4 h-4 text-red-500" />}>
-                Torles
+                Törlés
               </Button>
             )}
           </div>
@@ -495,25 +478,25 @@ function CreateCampaignModal({ campaign, onClose, onSave }: CreateCampaignModalP
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <Card className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold text-dark-900 dark:text-white mb-6">
-          {campaign ? 'Kampany szerkesztese' : 'Uj kampany'}
+          {campaign ? 'Kampány szerkesztése' : 'Új kampány'}
         </h2>
 
         <div className="space-y-4">
           <Input
-            label="Cim"
+            label="Cím"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ertesites cime"
+            placeholder="Értesítés címe"
           />
 
           <div>
             <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-1">
-              Uzenet
+              Üzenet
             </label>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Ertesites szovege..."
+              placeholder="Értesítés szövege..."
               rows={3}
               className="w-full px-4 py-2 bg-white dark:bg-dark-800 border border-dark-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all resize-none"
             />
@@ -521,7 +504,7 @@ function CreateCampaignModal({ campaign, onClose, onSave }: CreateCampaignModalP
 
           <div>
             <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-1">
-              Kategoria
+              Kategória
             </label>
             <select
               value={category}
@@ -529,36 +512,36 @@ function CreateCampaignModal({ campaign, onClose, onSave }: CreateCampaignModalP
               className="w-full px-4 py-2 bg-white dark:bg-dark-800 border border-dark-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
             >
               <option value="system">Rendszer</option>
-              <option value="game">Jatek</option>
+              <option value="game">Játék</option>
               <option value="tournament">Torna</option>
               <option value="club">Klub</option>
               <option value="admin">Admin</option>
-              <option value="nudge">Emlekeztetok</option>
+              <option value="nudge">Emlékeztetők</option>
             </select>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-1">
-              Celcsoport
+              Célcsoport
             </label>
             <select
               value={audience}
               onChange={(e) => setAudience(e.target.value)}
               className="w-full px-4 py-2 bg-white dark:bg-dark-800 border border-dark-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
             >
-              <option value="all_users">Minden felhasznalo</option>
-              <option value="free_users">Ingyenes felhasznalok</option>
-              <option value="premium_users">Premium felhasznalok</option>
-              <option value="new_users">Uj felhasznalok (7 napon belul)</option>
-              <option value="inactive_users">Inaktiv felhasznalok</option>
-              <option value="tournament_participants">Torna resztvevok</option>
+              <option value="all_users">Minden felhasználó</option>
+              <option value="free_users">Ingyenes felhasználók</option>
+              <option value="premium_users">Premium felhasználók</option>
+              <option value="new_users">Új felhasználók (7 napon belül)</option>
+              <option value="inactive_users">Inaktív felhasználók</option>
+              <option value="tournament_participants">Torna résztvevők</option>
             </select>
           </div>
         </div>
 
         <div className="flex gap-3 mt-6">
           <Button variant="outline" className="flex-1" onClick={onClose}>
-            Megse
+            Mégse
           </Button>
           <Button
             variant="primary"
@@ -566,7 +549,7 @@ function CreateCampaignModal({ campaign, onClose, onSave }: CreateCampaignModalP
             onClick={handleSave}
             isLoading={isSaving}
           >
-            Mentes
+            Mentés
           </Button>
         </div>
       </Card>

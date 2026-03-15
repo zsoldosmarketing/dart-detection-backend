@@ -100,7 +100,7 @@ function App() {
       <div className="min-h-screen flex items-center justify-center bg-dark-900">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-dark-400 mt-4">Betoltes...</p>
+          <p className="text-dark-400 mt-4">Betöltés...</p>
         </div>
       </div>
     );
@@ -152,7 +152,7 @@ function App() {
               <Route path="drills" element={<PlaceholderPage title="Gyakorlatok" />} />
               <Route path="programs" element={<PlaceholderPage title="Programok" />} />
               <Route path="clubs" element={<PlaceholderPage title="Klubok" />} />
-              <Route path="tournaments" element={<PlaceholderPage title="Tornak" />} />
+              <Route path="tournaments" element={<PlaceholderPage title="Tornák" />} />
               <Route path="audit" element={<CRMAuditPage />} />
               <Route path="health" element={<CRMHealthPage />} />
               <Route path="gdpr" element={<CRMGDPRPage />} />

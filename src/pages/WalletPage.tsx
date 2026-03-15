@@ -144,7 +144,7 @@ export function WalletPage() {
               <TrendingUp className="w-5 h-5 text-success-500" />
             </div>
             <div>
-              <p className="text-sm text-dark-500">Osszesen szerzett</p>
+              <p className="text-sm text-dark-500">Összesen szerzett</p>
               <p className="text-xl font-bold text-dark-900 dark:text-white">
                 +{account?.lifetime_earned || 0}
               </p>
@@ -158,7 +158,7 @@ export function WalletPage() {
               <TrendingDown className="w-5 h-5 text-error-500" />
             </div>
             <div>
-              <p className="text-sm text-dark-500">Osszesen elkoltott</p>
+              <p className="text-sm text-dark-500">Összesen elköltött</p>
               <p className="text-xl font-bold text-dark-900 dark:text-white">
                 -{account?.lifetime_spent || 0}
               </p>

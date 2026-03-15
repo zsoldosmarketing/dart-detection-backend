@@ -396,10 +396,10 @@ export function PVPMatchmakingPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-dark-900 dark:text-white">
-            Online Jatekosok
+            Online Játékosok
           </h1>
           <p className="text-dark-500 dark:text-dark-400 mt-1">
-            Keress ellenfelet vagy fogadj el meghivasokat
+            Keress ellenfelet vagy fogadj el meghívásokat
           </p>
         </div>
       </div>
@@ -407,7 +407,7 @@ export function PVPMatchmakingPage() {
       {pendingInvites.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-lg font-semibold text-dark-900 dark:text-white">
-            Beerkezett meghivok ({pendingInvites.length})
+            Beérkezett meghívók ({pendingInvites.length})
           </h2>
           {pendingInvites.map((invite) => (
             <GameInviteCard
@@ -421,7 +421,7 @@ export function PVPMatchmakingPage() {
 
       <Card>
         <h2 className="text-lg font-semibold text-dark-900 dark:text-white mb-4">
-          Jatek beallitasok
+          Játék beállítások
         </h2>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -500,7 +500,7 @@ export function PVPMatchmakingPage() {
               leftIcon={<X className="w-4 h-4" />}
               onClick={cancelMatchmaking}
             >
-              Megse
+              Mégse
             </Button>
           </div>
         ) : (
@@ -521,12 +521,12 @@ export function PVPMatchmakingPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-dark-900 dark:text-white flex items-center gap-2">
               <Swords className="w-5 h-5 text-warning-600" />
-              Varakozó jatekosok ({lobbyEntries.length})
+              Várakozó játékosok ({lobbyEntries.length})
             </h2>
           </div>
 
           <p className="text-sm text-dark-600 dark:text-dark-400 mb-4">
-            Ezek a jatekosok mar megadtak a jatek beallitasaikat es varjak a kihivasod!
+            Ezek a játékosok már megadták a játék beállításaikat és várják a kihívásodat!
           </p>
 
           <div className="space-y-2">
@@ -555,7 +555,7 @@ export function PVPMatchmakingPage() {
                       {entry.player_stats?.pvp_average && entry.player_stats.pvp_average > 0 && (
                         <Badge variant="secondary" size="sm">
                           <Target className="w-3 h-3 mr-1" />
-                          {entry.player_stats.pvp_average.toFixed(1)} atlag
+                          {entry.player_stats.pvp_average.toFixed(1)} átlag
                         </Badge>
                       )}
                     </div>
@@ -587,7 +587,7 @@ export function PVPMatchmakingPage() {
                   disabled={sendingInvite === entry.id}
                   className="whitespace-nowrap"
                 >
-                  Kihivas
+                  Kihívás
                 </Button>
               </div>
             ))}
@@ -599,16 +599,16 @@ export function PVPMatchmakingPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-dark-900 dark:text-white flex items-center gap-2">
             <Users className="w-5 h-5" />
-            Online jatekosok ({onlinePlayers.length})
+            Online játékosok ({onlinePlayers.length})
           </h2>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-sm text-dark-500">Elo</span>
+            <span className="text-sm text-dark-500">Élő</span>
           </div>
         </div>
 
         <Input
-          placeholder="Jatekos keresese..."
+          placeholder="Játékos keresése..."
           value={playerSearch}
           onChange={(e) => setPlayerSearch(e.target.value)}
           leftIcon={<Search className="w-4 h-4" />}
@@ -617,7 +617,7 @@ export function PVPMatchmakingPage() {
 
         {filteredPlayers.length === 0 ? (
           <div className="text-center py-8 text-dark-500 dark:text-dark-400">
-            Nincs elerheto online jatekos
+            Nincs elérhető online játékos
           </div>
         ) : (
           <div className="space-y-2">

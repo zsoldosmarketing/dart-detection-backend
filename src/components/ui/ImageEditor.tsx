@@ -192,11 +192,11 @@ export function ImageEditor({ imageUrl, onSave, onCancel }: ImageEditorProps) {
 
           <div className="flex gap-2">
             <Button variant="outline" onClick={onCancel}>
-              Megse
+              Mégse
             </Button>
             <Button onClick={handleSave}>
               <Check className="w-4 h-4 mr-2" />
-              Mentes
+              Mentés
             </Button>
           </div>
         </div>

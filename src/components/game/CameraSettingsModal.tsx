@@ -41,8 +41,8 @@ export const CameraSettingsModal = memo(function CameraSettingsModal({
               <Camera className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white">Kamera valasztas</h3>
-              <p className="text-sm text-dark-400">Valassz az elerheto kamerak kozul</p>
+              <h3 className="text-lg font-semibold text-white">Kamera választás</h3>
+              <p className="text-sm text-dark-400">Válassz az elérhető kamerák közül</p>
             </div>
           </div>
           <button
@@ -91,7 +91,7 @@ export const CameraSettingsModal = memo(function CameraSettingsModal({
                     ) : activeRemoteCamera === session.id ? (
                       <div className="flex items-center gap-2 text-green-400">
                         <Wifi className="w-5 h-5" />
-                        <span className="text-sm font-medium">Aktiv</span>
+                        <span className="text-sm font-medium">Aktív</span>
                       </div>
                     ) : null}
                   </div>
@@ -131,7 +131,7 @@ export const CameraSettingsModal = memo(function CameraSettingsModal({
                     {index === currentCameraIndex && !activeRemoteCamera && (
                       <div className="flex items-center gap-2 text-blue-400">
                         <Check className="w-5 h-5" />
-                        <span className="text-sm font-medium">Aktiv</span>
+                        <span className="text-sm font-medium">Aktív</span>
                       </div>
                     )}
                   </div>

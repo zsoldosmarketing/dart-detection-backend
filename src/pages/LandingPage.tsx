@@ -111,23 +111,23 @@ function Dartboard() {
 }
 
 const features = [
-  { icon: Target, title: 'Professzionalis edzes', desc: '180+ gyakorlat es strukturalt edzesprogramok minden szinthez.', color: 'text-blue-400 bg-blue-500/10' },
-  { icon: Swords, title: 'Elomeccs & PVP', desc: 'Jatssz online barki ellen valos idoben, vagy kihivd a barataidat.', color: 'text-green-400 bg-green-500/10' },
-  { icon: BarChart3, title: 'Reszletes statisztikak', desc: 'Minden dobas nyomon kovetve. Atlagok, trendek, fejlodes egy helyen.', color: 'text-orange-400 bg-orange-500/10' },
-  { icon: Camera, title: 'Kamera felismeres', desc: 'AI-alapu dart felismeres - automatikusan rogziti a dobasaidat.', color: 'text-blue-400 bg-blue-500/10' },
-  { icon: Mic, title: 'Hangvezerles', desc: 'Mondd be a pontszamot es a rendszer automatikusan rogziti.', color: 'text-green-400 bg-green-500/10' },
-  { icon: Trophy, title: 'Klubok & Tornak', desc: 'Csatlakozz klubokhoz, indits versenyeket es merkozhetsz masokkal.', color: 'text-orange-400 bg-orange-500/10' },
+  { icon: Target, title: 'Professzionális edzés', desc: '180+ gyakorlat és strukturált edzésprogramok minden szinthez.', color: 'text-blue-400 bg-blue-500/10' },
+  { icon: Swords, title: 'Élőmeccs & PVP', desc: 'Játssz online bárki ellen valós időben, vagy hívd ki a barátaidat.', color: 'text-green-400 bg-green-500/10' },
+  { icon: BarChart3, title: 'Részletes statisztikák', desc: 'Minden dobás nyomon követve. Átlagok, trendek, fejlődés egy helyen.', color: 'text-orange-400 bg-orange-500/10' },
+  { icon: Camera, title: 'Kamera felismerés', desc: 'AI-alapú dart felismerés - automatikusan rögzíti a dobásaidat.', color: 'text-blue-400 bg-blue-500/10' },
+  { icon: Mic, title: 'Hangvezérlés', desc: 'Mondd be a pontszámot és a rendszer automatikusan rögzíti.', color: 'text-green-400 bg-green-500/10' },
+  { icon: Trophy, title: 'Klubok & Tornák', desc: 'Csatlakozz klubokhoz, indíts versenyeket és mérkőzhetsz másokkal.', color: 'text-orange-400 bg-orange-500/10' },
 ];
 
 const steps = [
-  { num: '01', title: 'Regisztralj ingyen', desc: 'Hozd letre a fiokod masodpercek alatt, teljesen ingyen.', icon: UserPlus },
-  { num: '02', title: 'Edz okosan', desc: 'Valassz 180+ gyakorlat kozul es koveted a fejlodest.', icon: Zap },
-  { num: '03', title: 'Versenyezz', desc: 'Merkozhetsz masokkal, csatlakozz tornakhoz es klubokhoz.', icon: Trophy },
+  { num: '01', title: 'Regisztrálj ingyen', desc: 'Hozd létre a fiókodat másodpercek alatt, teljesen ingyen.', icon: UserPlus },
+  { num: '02', title: 'Edzz okosan', desc: 'Válassz 180+ gyakorlat közül és kövesd a fejlődést.', icon: Zap },
+  { num: '03', title: 'Versenyezz', desc: 'Mérkőzhetsz másokkal, csatlakozz tornákhoz és klubokhoz.', icon: Trophy },
 ];
 
 const stats = [
-  { value: '10,000+', label: 'Jatekos' },
-  { value: '500,000+', label: 'Dobas' },
+  { value: '10,000+', label: 'Játékos' },
+  { value: '500,000+', label: 'Dobás' },
   { value: '180+', label: 'Gyakorlat' },
   { value: '50+', label: 'Klub' },
 ];
@@ -147,27 +147,27 @@ export function LandingPage() {
             <div className="text-center lg:text-left animate-fade-in">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/20 text-primary-400 text-sm font-medium mb-6 animate-slide-up stagger-1" style={{ animationFillMode: 'both' }}>
                 <Target className="w-4 h-4" />
-                #1 Darts Platform Magyarorszagon
+                #1 Darts Platform Magyarországon
               </div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight tracking-tight mb-6 animate-slide-up stagger-2" style={{ animationFillMode: 'both' }}>
                 <span className="bg-gradient-to-r from-blue-400 via-primary-400 to-green-400 bg-clip-text text-transparent">
                   Emeld magasabbra
                 </span>
                 <br />
-                <span className="text-white">a jatekodat</span>
+                <span className="text-white">a játékodat</span>
               </h1>
               <p className="text-lg sm:text-xl text-dark-400 max-w-lg mx-auto lg:mx-0 mb-8 animate-slide-up stagger-3" style={{ animationFillMode: 'both' }}>
-                Professzionalis edzesprogramok, valos ideju statisztikak es versenyrendszer. Minden, amire szukseged van, hogy profi darts jatekos legy.
+                Professzionális edzésprogramok, valós idejű statisztikák és versenyrendszer. Minden, amire szükséged van, hogy profi darts játékos légy.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start animate-slide-up stagger-4" style={{ animationFillMode: 'both' }}>
                 <Link to="/register">
                   <Button size="lg" className="w-full sm:w-auto text-base px-8 py-3.5 bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 shadow-glow" leftIcon={<UserPlus className="w-5 h-5" />}>
-                    Ingyenes regisztracio
+                    Ingyenes regisztráció
                   </Button>
                 </Link>
                 <Link to="/login">
                   <Button variant="outline" size="lg" className="w-full sm:w-auto text-base px-8 py-3.5 border-dark-600 text-dark-200 hover:bg-dark-800 hover:border-dark-500" leftIcon={<LogIn className="w-5 h-5" />}>
-                    Bejelentkezes
+                    Bejelentkezés
                   </Button>
                 </Link>
               </div>
@@ -270,10 +270,10 @@ export function LandingPage() {
                 Teljesen ingyenes
               </div>
               <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-                Kesz vagy a fejlodesre?
+                Kész vagy a fejlődésre?
               </h2>
               <p className="text-lg text-primary-100/70 max-w-md mx-auto mb-8">
-                Csatlakozz tobb ezer jatekoshoz akik mar a DartsTraining platformon edzik magukat.
+                Csatlakozz több ezer játékoshoz akik már a DartsTraining platformon edzik magukat.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link to="/register">

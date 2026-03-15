@@ -257,7 +257,7 @@ export function ClubDetailPage() {
               <h1 className="text-2xl font-bold text-dark-900 dark:text-white">{club.name}</h1>
               <div className="flex items-center gap-4 text-sm text-dark-500">
                 <span>{club.total_members} tag</span>
-                <span>{club.total_games} jatek</span>
+                <span>{club.total_games} játék</span>
               </div>
             </div>
             <div>
@@ -319,7 +319,7 @@ export function ClubDetailPage() {
                 <div className="flex justify-end mt-3">
                   <Button type="submit" size="sm" disabled={!newPost.trim()} isLoading={isPosting}>
                     <Send className="w-4 h-4 mr-2" />
-                    Kuldes
+                    Küldés
                   </Button>
                 </div>
               </form>
@@ -384,7 +384,7 @@ export function ClubDetailPage() {
                       {getRoleIcon(member.role)}
                     </div>
                     <p className="text-sm text-dark-500">
-                      {member.games_played} jatek | {member.games_won} gyozelem
+                      {member.games_played} játék | {member.games_won} győzelem
                     </p>
                   </div>
                 </div>
@@ -404,23 +404,23 @@ export function ClubDetailPage() {
         <div className="grid md:grid-cols-2 gap-4">
           <Card className="p-6">
             <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-4">
-              Klub statisztikak
+              Klub statisztikák
             </h3>
             <div className="space-y-3">
               <div className="flex justify-between">
-                <span className="text-dark-500">Osszes tag</span>
+                <span className="text-dark-500">Összes tag</span>
                 <span className="font-semibold text-dark-900 dark:text-white">{club.total_members}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-dark-500">Osszes jatek</span>
+                <span className="text-dark-500">Összes játék</span>
                 <span className="font-semibold text-dark-900 dark:text-white">{club.total_games}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-dark-500">Osszes gyozelem</span>
+                <span className="text-dark-500">Összes győzelem</span>
                 <span className="font-semibold text-dark-900 dark:text-white">{club.total_wins}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-dark-500">Atlagos skill</span>
+                <span className="text-dark-500">Átlagos skill</span>
                 <span className="font-semibold text-dark-900 dark:text-white">
                   {club.average_skill?.toFixed(1) || '0'}
                 </span>
@@ -430,7 +430,7 @@ export function ClubDetailPage() {
 
           <Card className="p-6">
             <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-4">
-              Top jatekosok
+              Top játékosok
             </h3>
             <div className="space-y-3">
               {members

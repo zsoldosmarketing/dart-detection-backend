@@ -296,7 +296,7 @@ export function DetectionCorrectionModal({
 
         <div className="sticky bottom-0 bg-gray-900 border-t border-gray-800 p-4 flex gap-3">
           <Button variant="outline" onClick={onCancel} className="flex-1">
-            Megse
+            Mégse
           </Button>
           <Button
             onClick={handleSubmit}

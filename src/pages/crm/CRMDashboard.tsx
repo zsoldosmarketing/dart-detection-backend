@@ -78,13 +78,13 @@ export function CRMDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={<Users className="w-5 h-5" />}
-          label="Osszes felhasznalo"
+          label="Összes felhasználó"
           value={stats.totalUsers}
           color="primary"
         />
         <StatCard
           icon={<Gamepad2 className="w-5 h-5" />}
-          label="Osszes jatek"
+          label="Összes játék"
           value={stats.totalGames}
           color="secondary"
         />
@@ -96,7 +96,7 @@ export function CRMDashboard() {
         />
         <StatCard
           icon={<Trophy className="w-5 h-5" />}
-          label="Tornak"
+          label="Tornák"
           value={stats.totalTournaments}
           color="success"
         />
@@ -104,17 +104,17 @@ export function CRMDashboard() {
 
       <div className="grid lg:grid-cols-2 gap-6">
         <Card>
-          <CardTitle>Legutobbi aktivitas</CardTitle>
+          <CardTitle>Legutóbbi aktivitás</CardTitle>
           <div className="mt-4 text-dark-500 dark:text-dark-400 text-sm">
-            Az aktivitas naplo hamarosan elerheto lesz.
+            Az aktivitás napló hamarosan elérhető lesz.
           </div>
         </Card>
 
         <Card>
-          <CardTitle>Rendszer allapot</CardTitle>
+          <CardTitle>Rendszer állapot</CardTitle>
           <div className="mt-4 space-y-3">
-            <StatusRow label="Adatbazis" status="operational" />
-            <StatusRow label="Auth szolgaltatas" status="operational" />
+            <StatusRow label="Adatbázis" status="operational" />
+            <StatusRow label="Auth szolgáltatás" status="operational" />
             <StatusRow label="Realtime" status="operational" />
             <StatusRow label="Edge Functions" status="operational" />
           </div>
@@ -122,21 +122,21 @@ export function CRMDashboard() {
       </div>
 
       <Card>
-        <CardTitle>Gyors muveletek</CardTitle>
+        <CardTitle>Gyors műveletek</CardTitle>
         <div className="mt-4 grid sm:grid-cols-3 gap-4">
           <QuickAction
             icon={<Bell className="w-5 h-5" />}
-            title="Uj push kampany"
+            title="Új push kampány"
             to="/crm/push"
           />
           <QuickAction
             icon={<Target className="w-5 h-5" />}
-            title="Drill hozzaadasa"
+            title="Drill hozzáadása"
             to="/crm/drills"
           />
           <QuickAction
             icon={<Activity className="w-5 h-5" />}
-            title="Audit naplo"
+            title="Audit napló"
             to="/crm/audit"
           />
         </div>
