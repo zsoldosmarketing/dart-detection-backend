@@ -18,6 +18,8 @@ export interface BoardDetectResult {
   canonical_preview: string | null;
   debug_contour: string | null;
   message: string;
+  image_width?: number;
+  image_height?: number;
 }
 
 export interface ThrowScoreResult {
@@ -54,67 +56,73 @@ export interface AutoCalibrationResult {
   homography?: number[][] | null;
   overlay_points?: number[][] | null;
   canonical_preview?: string | null;
+  center?: { x: number; y: number } | null;
+  radiusX?: number | null;
+  radiusY?: number | null;
 }
 
-const DEFAULT_API_URL = import.meta.env.VITE_DART_DETECTION_API_URL || 'https://dart-detection-backend.onrender.com';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-export function getApiUrl(): string {
-  const override = localStorage.getItem('dart_backend_url_override');
-  if (override && override.includes('dart-detection-backend.onrender.com')) {
-    return override;
+const BOARD_MODEL = import.meta.env.VITE_ROBOFLOW_BOARD_MODEL ?? 'dartboard-detection/1';
+const DART_MODEL = import.meta.env.VITE_ROBOFLOW_DART_MODEL ?? 'dart-tip-detection/1';
+
+function getProxyUrl(action: string, extra: Record<string, string> = {}): string {
+  const url = new URL(`${SUPABASE_URL}/functions/v1/roboflow-proxy`);
+  url.searchParams.set('action', action);
+  for (const [k, v] of Object.entries(extra)) {
+    url.searchParams.set(k, v);
   }
-  return DEFAULT_API_URL;
+  return url.toString();
+}
+
+function proxyHeaders(): Record<string, string> {
+  return {
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+  };
 }
 
 export function isApiConfigured(): boolean {
-  return DEFAULT_API_URL.length > 0;
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 }
 
-export async function checkApiHealth(retries = 3): Promise<{ status: string; board_found: boolean; has_homography: boolean; roboflow_enabled?: boolean } | null> {
-  const apiUrl = getApiUrl();
-  if (!apiUrl) return null;
-
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      const response = await fetch(`${apiUrl}/health`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(8000),
-      });
-      if (response.ok) {
-        return await response.json();
-      }
-    } catch (err) {
-      console.log(`[API] Health check ${attempt + 1}/${retries} failed:`, err instanceof Error ? err.message : 'timeout');
-      if (attempt < retries - 1) {
-        await new Promise(r => setTimeout(r, 1500));
-      }
+export async function checkApiHealth(): Promise<{ status: string; board_found: boolean; has_homography: boolean; roboflow_enabled?: boolean } | null> {
+  try {
+    const response = await fetch(getProxyUrl('health'), {
+      method: 'GET',
+      headers: proxyHeaders(),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      return { status: data.status ?? 'ok', board_found: false, has_homography: false, roboflow_enabled: true };
     }
+  } catch (err) {
+    console.log('[API] Health check failed:', err instanceof Error ? err.message : 'timeout');
   }
   return null;
 }
 
 export async function detectBoard(imageBlob: Blob): Promise<BoardDetectResult | null> {
-  const apiUrl = getApiUrl();
-  if (!apiUrl) return null;
-
   try {
-    const formData = new FormData();
-    formData.append('image', imageBlob, 'board.jpg');
+    const arrayBuffer = await imageBlob.arrayBuffer();
+    console.log('[API] Detecting board via Roboflow...');
 
-    console.log('[API] Detecting board...');
-    const response = await fetch(`${apiUrl}/board/detect`, {
+    const response = await fetch(getProxyUrl('detect_board', { model: BOARD_MODEL }), {
       method: 'POST',
-      body: formData,
-      signal: AbortSignal.timeout(30000),
+      headers: proxyHeaders(),
+      body: arrayBuffer,
+      signal: AbortSignal.timeout(20000),
     });
 
     if (!response.ok) {
       console.error('[API] Board detection failed:', response.status);
       return null;
     }
+
     const result = await response.json();
     console.log('[API] Board detection result:', result);
-    return result;
+    return result as BoardDetectResult;
   } catch (err) {
     console.error('[API] Board detection error:', err instanceof Error ? err.message : 'timeout');
     return null;
@@ -135,75 +143,41 @@ export async function detectBoardWithRetry(imageBlob: Blob, maxRetries = 2): Pro
 }
 
 export async function scoreThrow(
-  beforeBlob: Blob,
+  _beforeBlob: Blob,
   afterBlob: Blob,
-  homography?: number[][]
+  _homography?: number[][]
 ): Promise<ThrowScoreResult | null> {
-  const apiUrl = getApiUrl();
-  if (!apiUrl) return null;
-
   try {
-    const formData = new FormData();
-    formData.append('before', beforeBlob, 'before.jpg');
-    formData.append('after', afterBlob, 'after.jpg');
-    if (homography) {
-      formData.append('homography', JSON.stringify(homography));
-    }
+    const arrayBuffer = await afterBlob.arrayBuffer();
+    console.log('[API] Scoring throw via Roboflow...');
 
-    console.log('[API] Scoring throw...');
-    const response = await fetch(`${apiUrl}/throw/score`, {
+    const response = await fetch(getProxyUrl('score_throw', { model: DART_MODEL, confidence: '35' }), {
       method: 'POST',
-      body: formData,
-      signal: AbortSignal.timeout(30000),
+      headers: proxyHeaders(),
+      body: arrayBuffer,
+      signal: AbortSignal.timeout(20000),
     });
 
     if (!response.ok) {
       console.error('[API] Throw scoring failed:', response.status);
       return null;
     }
+
     const result = await response.json();
     console.log('[API] Throw score result:', result);
-    return result;
+    return result as ThrowScoreResult;
   } catch (err) {
     console.error('[API] Throw scoring error:', err instanceof Error ? err.message : 'timeout');
     return null;
   }
 }
 
-export async function setReferenceImage(imageBlob: Blob): Promise<{ status: string; canonical_preview?: string } | null> {
-  const apiUrl = getApiUrl();
-  if (!apiUrl) return null;
-
-  try {
-    const formData = new FormData();
-    formData.append('image', imageBlob, 'reference.jpg');
-
-    const response = await fetch(`${apiUrl}/set-reference`, {
-      method: 'POST',
-      body: formData,
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (err) {
-    console.error('[API] Set reference error:', err);
-    return null;
-  }
+export async function setReferenceImage(_imageBlob: Blob): Promise<{ status: string; canonical_preview?: string } | null> {
+  return { status: 'ok' };
 }
 
 export async function resetSession(): Promise<boolean> {
-  const apiUrl = getApiUrl();
-  if (!apiUrl) return false;
-
-  try {
-    const response = await fetch(`${apiUrl}/reset`, {
-      method: 'POST',
-      signal: AbortSignal.timeout(5000),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
+  return true;
 }
 
 export async function getSessionStatus(): Promise<{
@@ -212,19 +186,7 @@ export async function getSessionStatus(): Promise<{
   has_reference: boolean;
   ellipse: EllipseData | null;
 } | null> {
-  const apiUrl = getApiUrl();
-  if (!apiUrl) return null;
-
-  try {
-    const response = await fetch(`${apiUrl}/session/status`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!response.ok) return null;
-    return await response.json();
-  } catch {
-    return null;
-  }
+  return { board_found: false, has_homography: false, has_reference: false, ellipse: null };
 }
 
 export function boardDetectToCalibration(result: BoardDetectResult): AutoCalibrationResult {
@@ -252,13 +214,16 @@ export function boardDetectToCalibration(result: BoardDetectResult): AutoCalibra
     radius_y: b,
     rotation_offset: -9.0,
     confidence: result.confidence,
-    method: 'homography',
+    method: 'roboflow',
     message: result.message,
     ellipse: result.ellipse,
     is_angled: Math.abs(a - b) / Math.max(a, b) > 0.1,
-    homography: result.homography,
+    homography: null,
     overlay_points: result.overlay_points,
-    canonical_preview: result.canonical_preview,
+    canonical_preview: null,
+    center: { x: cx, y: cy },
+    radiusX: a,
+    radiusY: b,
   };
 }
 
@@ -351,4 +316,8 @@ export async function autoCalibrateWithRetry(imageBlob: Blob, maxRetries = 2): P
     };
   }
   return boardDetectToCalibration(result);
+}
+
+export function getApiUrl(): string {
+  return `${SUPABASE_URL}/functions/v1/roboflow-proxy`;
 }

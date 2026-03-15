@@ -36,7 +36,6 @@ import {
   parseScoreToTarget,
   captureVideoFrame,
   captureHighQualityFrame,
-  getApiUrl,
   boardDetectToCalibration,
   type BoardDetectResult,
   type ThrowScoreResult,
@@ -139,7 +138,7 @@ export function CameraDetectionInput({
       setStatusMessage(t('camera.connecting'));
     }
     try {
-      const health = await checkApiHealth(3);
+      const health = await checkApiHealth();
       if (health) {
         apiConnectedRef.current = true;
         setApiConnected(true);
@@ -167,34 +166,6 @@ export function CameraDetectionInput({
     return () => clearInterval(interval);
   }, [checkConnection]);
 
-  const captureZoomedFrame = useCallback((video: HTMLVideoElement, quality = 0.85): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        reject(new Error('Failed to get canvas context'));
-        return;
-      }
-
-      const zoom = zoomRegionRef.current;
-      if (zoom) {
-        canvas.width = zoom.w;
-        canvas.height = zoom.h;
-        ctx.drawImage(video, zoom.x, zoom.y, zoom.w, zoom.h, 0, 0, zoom.w, zoom.h);
-      } else {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0);
-      }
-
-      canvas.toBlob(
-        (blob) => blob ? resolve(blob) : reject(new Error('Failed to create blob')),
-        'image/jpeg',
-        quality
-      );
-    });
-  }, []);
-
   const runBoardDetection = useCallback(async () => {
     const video = videoRef.current;
     if (!video || !apiConnectedRef.current) return;
@@ -204,11 +175,33 @@ export function CameraDetectionInput({
       const frameBlob = await captureVideoFrame(video);
       const result = await detectBoard(frameBlob);
 
-      if (result && result.board_found) {
-        boardResultRef.current = result;
-        homographyRef.current = result.homography;
+      if (result && result.board_found && result.ellipse) {
+        const imgW = result.image_width ?? video.videoWidth;
+        const imgH = result.image_height ?? video.videoHeight;
+        const scaleX = video.videoWidth / imgW;
+        const scaleY = video.videoHeight / imgH;
 
-        const cal = boardDetectToCalibration(result);
+        const scaledResult = {
+          ...result,
+          ellipse: {
+            ...result.ellipse,
+            cx: result.ellipse.cx * scaleX,
+            cy: result.ellipse.cy * scaleY,
+            a: result.ellipse.a * scaleX,
+            b: result.ellipse.b * scaleY,
+          },
+          bull_center: result.bull_center
+            ? [result.bull_center[0] * scaleX, result.bull_center[1] * scaleY]
+            : null,
+          overlay_points: result.overlay_points
+            ? result.overlay_points.map(([x, y]) => [x * scaleX, y * scaleY])
+            : null,
+        };
+
+        boardResultRef.current = scaledResult;
+        homographyRef.current = null;
+
+        const cal = boardDetectToCalibration(scaledResult);
         calibrationRef.current = cal;
         setBoardConfidence(result.confidence);
 
@@ -217,16 +210,12 @@ export function CameraDetectionInput({
         await setReferenceImage(frameBlob);
 
         cameraStore.setCalibration(cal);
-        cameraStore.setBoardResult(result);
-        cameraStore.setHomography(result.homography);
+        cameraStore.setBoardResult(scaledResult);
+        cameraStore.setHomography(null);
 
         if (boardDetectIntervalRef.current) {
           clearInterval(boardDetectIntervalRef.current);
           boardDetectIntervalRef.current = null;
-        }
-
-        if (result.canonical_preview) {
-          setDebugImages(prev => ({ ...prev, canonical: result.canonical_preview! }));
         }
       }
     } catch (err) {
@@ -531,14 +520,6 @@ export function CameraDetectionInput({
       );
 
       if (result) {
-        if (result.debug) {
-          setDebugImages({
-            diff: result.debug.diff_preview,
-            mask: result.debug.mask_preview,
-            canonical: result.debug.canonical_preview || result.debug.canonical_after,
-          });
-        }
-
         if (result.tip_original && result.tip_original.length >= 2) {
           lastDartHitRef.current = { x: result.tip_original[0], y: result.tip_original[1] };
         }
@@ -746,7 +727,6 @@ export function CameraDetectionInput({
                     <WifiOff className="w-3.5 h-3.5 text-amber-400" />
                     <span className="text-amber-400 text-xs font-medium">{t('camera.connecting_label')}</span>
                   </div>
-                  <span className="text-dark-500 text-xs truncate max-w-[200px]">{getApiUrl()}</span>
                   <Button
                     onClick={() => checkConnection(true)}
                     variant="ghost"
