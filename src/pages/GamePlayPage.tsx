@@ -35,6 +35,7 @@ import {
   calculateLegStats,
   type StatTrackingContext,
 } from '../lib/statisticsTracker';
+import { aiCoachService } from '../lib/aiCoachService';
 
 interface GameRoom {
   id: string;
@@ -308,6 +309,19 @@ export function GamePlayPage() {
           }
 
           setMessage(isWinner ? 'Győzelem!' : `${winnerName} nyert!`);
+
+          if (room.status === 'completed' && user?.id) {
+            const myPlayer = players.find(p => p.user_id === user.id);
+            const otherPlayer = players.find(p => p.user_id !== user.id);
+            const myMatchStats = Object.values(playerMatchStats).find((_, i) => Object.keys(playerMatchStats)[i] === user.id) as { matchAverage?: number } | undefined;
+            aiCoachService.triggerPostGame({
+              won: isWinner,
+              match_average: (myMatchStats as any)?.matchAverage || 0,
+              legs_won: myPlayer?.legs_won || 0,
+              legs_lost: otherPlayer?.legs_won || 0,
+              game_mode: room.mode,
+            });
+          }
 
           setTimeout(() => {
             navigate('/game');

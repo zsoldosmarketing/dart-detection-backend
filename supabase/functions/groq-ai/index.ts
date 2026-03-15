@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { message, conversation_id, action = "chat", context, game_result } = body;
+    const { message, conversation_id, action = "chat", context, game_result, training_result } = body;
 
     const { data: configs } = await supabaseAdmin
       .from("app_config")
@@ -98,10 +98,11 @@ Deno.serve(async (req: Request) => {
 
     let convId = conversation_id;
 
-    if (!convId && (action === "chat" || action === "greeting" || action === "game_result")) {
+    if (!convId && (action === "chat" || action === "greeting" || action === "game_result" || action === "training_result")) {
       const titleMap: Record<string, string> = {
         greeting: "AI Edző üdvözlés",
         game_result: "Meccs utáni elemzés",
+        training_result: "Edzés utáni értékelés",
         chat: message?.substring(0, 60) || "Új chat",
       };
       const { data: newConv } = await supabaseAdmin
@@ -123,7 +124,7 @@ Deno.serve(async (req: Request) => {
       historyMessages = history || [];
     }
 
-    const userMessage = message || buildActionPrompt(action, profile, stats, context, game_result, recentInsights);
+    const userMessage = message || buildActionPrompt(action, profile, stats, context, game_result, training_result, recentInsights);
     historyMessages.push({ role: "user", content: userMessage });
 
     if (convId) {
@@ -174,13 +175,17 @@ Deno.serve(async (req: Request) => {
       ]);
     }
 
-    if (action === "analyze" || action === "game_result") {
-      const insightType = action === "game_result" ? "performance" : "recommendation";
-      const insightTitle = action === "game_result" ? "Meccs utáni elemzés" : "Teljesítményelemzés";
+    if (action === "analyze" || action === "game_result" || action === "training_result") {
+      const insightMap: Record<string, { type: string; title: string }> = {
+        game_result: { type: "performance", title: "Meccs utáni elemzés" },
+        training_result: { type: "recommendation", title: "Edzés utáni értékelés" },
+        analyze: { type: "recommendation", title: "Teljesítményelemzés" },
+      };
+      const insight = insightMap[action];
       await supabaseAdmin.from("ai_insights").insert({
         user_id: user.id,
-        insight_type: insightType,
-        title: insightTitle,
+        insight_type: insight.type,
+        title: insight.title,
         content: aiContent,
         is_read: false,
       });
@@ -309,6 +314,7 @@ function buildActionPrompt(
   stats: Record<string, unknown> | null,
   context?: string,
   gameResult?: Record<string, unknown>,
+  trainingResult?: Record<string, unknown>,
   recentInsights?: Record<string, unknown>[]
 ): string {
   const name = (profile?.display_name as string) || (profile?.username as string) || "Játékos";
@@ -335,9 +341,16 @@ function buildActionPrompt(
     case "game_result": {
       if (gameResult) {
         const result = gameResult.won ? "megnyerte" : "elvesztette";
-        return `${name} most ${result} a meccsét. Eredmény: ${gameResult.legs_won || 0}-${gameResult.legs_lost || 0} leg, átlag: ${(gameResult.match_average as number || 0).toFixed(1)}. Adj egy rövid, személyes visszajelzést: mi ment jól, min lehet javítani, és egy motiváló zárás.`;
+        return `${name} most ${result} a meccsét. Eredmény: ${gameResult.legs_won || 0}-${gameResult.legs_lost || 0} leg, átlag: ${(gameResult.match_average as number || 0).toFixed(1)}. Adj egy rövid, személyes visszajelzést: mi ment jól, min lehet javítani, és egy motiváló zárás. Maximum 3 bekezdés.`;
       }
       return `Elemezd ${name} legutóbbi meccsét és adj visszajelzést.`;
+    }
+    case "training_result": {
+      const tr = trainingResult as Record<string, unknown> | undefined;
+      if (tr) {
+        return `${name} most befejezett egy edzést: "${tr.drill_name}", találati arány: ${((tr.hit_rate as number) || 0).toFixed(1)}%, összes nyíl: ${tr.total_darts || 0}, időtartam: ${Math.floor(((tr.duration_seconds as number) || 0) / 60)} perc. Adj egy rövid, személyes visszajelzést az edzésről, emeld ki mi ment jól, adj egy konkrét tippet a következő alkalomra, és zárj motiválóan. Max 3 bekezdés.`;
+      }
+      return `Adj visszajelzést ${name} legutóbbi edzéséről.`;
     }
     default:
       return `Üdvözöld ${name}-t és adj egy rövid, motiváló összefoglalót.`;

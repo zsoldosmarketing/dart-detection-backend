@@ -14,6 +14,7 @@ import { useAuthStore } from '../stores/authStore';
 import { getScore, getCheckoutRoutes, getSetupSuggestions, isCheckout, isBust, formatDartDisplay, type DartTarget, type CheckoutRoute, type SetupSuggestion } from '../lib/dartsEngine';
 import { soundEffects } from '../lib/soundEffects';
 import type { Tables } from '../lib/supabase';
+import { aiCoachService } from '../lib/aiCoachService';
 
 type DrillMode = 'target_hit' | 'checkout' | 'random_checkout';
 
@@ -319,6 +320,16 @@ export function TrainingSessionPage() {
 
       if (error) {
         console.error('Failed to complete session:', error);
+      }
+
+      if (drill) {
+        aiCoachService.triggerPostTraining({
+          drill_name: drill.name_key || 'Edzés',
+          score: finalScore,
+          hit_rate: hitRate,
+          total_darts: finalDarts,
+          duration_seconds: duration,
+        });
       }
     }
 
