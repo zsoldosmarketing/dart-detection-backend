@@ -14,6 +14,12 @@ import json
 from image_preprocessing import ImagePreprocessor
 from advanced_calibration import AdvancedDartboardCalibration, CalibrationResult
 from advanced_detection import AdvancedDartDetection
+from roboflow_detection import (
+    detect_dart_tip_roboflow,
+    detect_board_roboflow,
+    detect_dart_in_canonical_roboflow,
+    is_available as roboflow_available,
+)
 
 app = FastAPI(
     title="Dart Detection API v4",
@@ -376,6 +382,7 @@ async def health():
         "board_found": session_data["board_found"],
         "has_homography": session_data["homography"] is not None,
         "is_angled": session_data.get("is_angled", False),
+        "roboflow_enabled": roboflow_available(),
     }
 
 
@@ -395,6 +402,11 @@ async def board_detect(image: UploadFile = File(...)):
     if max(h, w) > max_dim:
         scale = max_dim / max(h, w)
         img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+
+    if roboflow_available():
+        rf_board = detect_board_roboflow(img, confidence_threshold=0.40)
+        if rf_board and rf_board["confidence"] > 0.50:
+            print(f"[Roboflow] Board detected at ({rf_board['cx']}, {rf_board['cy']}) conf={rf_board['confidence']:.2f}")
 
     cal_result, processed = find_dartboard_advanced(img)
 
@@ -520,9 +532,29 @@ async def throw_score(
     before_canonical = warp_image(before_img, H, CANONICAL_SIZE)
     after_canonical = warp_image(after_img, H, CANONICAL_SIZE)
 
-    tip, confidence, diff_img, mask_img = detect_dart_in_canonical(before_canonical, after_canonical)
-
     rotation_offset = session_data.get("rotation_offset", -9.0)
+    detection_method = "cv_diff"
+    tip = None
+    confidence = 0.0
+
+    if roboflow_available():
+        rf_tip, rf_conf = detect_dart_in_canonical_roboflow(
+            before_canonical, after_canonical, confidence_threshold=0.35
+        )
+        if rf_tip is not None and rf_conf >= 0.35:
+            tip = rf_tip
+            confidence = rf_conf
+            detection_method = "roboflow"
+            print(f"[Roboflow] Dart tip at canonical {tip} conf={confidence:.2f}")
+
+    if tip is None:
+        tip, confidence, diff_img, mask_img = detect_dart_in_canonical(before_canonical, after_canonical)
+        detection_method = "cv_diff"
+    else:
+        diff_img = cv2.absdiff(after_canonical, before_canonical)
+        mask_img = cv2.cvtColor(cv2.cvtColor(diff_img, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+        _, mask_gray = cv2.threshold(cv2.cvtColor(diff_img, cv2.COLOR_BGR2GRAY), 20, 255, cv2.THRESH_BINARY)
+        mask_img = mask_gray
 
     if tip is None:
         cal = session_data.get("calibration_result")
@@ -589,7 +621,7 @@ async def throw_score(
         decision=decision,
         tip_canonical=list(tip),
         tip_original=tip_original,
-        message=f"Detected {label} ({score_value} pts) [{confidence * 100:.0f}%]",
+        message=f"Detected {label} ({score_value} pts) [{confidence * 100:.0f}%] via {detection_method}",
         debug={
             "diff_preview": image_to_base64(diff_img, 70),
             "mask_preview": image_to_base64(cv2.cvtColor(mask_img, cv2.COLOR_GRAY2BGR), 70),

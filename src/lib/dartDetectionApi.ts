@@ -70,7 +70,7 @@ export function isApiConfigured(): boolean {
   return DEFAULT_API_URL.length > 0;
 }
 
-export async function checkApiHealth(retries = 3): Promise<{ status: string; board_found: boolean; has_homography: boolean } | null> {
+export async function checkApiHealth(retries = 3): Promise<{ status: string; board_found: boolean; has_homography: boolean; roboflow_enabled?: boolean } | null> {
   const apiUrl = getApiUrl();
   if (!apiUrl) return null;
 
