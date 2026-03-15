@@ -60,7 +60,7 @@ function PlaceholderPage({ title }: { title: string }) {
     <div className="text-center py-12">
       <h2 className="text-xl font-semibold text-dark-900 dark:text-white">{title}</h2>
       <p className="text-dark-500 dark:text-dark-400 mt-2">
-        Ez a funkcio hamarosan elerheto lesz.
+        Ez a funkció hamarosan elérhető lesz.
       </p>
     </div>
   );

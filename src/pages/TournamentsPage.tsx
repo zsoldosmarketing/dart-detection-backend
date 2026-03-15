@@ -97,7 +97,7 @@ export function TournamentsPage() {
   };
 
   const handleDelete = async (tournamentId: string) => {
-    if (!confirm('Biztosan törlöd ezt a tornát? Ez a művelet nem visszavonható.')) {
+    if (!confirm(t('tournament.delete_confirm'))) {
       return;
     }
 

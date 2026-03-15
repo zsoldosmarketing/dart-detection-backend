@@ -193,8 +193,8 @@ export function DashboardPage() {
         activities.push({
           id: game.id,
           type: 'game',
-          title: `${game.starting_score} jatek`,
-          subtitle: game.winner_id === user.id ? 'Gyozelem' : 'Vereseg',
+          title: `${game.starting_score} ${t('game.leg')}`,
+          subtitle: game.winner_id === user.id ? t('game.win') : t('game.loss'),
           date: game.created_at,
         });
       });

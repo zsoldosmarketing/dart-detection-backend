@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { t } from '../lib/i18n';
 import { Card } from '../components/ui/Card';
 import { DartScoreInput } from '../components/game/DartScoreInput';
 import { GameHeader } from '../components/game/GameHeader';
@@ -751,7 +752,7 @@ export function GamePlayPage() {
   const handleSurrender = async () => {
     if (!room || !roomId || !user) return;
 
-    const confirmSurrender = window.confirm('Biztosan feladod a játékot?');
+    const confirmSurrender = window.confirm(t('game.surrender_confirm'));
     if (!confirmSurrender) return;
 
     setIsProcessing(true);
@@ -770,13 +771,13 @@ export function GamePlayPage() {
 
       if (error) {
         console.error('Surrender error:', error);
-        alert(`Hiba: ${error.message}`);
+        alert(`${t('game.error_prefix')}: ${error.message}`);
         return;
       }
 
     } catch (err: any) {
       console.error('Failed to surrender:', err);
-      alert(`Nem sikerült feladni a játékot: ${err?.message || 'Ismeretlen hiba'}`);
+      alert(`${t('game.surrender_error')}: ${err?.message || t('error.unknown')}`);
     } finally {
       setIsProcessing(false);
     }
@@ -785,7 +786,7 @@ export function GamePlayPage() {
   const handleSaveAndExit = async () => {
     if (!room || !roomId || !gameState) return;
 
-    const confirmSave = window.confirm('Szeretnéd elmenteni és kilépni? Később folytathatod.');
+    const confirmSave = window.confirm(t('game.save_confirm'));
     if (!confirmSave) return;
 
     setIsProcessing(true);
@@ -801,14 +802,14 @@ export function GamePlayPage() {
 
       if (error) {
         console.error('Save error:', error);
-        alert(`Hiba: ${error.message}`);
+        alert(`${t('game.error_prefix')}: ${error.message}`);
         setIsProcessing(false);
         return;
       }
 
     } catch (err: any) {
       console.error('Failed to save game:', err);
-      alert(`Nem sikerült elmenteni a játékot: ${err?.message || 'Ismeretlen hiba'}`);
+      alert(`${t('game.save_error')}: ${err?.message || t('error.unknown')}`);
       setIsProcessing(false);
     }
   };
@@ -998,7 +999,7 @@ export function GamePlayPage() {
   };
 
   return (
-    <div className="flex flex-col gap-2 h-[calc(100dvh_-_11rem)] md:h-[calc(100dvh_-_8.5rem)] overflow-hidden animate-fade-in">
+    <div className="flex flex-col gap-2 h-[calc(100svh-11rem)] md:h-[calc(100svh-8.5rem)] overflow-hidden animate-fade-in">
       <GameHeader
         mode={room.mode}
         currentLeg={gameState.current_leg}

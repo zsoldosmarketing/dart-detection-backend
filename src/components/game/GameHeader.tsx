@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { t } from '../../lib/i18n';
 import {
   ChevronLeft,
   Volume2,
@@ -47,7 +48,7 @@ export const GameHeader = memo(function GameHeader({
           leftIcon={<ChevronLeft className="w-4 h-4" />}
           onClick={onNavigateBack}
         >
-          Vissza
+          {t('game.back')}
         </Button>
         {isAdmin && (
           <button
@@ -92,11 +93,11 @@ export const GameHeader = memo(function GameHeader({
               ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
               : 'bg-dark-100 dark:bg-dark-700 text-dark-400'
           }`}
-          title={soundEnabled ? 'Hang kikapcsolasa' : 'Hang bekapcsolasa'}
+          title={soundEnabled ? t('common.sound_off') : t('common.sound_on')}
         >
           {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
         </button>
-        <Badge variant="primary">Leg {currentLeg}</Badge>
+        <Badge variant="primary">{t('game.leg')} {currentLeg}</Badge>
         <Badge variant="secondary">{startingScore}</Badge>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { Card } from '../ui/Card';
+import { t } from '../../lib/i18n';
 import type { DartThrow } from '../../lib/dartsEngine';
 
 interface Player {
@@ -109,10 +110,10 @@ export const PlayerScoreCards = memo(function PlayerScoreCards({
                   {displayScore}
                 </p>
                 <div className="mt-1 pt-1 border-t border-dark-100 dark:border-dark-700/50 flex items-center justify-center gap-2 text-[10px] text-dark-400 flex-wrap">
-                  <span>Atl: {getAverage(stats)}</span>
-                  <span>Leg {player.legs_won}/{legsToWin}</span>
+                  <span>{t('game.avg_short')}: {getAverage(stats)}</span>
+                  <span>{t('game.leg')} {player.legs_won}/{legsToWin}</span>
                   {stats?.lastVisitScore !== undefined && stats.visits > 0 && (
-                    <span>Ut: {stats.lastVisitScore}</span>
+                    <span>{t('game.last_short')}: {stats.lastVisitScore}</span>
                   )}
                 </div>
               </div>
@@ -141,16 +142,16 @@ export const PlayerScoreCards = memo(function PlayerScoreCards({
                 {displayScore}
               </p>
               <div className="flex items-center justify-center gap-4 mt-2 text-xs text-dark-400">
-                <span>Atlag: {getAverage(stats)}</span>
-                <span>Elso 9: {getFirst9Avg(stats)}</span>
-                <span>Leg {player.legs_won}/{legsToWin}</span>
+                <span>{t('game.avg_short')}: {getAverage(stats)}</span>
+                <span>{t('game.first9_short')}: {getFirst9Avg(stats)}</span>
+                <span>{t('game.leg')} {player.legs_won}/{legsToWin}</span>
               </div>
             </div>
           </Card>
         );
       })()}
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {players
           .filter(p => p.player_order !== gameState.current_player_order)
           .map((player) => {
@@ -168,7 +169,7 @@ export const PlayerScoreCards = memo(function PlayerScoreCards({
                   {player.current_score}
                 </p>
                 <p className="text-[10px] text-dark-400 mt-0.5">
-                  Atl: {getAverage(stats)} | {player.legs_won}/{legsToWin}
+                  {t('game.avg_short')}: {getAverage(stats)} | {player.legs_won}/{legsToWin}
                 </p>
               </Card>
             );

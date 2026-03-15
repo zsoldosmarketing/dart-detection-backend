@@ -73,12 +73,12 @@ export function ProfilePage() {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Csak kep fajlokat tolthetsz fel');
+      alert(t('profile.upload_image_only'));
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      alert('A kep maximum 5MB lehet');
+      alert(t('profile.image_too_large'));
       return;
     }
 
@@ -124,7 +124,7 @@ export function ProfilePage() {
       setEditingImage(null);
     } catch (error) {
       console.error('Avatar upload error:', error);
-      alert('Hiba tortent a kep feltoltese soran');
+      alert(t('profile.upload_error'));
     } finally {
       setUploadingAvatar(false);
     }

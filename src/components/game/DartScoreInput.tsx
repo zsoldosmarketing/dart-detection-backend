@@ -1,18 +1,5 @@
 import { useState, useEffect } from 'react';
-import {
-  RotateCcw,
-  Lightbulb,
-  HelpCircle,
-  CircleDot,
-  Grid3X3,
-  Settings,
-  Zap,
-  Target,
-  Mic,
-  Volume2,
-  VolumeX,
-  Camera,
-} from 'lucide-react';
+import { RotateCcw, Lightbulb, HelpCircle, CircleDot, Grid3x3 as Grid3X3, Settings, Zap, Target, Mic, Volume2, VolumeX, Camera } from 'lucide-react';
 import { DartboardInput } from './DartboardInput';
 import { NumberPadInput } from './NumberPadInput';
 import { VoiceInput } from './VoiceInput';
@@ -146,13 +133,13 @@ export function DartScoreInput({
       <Card padding="none" className="p-2 sm:p-3 flex-1 min-h-0 flex flex-col overflow-hidden">
         <div className="shrink-0 flex items-center justify-between mb-2">
           <span className="text-sm font-medium text-dark-300">
-            Javitas: {editingDartIndex + 1}. nyil
+            {t('game.correction', { index: editingDartIndex + 1 })}
           </span>
           <button
             onClick={() => setEditingDartIndex(null)}
             className="px-3 py-1 rounded-lg bg-dark-700 hover:bg-dark-600 text-white text-sm"
           >
-            Megse
+            {t('game.correction_cancel')}
           </button>
         </div>
         <NumberPadInput
@@ -201,7 +188,7 @@ export function DartScoreInput({
       </div>
 
       <p className="text-xs text-dark-400 text-center mb-1">
-        Nyil {totalDarts} / 3 | {totalScore} pont
+        {t('game.dart_count', { count: totalDarts, score: totalScore })}
       </p>
 
       <div className="flex items-center gap-1 mb-1">
@@ -219,7 +206,7 @@ export function DartScoreInput({
           disabled={!canSubmit || isProcessing || disabled}
           className="px-3 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white disabled:opacity-30 transition-all text-sm font-medium flex-1"
         >
-          Beküldes ({totalDarts}/3)
+          {t('game.submit_darts', { count: totalDarts })}
         </button>
 
         {onToggleSuggestions && (
@@ -230,7 +217,7 @@ export function DartScoreInput({
                 ? 'bg-primary-600 text-white'
                 : 'bg-dark-700 hover:bg-dark-600 text-white'
             }`}
-            title={showSuggestions ? 'Javaslatok elrejtese' : 'Javaslatok megjelenítése'}
+            title={showSuggestions ? t('game.suggestions_hide') : t('game.suggestions_show')}
           >
             <Lightbulb className="w-4 h-4" />
           </button>
@@ -239,7 +226,7 @@ export function DartScoreInput({
         <button
           onClick={() => setShowVoiceHelp(true)}
           className="p-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-white transition-all"
-          title="Hangvezérlés súgó"
+          title={t('game.voice_help')}
         >
           <HelpCircle className="w-4 h-4" />
         </button>
@@ -310,17 +297,16 @@ export function DartScoreInput({
         <div className="mb-2 p-2 rounded-lg bg-dark-100 dark:bg-dark-800 space-y-3">
           <div>
             <p className="text-xs font-semibold text-dark-700 dark:text-dark-300 mb-2">
-              Felismerési mód
+              {t('game.voice_mode')}
             </p>
             <p className="text-[10px] text-dark-500 dark:text-dark-400 mb-2">
-              Gyors = alacsonyabb pontosság, gyorsabb reagálás. Pontos = magasabb pontosság,
-              lassabb reagálás.
+              {t('game.voice_mode_desc')}
             </p>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { mode: 'fast' as RecognitionMode, label: 'Gyors', icon: Zap },
-                { mode: 'balanced' as RecognitionMode, label: 'Kiegyensúlyozott', icon: CircleDot },
-                { mode: 'accurate' as RecognitionMode, label: 'Pontos', icon: Target },
+                { mode: 'fast' as RecognitionMode, label: t('training.voice_fast'), icon: Zap },
+                { mode: 'balanced' as RecognitionMode, label: t('training.voice_balanced'), icon: CircleDot },
+                { mode: 'accurate' as RecognitionMode, label: t('training.voice_accurate'), icon: Target },
               ].map(({ mode, label, icon: Icon }) => (
                 <button
                   key={mode}
@@ -341,11 +327,10 @@ export function DartScoreInput({
           <div>
             <p className="text-xs font-semibold text-dark-700 dark:text-dark-300 mb-2 flex items-center gap-2">
               <Mic className="w-4 h-4" />
-              Zajszűrő küszöb: {noiseGateThreshold.toFixed(3)}
+              {t('game.noise_gate', { value: noiseGateThreshold.toFixed(3) })}
             </p>
             <p className="text-[10px] text-dark-500 dark:text-dark-400 mb-2">
-              Alacsonyabb érték = érzékenyebb mikrofon (több háttérzaj). Magasabb érték = kevésbé
-              érzékeny (kevesebb hamis pozitív).
+              {t('game.noise_gate_desc')}
             </p>
             <input
               type="range"

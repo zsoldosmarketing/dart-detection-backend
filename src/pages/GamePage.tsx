@@ -195,7 +195,7 @@ export function GamePage() {
 
   const selectRegisteredPlayer = (player: any, index: number) => {
     if (!player.has_pin_code) {
-      alert(`${player.display_name || player.username} még nem állított be PIN kódot a profiljában. PIN kód nélkül nem csatlakozhat a játékhoz.`);
+      alert(t('player.no_pin_code', { name: player.display_name || player.username }));
       return;
     }
     setPendingPlayer({ player, index });

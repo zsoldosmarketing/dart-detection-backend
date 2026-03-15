@@ -188,7 +188,7 @@ export function Navigation() {
             <>
               <div className="pt-6 pb-2 px-3">
                 <span className="text-[11px] font-semibold text-dark-400 dark:text-dark-600 uppercase tracking-widest">
-                  Fiok
+                  {t('nav.account')}
                 </span>
               </div>
 
