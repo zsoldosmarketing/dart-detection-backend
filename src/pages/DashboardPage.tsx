@@ -268,11 +268,11 @@ export function DashboardPage() {
       if (data?.success) {
         window.location.href = `/game/${gameId}`;
       } else {
-        alert(data?.error || 'Hiba tortent a jatek folytatas kozben');
+        alert(data?.error || t('game.continue_error'));
       }
     } catch (err) {
       console.error('Failed to resume game:', err);
-      alert('Nem sikerult folytatni a jatekot');
+      alert(t('game.continue_error'));
     }
   };
 
@@ -312,7 +312,7 @@ export function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-slide-up stagger-1" style={{ animationFillMode: 'both' }}>
         <div>
           <h1 className="text-2xl font-bold text-dark-900 dark:text-white">
-            Szia, {profile?.display_name || profile?.username || 'Jatekos'}!
+            {t('dashboard.greeting', { name: profile?.display_name || profile?.username || t('game.player_label') })}
           </h1>
           <p className="text-dark-500 dark:text-dark-400 mt-1 text-sm">
             {today}
@@ -443,10 +443,10 @@ export function DashboardPage() {
             <div className="text-center py-6">
               <Swords className="w-10 h-10 text-dark-300 dark:text-dark-600 mx-auto mb-3" />
               <p className="text-dark-500 dark:text-dark-400 text-sm">
-                Meg nincs meccs elozmenyed. Jatssz egy meccset!
+                {t('dashboard.no_history')}
               </p>
               <Link to="/game" className="inline-block mt-3">
-                <Button size="sm" leftIcon={<Gamepad2 className="w-4 h-4" />}>Jatek inditasa</Button>
+                <Button size="sm" leftIcon={<Gamepad2 className="w-4 h-4" />}>{t('game.start')}</Button>
               </Link>
             </div>
           </Card>
@@ -540,7 +540,7 @@ export function DashboardPage() {
                         <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
                           <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Mod</p>
                           <p className="text-base font-bold text-dark-900 dark:text-white capitalize">
-                            {match.game_mode === 'bot' ? 'Bot' : match.game_mode === 'pvp' ? 'Online' : 'Helyi'}
+                            {match.game_mode === 'bot' ? t('game.mode_bot') : match.game_mode === 'pvp' ? t('game.mode_pvp') : t('game.mode_local')}
                           </p>
                         </div>
                       </div>

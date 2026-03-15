@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { t } from '../lib/i18n';
 import {
   Swords,
   Filter,
@@ -360,7 +361,6 @@ export function PVPArenaPage() {
         };
       });
 
-      console.log(`Fetched ${entriesWithStats.length} lobby entries`, entriesWithStats.slice(0, 2));
       setLobbyEntries(entriesWithStats);
     }
   };
@@ -425,13 +425,10 @@ export function PVPArenaPage() {
         },
       };
 
-      console.log('Found my lobby:', lobbyWithStats);
       setMyLobby(lobbyWithStats);
     } else if (!myLobby || myLobby.status !== 'waiting') {
-      console.log('No lobby found, clearing state');
       setMyLobby(null);
     } else {
-      console.log('No lobby found but keeping existing state');
     }
   };
 
@@ -483,7 +480,6 @@ export function PVPArenaPage() {
         };
       });
 
-      console.log(`Fetched ${challengesWithStats.length} challenges`);
       setChallenges(challengesWithStats as Challenge[]);
     } else {
       setChallenges([]);
@@ -607,7 +603,6 @@ export function PVPArenaPage() {
         throw new Error('No data returned from lobby creation');
       }
 
-      console.log('Lobby created successfully:', data);
       setMyLobby(data);
       setShowCreateLobby(false);
 
@@ -616,7 +611,7 @@ export function PVPArenaPage() {
       setActiveTab('waiting');
     } catch (err: any) {
       console.error('Failed to create lobby:', err);
-      alert(`Nem sikerült létrehozni a lobbyt: ${err.message || 'Ismeretlen hiba'}`);
+      alert(t('game.lobby_create_error', { msg: err.message || t('error.unknown') }));
     } finally {
       setIsCreating(false);
     }
@@ -637,20 +632,16 @@ export function PVPArenaPage() {
   const challengePlayer = async (lobbyId: string) => {
     if (!user) return;
 
-    console.log('challengePlayer called:', { lobbyId, lobbyEntriesCount: lobbyEntries.length, userId: user.id });
-
     try {
       const lobbyEntry = lobbyEntries.find((e) => e.id === lobbyId);
-      console.log('Found lobby entry:', lobbyEntry);
 
       if (!lobbyEntry || !lobbyEntry.user_id) {
-        console.error('Lobby entry not found or missing user_id:', { lobbyId, lobbyEntry });
-        alert('Nem található a lobby vagy hiányzik a felhasználó adat');
+        alert(t('game.lobby_not_found'));
         return;
       }
 
       if (lobbyEntry.user_id === user.id) {
-        alert('Nem hívhatod ki saját magad!');
+        alert(t('game.self_challenge'));
         return;
       }
 
@@ -666,7 +657,6 @@ export function PVPArenaPage() {
         .single();
 
       if (error) {
-        console.error('Challenge insert error:', error);
         throw error;
       }
 
@@ -674,8 +664,7 @@ export function PVPArenaPage() {
       setWaitingForAcceptance(true);
       setWaitTimeRemaining(120);
     } catch (err: any) {
-      console.error('Failed to challenge:', err);
-      alert(`Nem sikerült elküldeni a kihívást: ${err?.message || 'Ismeretlen hiba'}`);
+      alert(t('game.send_challenge_error', { msg: err?.message || t('error.unknown') }));
     }
   };
 
@@ -757,13 +746,13 @@ export function PVPArenaPage() {
   const getSkillFilterLabel = (filter: SkillFilter) => {
     switch (filter) {
       case 'similar':
-        return 'Hasonló szintű';
+        return t('pvp.skill_similar');
       case 'higher':
-        return 'Magasabb szintű';
+        return t('pvp.skill_higher');
       case 'lower':
-        return 'Alacsonyabb szintű';
+        return t('pvp.skill_lower');
       default:
-        return 'Bárki';
+        return t('pvp.skill_any');
     }
   };
 
@@ -791,10 +780,10 @@ export function PVPArenaPage() {
       <div>
         <h1 className="text-2xl font-bold text-dark-900 dark:text-white flex items-center gap-2">
           <Swords className="w-7 h-7 text-primary-600" />
-          PVP Aréna
+          {t('pvp.arena_title')}
         </h1>
         <p className="text-dark-500 dark:text-dark-400 mt-1">
-          Találj ellenfelet és versenyezz más játékosokkal
+          {t('pvp.arena_subtitle')}
         </p>
       </div>
 
@@ -808,7 +797,7 @@ export function PVPArenaPage() {
           }`}
         >
           <Filter className="w-5 h-5 md:w-4 md:h-4" />
-          <span className="text-xs md:text-base md:whitespace-nowrap">Játékosok</span>
+          <span className="text-xs md:text-base md:whitespace-nowrap">{t('pvp.tab_players')}</span>
         </button>
         <button
           onClick={() => setActiveTab('waiting')}
@@ -819,7 +808,7 @@ export function PVPArenaPage() {
           }`}
         >
           <Clock className="w-5 h-5 md:w-4 md:h-4" />
-          <span className="text-xs md:text-base md:whitespace-nowrap">Várakozás</span>
+          <span className="text-xs md:text-base md:whitespace-nowrap">{t('pvp.tab_waiting')}</span>
           {myLobby && <span className="w-2 h-2 bg-warning-500 rounded-full animate-pulse absolute top-1 right-1 md:top-2 md:right-2"></span>}
         </button>
         <button
@@ -831,7 +820,7 @@ export function PVPArenaPage() {
           }`}
         >
           <Clock className="w-5 h-5 md:w-4 md:h-4" />
-          <span className="text-xs md:text-base md:whitespace-nowrap">Aktív Játékaim</span>
+          <span className="text-xs md:text-base md:whitespace-nowrap">{t('pvp.tab_active')}</span>
           {activeGames.length > 0 && (
             <span className="absolute -top-1 -right-1 w-5 h-5 bg-error-600 text-white text-xs rounded-full flex items-center justify-center font-bold">
               {activeGames.length}
@@ -850,13 +839,13 @@ export function PVPArenaPage() {
                 <Loader2 className="w-10 h-10 text-white animate-spin" />
               </div>
               <h3 className="text-2xl font-bold text-dark-900 dark:text-white mb-3">
-                Várakozás elfogadásra
+                {t('pvp.waiting_acceptance')}
               </h3>
               <p className="text-dark-600 dark:text-dark-400 mb-2">
-                Kihívtál egy játékost az arénában
+                {t('pvp.challenged_player')}
               </p>
               <p className="text-sm text-dark-500 dark:text-dark-400 mb-6">
-                Várakozz, amíg elfogadja a kihívásodat
+                {t('pvp.wait_accept')}
               </p>
 
               <div className="inline-flex items-center gap-3 px-6 py-4 rounded-xl bg-warning-100 dark:bg-warning-900/30 mb-6">
@@ -875,7 +864,7 @@ export function PVPArenaPage() {
                 }}
                 className="w-full"
               >
-                Visszavonás
+                {t('pvp.withdraw')}
               </Button>
             </div>
           </Card>

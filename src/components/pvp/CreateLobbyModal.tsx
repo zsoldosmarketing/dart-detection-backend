@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { t } from '../../lib/i18n';
 import {
   Plus,
   Users,
@@ -51,7 +52,7 @@ export const CreateLobbyModal = memo(function CreateLobbyModal({
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
       <Card className="max-w-md w-full max-h-[90vh] overflow-y-auto animate-scale-in">
         <div className="flex items-center justify-between mb-4 sticky top-0 bg-white dark:bg-dark-800 py-2 -mt-2 z-10">
-          <CardTitle>Belépés az arénába</CardTitle>
+          <CardTitle>{t('lobby.title')}</CardTitle>
           <button
             onClick={onClose}
             className="p-1 text-dark-400 hover:text-dark-600"
@@ -63,7 +64,7 @@ export const CreateLobbyModal = memo(function CreateLobbyModal({
         <div className="space-y-4 pb-2">
           <div>
             <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
-              Kezdő pontszám
+              {t('lobby.starting_score')}
             </label>
             <div className="grid grid-cols-4 gap-2">
               {[301, 501, 701, 1001].map((score) => (
@@ -85,7 +86,7 @@ export const CreateLobbyModal = memo(function CreateLobbyModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
-                Leg-ek
+                {t('lobby.legs')}
               </label>
               <input
                 type="number"
@@ -98,7 +99,7 @@ export const CreateLobbyModal = memo(function CreateLobbyModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
-                Set-ek
+                {t('lobby.sets')}
               </label>
               <input
                 type="number"
@@ -150,14 +151,14 @@ export const CreateLobbyModal = memo(function CreateLobbyModal({
 
           <div>
             <label className="block text-sm font-medium text-dark-700 dark:text-dark-300 mb-2">
-              Ellenfél szintje
+              {t('lobby.opponent_level')}
             </label>
             <div className="grid grid-cols-2 gap-2">
               {([
-                { value: 'any', label: 'Bárki', icon: <Users className="w-3.5 h-3.5" /> },
-                { value: 'similar', label: 'Hasonló', icon: <Minus className="w-3.5 h-3.5" /> },
-                { value: 'higher', label: 'Magasabb', icon: <TrendingUp className="w-3.5 h-3.5" /> },
-                { value: 'lower', label: 'Alacsonyabb', icon: <TrendingDown className="w-3.5 h-3.5" /> },
+                { value: 'any', label: t('lobby.any'), icon: <Users className="w-3.5 h-3.5" /> },
+                { value: 'similar', label: t('lobby.similar'), icon: <Minus className="w-3.5 h-3.5" /> },
+                { value: 'higher', label: t('lobby.higher'), icon: <TrendingUp className="w-3.5 h-3.5" /> },
+                { value: 'lower', label: t('lobby.lower'), icon: <TrendingDown className="w-3.5 h-3.5" /> },
               ] as const).map((option) => (
                 <button
                   key={option.value}
@@ -181,7 +182,7 @@ export const CreateLobbyModal = memo(function CreateLobbyModal({
               onClick={onClose}
               className="flex-1"
             >
-              Mégse
+              {t('lobby.cancel')}
             </Button>
             <Button
               variant="primary"
@@ -190,7 +191,7 @@ export const CreateLobbyModal = memo(function CreateLobbyModal({
               isLoading={isCreating}
               className="flex-1"
             >
-              Belépés
+              {t('lobby.enter')}
             </Button>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { t } from '../lib/i18n';
 import {
   History,
   Trophy,
@@ -119,20 +120,20 @@ export function GameHistoryPage() {
   const getModeLabel = (mode: string, botDifficulty: string | null) => {
     switch (mode) {
       case 'bot': return `Bot (${botDifficulty || 'medium'})`;
-      case 'pvp': return 'Online';
-      case 'local': return 'Helyi';
+      case 'pvp': return t('game.mode_pvp');
+      case 'local': return t('game.mode_local');
       default: return mode;
     }
   };
 
   const getResultBadge = (game: GameRoom) => {
     if (game.status === 'in_progress') {
-      return <Badge variant="warning">Folyamatban</Badge>;
+      return <Badge variant="warning">{t('history.in_progress_badge')}</Badge>;
     }
     if (game.winner_id === user?.id) {
-      return <Badge variant="success">Gyozelem</Badge>;
+      return <Badge variant="success">{t('game.win')}</Badge>;
     }
-    return <Badge variant="error">Vereseg</Badge>;
+    return <Badge variant="error">{t('game.loss')}</Badge>;
   };
 
   return (
@@ -142,8 +143,8 @@ export function GameHistoryPage() {
           <History className="w-5 h-5 text-primary-600 dark:text-primary-400" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-dark-900 dark:text-white">Jatek elozmeny</h1>
-          <p className="text-dark-500 dark:text-dark-400">Korabbi jatekaid es statisztikak</p>
+          <h1 className="text-2xl font-bold text-dark-900 dark:text-white">{t('history.title')}</h1>
+          <p className="text-dark-500 dark:text-dark-400">{t('history.subtitle')}</p>
         </div>
       </div>
 
@@ -156,7 +157,7 @@ export function GameHistoryPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-dark-900 dark:text-white">{stats.totalGames}</p>
-                <p className="text-xs text-dark-500">Osszes jatek</p>
+                <p className="text-xs text-dark-500">{t('history.total_games')}</p>
               </div>
             </div>
           </Card>
@@ -168,7 +169,7 @@ export function GameHistoryPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-dark-900 dark:text-white">{stats.winRate}%</p>
-                <p className="text-xs text-dark-500">Gyozelmi arany</p>
+                <p className="text-xs text-dark-500">{t('history.win_rate')}</p>
               </div>
             </div>
           </Card>
@@ -180,7 +181,7 @@ export function GameHistoryPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-dark-900 dark:text-white">{stats.totalCheckouts}</p>
-                <p className="text-xs text-dark-500">Kiszallok</p>
+                <p className="text-xs text-dark-500">{t('history.checkouts')}</p>
               </div>
             </div>
           </Card>
@@ -192,7 +193,7 @@ export function GameHistoryPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-dark-900 dark:text-white">{stats.highestCheckout}</p>
-                <p className="text-xs text-dark-500">Legjobb kiszallo</p>
+                <p className="text-xs text-dark-500">{t('history.best_checkout')}</p>
               </div>
             </div>
           </Card>
@@ -210,7 +211,7 @@ export function GameHistoryPage() {
                 : 'bg-dark-100 dark:bg-dark-700 text-dark-600 dark:text-dark-300 hover:bg-dark-200 dark:hover:bg-dark-600'
             }`}
           >
-            {f === 'all' ? 'Mind' : f === 'bot' ? 'Bot' : f === 'pvp' ? 'Online' : 'Helyi'}
+            {f === 'all' ? t('game.mode_all') : f === 'bot' ? t('game.mode_bot') : f === 'pvp' ? t('game.mode_pvp') : t('game.mode_local')}
           </button>
         ))}
       </div>
@@ -223,17 +224,17 @@ export function GameHistoryPage() {
         <Card className="p-8 text-center">
           <Gamepad2 className="w-12 h-12 text-dark-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-2">
-            Nincs jatek elozmeny
+            {t('history.empty_title')}
           </h3>
           <p className="text-dark-500 dark:text-dark-400 mb-4">
-            Indits egy jatekot, hogy megjelenjen itt!
+            {t('history.empty_desc')}
           </p>
           <Link
             to="/game"
             className="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
           >
             <Gamepad2 className="w-4 h-4" />
-            Jatek inditasa
+            {t('game.start')}
           </Link>
         </Card>
       ) : (
@@ -281,21 +282,21 @@ export function GameHistoryPage() {
                   <div className="mt-3 pt-3 border-t border-dark-200/50 dark:border-dark-700/40 animate-in">
                     <div className="grid grid-cols-3 gap-2 mb-3">
                       <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
-                        <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Set-ek</p>
+                        <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">{t('history.sets')}</p>
                         <p className="text-base font-bold text-dark-900 dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
                           {game.sets_to_win}
                         </p>
                       </div>
                       <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
-                        <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Jatek tipus</p>
+                        <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">{t('history.game_type')}</p>
                         <p className="text-base font-bold text-dark-900 dark:text-white uppercase">
                           {game.game_type}
                         </p>
                       </div>
                       <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
-                        <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Statusz</p>
+                        <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">{t('history.status')}</p>
                         <p className="text-base font-bold text-dark-900 dark:text-white capitalize">
-                          {game.status === 'completed' ? 'Befejezett' : 'Folyamat'}
+                          {game.status === 'completed' ? t('history.completed') : t('history.in_progress')}
                         </p>
                       </div>
                     </div>
@@ -306,7 +307,7 @@ export function GameHistoryPage() {
                       >
                         <button className="w-full py-2 px-4 rounded-lg bg-primary-500 hover:bg-primary-600 text-white font-medium transition-colors flex items-center justify-center gap-2">
                           <ChevronRight className="w-4 h-4" />
-                          {game.status === 'completed' ? 'Reszletek' : 'Folytatas'}
+                          {game.status === 'completed' ? t('history.details') : t('history.continue')}
                         </button>
                       </Link>
                     </div>

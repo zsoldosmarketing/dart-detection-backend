@@ -1,4 +1,5 @@
 import { ReactNode, memo } from 'react';
+import { t } from '../../lib/i18n';
 import {
   Plus,
   Clock,
@@ -97,16 +98,16 @@ export const LobbyWaiting = memo(function LobbyWaiting({
                 </div>
                 <div>
                   <h3 className="font-semibold text-dark-900 dark:text-white">
-                    Várakozol kihívóra
+                    {t('pvp.waiting_for_challenger')}
                   </h3>
                   <p className="text-sm text-dark-600 dark:text-dark-400">
-                    Más játékosok láthatják a beállításaid és kihívhatnak
+                    {t('pvp.others_see_settings')}
                   </p>
                 </div>
               </div>
               {timeRemaining > 0 && (
                 <div className="flex flex-col items-end">
-                  <span className="text-xs text-dark-500 dark:text-dark-400">Lejár:</span>
+                  <span className="text-xs text-dark-500 dark:text-dark-400">{t('pvp.expires')}</span>
                   <span className="text-lg font-bold text-success-600 dark:text-success-400 font-mono">
                     {formatTimeRemaining(timeRemaining)}
                   </span>
@@ -138,7 +139,7 @@ export const LobbyWaiting = memo(function LobbyWaiting({
                   return (
                     <Badge variant="secondary" size="sm">
                       <Target className="w-3 h-3 mr-1" />
-                      {myLobby.player_stats.lifetime_average!.toFixed(1)} Össz
+                      {myLobby.player_stats.lifetime_average!.toFixed(1)} {t('stat.overall')}
                     </Badge>
                   );
                 }
@@ -151,14 +152,14 @@ export const LobbyWaiting = memo(function LobbyWaiting({
               leftIcon={<X className="w-4 h-4" />}
               onClick={onCancelLobby}
             >
-              Kilépés az arénából
+              {t('pvp.leave_arena')}
             </Button>
           </Card>
 
           {challenges.length > 0 && (
             <div>
               <h3 className="font-semibold text-dark-900 dark:text-white mb-3">
-                Beérkezett kihívások ({challenges.length})
+                {t('pvp.incoming_challenges', { count: challenges.length })}
               </h3>
               <div className="grid gap-3">
                 {challenges.map((challenge) => (
@@ -188,7 +189,7 @@ export const LobbyWaiting = memo(function LobbyWaiting({
                                 return (
                                   <Badge variant="secondary" size="sm">
                                     <Target className="w-3 h-3 mr-1" />
-                                    {challenge.challenger_stats.lifetime_average!.toFixed(1)} Össz
+                                    {challenge.challenger_stats.lifetime_average!.toFixed(1)} {t('stat.overall')}
                                   </Badge>
                                 );
                               }
@@ -216,7 +217,7 @@ export const LobbyWaiting = memo(function LobbyWaiting({
                           onClick={() => onRespondToChallenge(challenge.id, true)}
                           className="flex-1 sm:flex-none"
                         >
-                          Elfogad
+                          {t('pvp.accept')}
                         </Button>
                         <Button
                           size="sm"
@@ -225,7 +226,7 @@ export const LobbyWaiting = memo(function LobbyWaiting({
                           onClick={() => onRespondToChallenge(challenge.id, false)}
                           className="flex-1 sm:flex-none"
                         >
-                          Elutasít
+                          {t('pvp.decline')}
                         </Button>
                       </div>
                     </div>
@@ -239,13 +240,13 @@ export const LobbyWaiting = memo(function LobbyWaiting({
         <Card className="text-center py-12">
           <Clock className="w-12 h-12 text-dark-400 mx-auto mb-4" />
           <p className="text-dark-600 dark:text-dark-400 mb-4">
-            Jelenleg nem várakozol az arénában
+            {t('pvp.not_in_arena')}
           </p>
           <Button
             leftIcon={<Plus className="w-4 h-4" />}
             onClick={onShowCreateLobby}
           >
-            Belépés az arénába
+            {t('pvp.enter_arena')}
           </Button>
         </Card>
       )}

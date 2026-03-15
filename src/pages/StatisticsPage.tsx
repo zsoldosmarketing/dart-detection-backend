@@ -358,7 +358,7 @@ export function StatisticsPage() {
     setShowExportMenu(false);
   };
 
-  const periodLabel = period === 'week' ? 'Het' : period === 'month' ? 'Honap' : 'Osszes';
+  const periodLabel = period === 'week' ? t('stats.period_week') : period === 'month' ? t('stats.period_month') : t('stats.period_all');
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-20 md:pb-6">
@@ -368,8 +368,8 @@ export function StatisticsPage() {
             <BarChart3 className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-dark-900 dark:text-white">Statisztikak</h1>
-            <p className="text-sm text-dark-500 dark:text-dark-400">Reszletes teljesitmeny elemzes</p>
+            <h1 className="text-2xl font-bold text-dark-900 dark:text-white">{t('stats.title')}</h1>
+            <p className="text-sm text-dark-500 dark:text-dark-400">{t('stats.subtitle')}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -385,7 +385,7 @@ export function StatisticsPage() {
                     : 'text-dark-500 dark:text-dark-400 hover:text-dark-700 dark:hover:text-dark-200'
                 )}
               >
-                {p === 'week' ? 'Het' : p === 'month' ? 'Honap' : 'Osszes'}
+                {p === 'week' ? t('stats.period_week') : p === 'month' ? t('stats.period_month') : t('stats.period_all')}
               </button>
             ))}
           </div>

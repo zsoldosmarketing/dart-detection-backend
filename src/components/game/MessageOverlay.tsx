@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Mic, Target, Settings } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { t } from '../../lib/i18n';
 
 interface MessageOverlayProps {
   message: string | null;
@@ -35,7 +36,7 @@ export const MessageOverlay = memo(function MessageOverlay({
                 <div className="p-2 rounded-lg bg-primary-100 dark:bg-primary-900/30">
                   <Mic className="w-6 h-6 text-primary-600 dark:text-primary-400" />
                 </div>
-                <h2 className="text-2xl font-bold text-dark-900 dark:text-white">Hangvezérlés súgó</h2>
+                <h2 className="text-2xl font-bold text-dark-900 dark:text-white">{t('voice.help_title')}</h2>
               </div>
               <button
                 onClick={onCloseVoiceHelp}
@@ -49,31 +50,31 @@ export const MessageOverlay = memo(function MessageOverlay({
               <div>
                 <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-3 flex items-center gap-2">
                   <Target className="w-5 h-5 text-primary-500" />
-                  Hogyan működik a hangvezérlés?
+                  {t('voice.how_it_works')}
                 </h3>
                 <p className="text-sm text-dark-700 dark:text-dark-300 mb-3">
-                  A hangvezérlés lehetővé teszi, hogy hangparancsokkal rögzítsd a dobásaidat. Nincs szükség gomb megnyomására - csak mondd ki a dobásod!
+                  {t('voice.description')}
                 </p>
                 <p className="text-sm text-dark-700 dark:text-dark-300">
-                  A mikrofon ikon {voiceRecognitionEnabled ? 'zöld színnel jelzi, hogy a hangvezérlés aktív' : 'szürkével jelzi, hogy a hangvezérlés kikapcsolt állapotban van'}.
+                  {t('voice.auto_on')}
                 </p>
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-3">Dobás parancsok</h3>
+                <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-3">{t('voice.commands_title')}</h3>
                 <div className="space-y-2">
                   <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">Egyszeres dobás</p>
+                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">{t('voice.single')}</p>
                     <p className="text-sm text-dark-700 dark:text-dark-300">
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">húsz</span>
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">20</span>
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded">egy</span>
                     </p>
-                    <p className="text-xs text-dark-600 dark:text-dark-400 mt-1">Bármely szám 1-től 20-ig, szóban vagy számmal</p>
+                    <p className="text-xs text-dark-600 dark:text-dark-400 mt-1">{t('voice.single_example')}</p>
                   </div>
 
                   <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">Dupla dobás</p>
+                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">{t('voice.double')}</p>
                     <p className="text-sm text-dark-700 dark:text-dark-300">
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">dupla húsz</span>
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded">D20</span>
@@ -81,7 +82,7 @@ export const MessageOverlay = memo(function MessageOverlay({
                   </div>
 
                   <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">Tripla dobás</p>
+                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">{t('voice.triple')}</p>
                     <p className="text-sm text-dark-700 dark:text-dark-300">
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">tripla húsz</span>
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded">T20</span>
@@ -89,7 +90,7 @@ export const MessageOverlay = memo(function MessageOverlay({
                   </div>
 
                   <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">Dupla bull (50 pont)</p>
+                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">{t('voice.bull50')}</p>
                     <p className="text-sm text-dark-700 dark:text-dark-300">
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">bull</span>
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">ötven</span>
@@ -102,7 +103,7 @@ export const MessageOverlay = memo(function MessageOverlay({
                   </div>
 
                   <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">Kis bull (25 pont)</p>
+                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">{t('voice.bull25')}</p>
                     <p className="text-sm text-dark-700 dark:text-dark-300">
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">kisbull</span>
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">kis bull</span>
@@ -114,7 +115,7 @@ export const MessageOverlay = memo(function MessageOverlay({
                   </div>
 
                   <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20">
-                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">Mellé dobás (0 pont)</p>
+                    <p className="font-semibold text-primary-700 dark:text-primary-300 mb-1">{t('voice.miss')}</p>
                     <p className="text-sm text-dark-700 dark:text-dark-300">
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">miss</span>
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">mellé</span>
@@ -126,10 +127,10 @@ export const MessageOverlay = memo(function MessageOverlay({
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-3">Vezérlő parancsok</h3>
+                <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-3">{t('voice.control_title')}</h3>
                 <div className="space-y-2">
                   <div className="p-3 rounded-lg bg-secondary-50 dark:bg-secondary-900/20">
-                    <p className="font-semibold text-secondary-700 dark:text-secondary-300 mb-1">Visszavonás / Törlés</p>
+                    <p className="font-semibold text-secondary-700 dark:text-secondary-300 mb-1">{t('voice.undo_cmd')}</p>
                     <p className="text-sm text-dark-700 dark:text-dark-300 mb-2">
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">vissza</span>
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">törlés</span>
@@ -138,11 +139,10 @@ export const MessageOverlay = memo(function MessageOverlay({
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">delete</span>
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded">előző</span>
                     </p>
-                    <p className="text-xs text-dark-600 dark:text-dark-400">Utolsó dobás törlése</p>
                   </div>
 
                   <div className="p-3 rounded-lg bg-secondary-50 dark:bg-secondary-900/20">
-                    <p className="font-semibold text-secondary-700 dark:text-secondary-300 mb-1">Beküldés / Kör lezárása</p>
+                    <p className="font-semibold text-secondary-700 dark:text-secondary-300 mb-1">{t('voice.submit_cmd')}</p>
                     <p className="text-sm text-dark-700 dark:text-dark-300 mb-2">
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">beküld</span>
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">küld</span>
@@ -157,7 +157,6 @@ export const MessageOverlay = memo(function MessageOverlay({
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded mr-1">indulhat</span>
                       <span className="font-mono bg-white dark:bg-dark-700 px-2 py-1 rounded">következő</span>
                     </p>
-                    <p className="text-xs text-dark-600 dark:text-dark-400">Kör beküldése (3 dobás után automatikus)</p>
                   </div>
                 </div>
               </div>
@@ -165,20 +164,20 @@ export const MessageOverlay = memo(function MessageOverlay({
               <div>
                 <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-3 flex items-center gap-2">
                   <Settings className="w-5 h-5 text-primary-500" />
-                  Beállítási tippek
+                  {t('voice.tips_title')}
                 </h3>
                 <div className="space-y-3 text-sm text-dark-700 dark:text-dark-300">
                   <div className="flex items-start gap-2">
                     <span className="text-primary-500 mt-0.5">•</span>
-                    <p><strong>Felismerési mód:</strong> Zajos környezetben válaszd a "Pontos" módot a jobb eredményekért.</p>
+                    <p>{t('voice.tip_mode')}</p>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-primary-500 mt-0.5">•</span>
-                    <p><strong>Zajszűrés:</strong> Ha a rendszer túl érzékeny, állítsd a küszöböt alacsonyabb értékre (-60 dB körül).</p>
+                    <p>{t('voice.tip_noise')}</p>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-primary-500 mt-0.5">•</span>
-                    <p><strong>Mikrofonhasználat:</strong> Beszélj tisztán és közvetlenül a mikrofon felé. A parancsok közötti kis szünet segít a felismerésben.</p>
+                    <p>{t('voice.tip_mic')}</p>
                   </div>
                 </div>
               </div>
@@ -188,7 +187,7 @@ export const MessageOverlay = memo(function MessageOverlay({
                   onClick={onCloseVoiceHelp}
                   className="w-full"
                 >
-                  Értettem
+                  {t('voice.understood')}
                 </Button>
               </div>
             </div>

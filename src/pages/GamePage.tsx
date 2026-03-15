@@ -130,7 +130,7 @@ export function GamePage() {
           starting_score: room.starting_score,
           mode: room.mode,
           bot_difficulty: room.bot_difficulty,
-          bot_name: opponent?.display_name || (room.mode === 'bot' ? 'Bot' : 'Ellenfél'),
+          bot_name: opponent?.display_name || (room.mode === 'bot' ? 'Bot' : t('game.opponent')),
           created_at: room.created_at,
           my_score: myPlayer?.current_score ?? room.starting_score,
           opponent_score: opponent?.current_score ?? room.starting_score,
@@ -248,7 +248,7 @@ export function GamePage() {
     const newPlayers = [...localPlayers];
     newPlayers[index] = {
       id: null,
-      name: `Jatekos ${index + 2}`,
+      name: t('game.player_n', { n: index + 2 }),
       isRegistered: false,
       isBot: false,
     };
@@ -259,7 +259,7 @@ export function GamePage() {
     if (localPlayers.length >= 3) return;
     setLocalPlayers([
       ...localPlayers,
-      { id: null, name: `Jatekos ${localPlayers.length + 2}`, isRegistered: false, isBot: false }
+      { id: null, name: t('game.player_n', { n: localPlayers.length + 2 }), isRegistered: false, isBot: false }
     ]);
   };
 
@@ -273,7 +273,7 @@ export function GamePage() {
     if (player.isBot) {
       newPlayers[index] = {
         id: null,
-        name: `Jatekos ${index + 2}`,
+        name: t('game.player_n', { n: index + 2 }),
         isRegistered: false,
         isBot: false,
       };
@@ -303,7 +303,7 @@ export function GamePage() {
 
   const handleStartGame = async () => {
     if (!user) {
-      alert('Nem vagy bejelentkezve! Kérlek jelentkezz be először.');
+      alert(t('game.not_logged_in'));
       return;
     }
 
@@ -335,7 +335,7 @@ export function GamePage() {
 
       if (error) {
         console.error('Room creation error:', error);
-        alert(`Hiba a játék létrehozásakor: ${error.message}`);
+        alert(t('game.create_error', { msg: error.message }));
         throw error;
       }
 
@@ -349,7 +349,7 @@ export function GamePage() {
 
       if (playerError) {
         console.error('Player insert error:', playerError);
-        alert(`Hiba a játékos hozzáadásakor: ${playerError.message}`);
+        alert(t('game.player_add_error', { msg: playerError.message }));
         throw playerError;
       }
 
@@ -365,7 +365,7 @@ export function GamePage() {
 
         if (botError) {
           console.error('Bot insert error:', botError);
-          alert(`Hiba a bot hozzáadásakor: ${botError.message}`);
+          alert(t('game.bot_add_error', { msg: botError.message }));
           throw botError;
         }
       } else if (mode === 'local') {
@@ -384,7 +384,7 @@ export function GamePage() {
 
           if (localPlayerError) {
             console.error('Local player insert error:', localPlayerError);
-            alert(`Hiba a ${player.name} játékos hozzáadásakor: ${localPlayerError.message}`);
+            alert(t('game.local_player_add_error', { name: player.name, msg: localPlayerError.message }));
             throw localPlayerError;
           }
         }
@@ -409,7 +409,7 @@ export function GamePage() {
 
       if (stateError) {
         console.error('Game state insert error:', stateError);
-        alert(`Hiba a játék állapot létrehozásakor: ${stateError.message}`);
+        alert(t('game.state_error', { msg: stateError.message }));
         throw stateError;
       }
 
@@ -460,7 +460,7 @@ export function GamePage() {
                       <div className="text-center">
                         <p className="text-lg font-bold text-secondary-600" style={{ fontVariantNumeric: 'tabular-nums' }}>{game.opponent_score}</p>
                         <p className="text-[10px] text-dark-500 truncate max-w-[60px]">
-                          {game.bot_name || 'Ellenfél'}
+                          {game.bot_name || t('game.opponent')}
                         </p>
                       </div>
                       <Badge variant="default" size="sm">{game.starting_score}</Badge>
@@ -474,7 +474,7 @@ export function GamePage() {
                         <div className="text-center py-2 px-1 rounded-lg bg-dark-50 dark:bg-dark-700/40">
                           <p className="text-[10px] text-dark-400 uppercase tracking-wider mb-0.5">Mod</p>
                           <p className="text-sm font-bold text-dark-900 dark:text-white capitalize">
-                            {game.mode === 'bot' ? 'Bot' : game.mode === 'pvp' ? 'Online' : 'Helyi'}
+                            {game.mode === 'bot' ? t('game.mode_bot') : game.mode === 'pvp' ? t('game.mode_pvp') : t('game.mode_local')}
                           </p>
                         </div>
                         {game.bot_difficulty && (
@@ -745,7 +745,7 @@ export function GamePage() {
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { value: 'player', label: 'Te' },
-                    { value: 'opponent', label: mode === 'bot' ? 'Bot' : 'Ellenfél' },
+                    { value: 'opponent', label: mode === 'bot' ? 'Bot' : t('game.opponent') },
                     { value: 'random', label: 'Véletlenszerű' }
                   ].map((option) => (
                     <button
@@ -903,7 +903,7 @@ export function GamePage() {
                           value={player.name}
                           onChange={(e) => updatePlayerName(index, e.target.value)}
                           className="w-full px-3 py-1.5 text-sm rounded-lg border border-dark-300 dark:border-dark-600 bg-white dark:bg-dark-800 text-dark-900 dark:text-white"
-                          placeholder="Jatekos neve"
+                          placeholder={t('game.player_name_placeholder')}
                         />
                       )}
                     </div>
@@ -937,7 +937,7 @@ export function GamePage() {
                         }`}
                       >
                         <Users className="w-3 h-3 inline mr-1" />
-                        Jatekos
+                        {t('game.player_label')}
                       </button>
                     </div>
 
@@ -985,7 +985,7 @@ export function GamePage() {
                   className="w-full p-3 rounded-lg border-2 border-dashed border-dark-300 dark:border-dark-600 hover:border-primary-500 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-all flex items-center justify-center gap-2 text-dark-500 hover:text-primary-600"
                 >
                   <Plus className="w-4 h-4" />
-                  <span className="text-sm font-medium">Jatekos hozzaadasa</span>
+                  <span className="text-sm font-medium">{t('game.add_player')}</span>
                 </button>
               )}
 

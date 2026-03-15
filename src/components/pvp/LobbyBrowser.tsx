@@ -1,4 +1,5 @@
 import { ReactNode, memo } from 'react';
+import { t } from '../../lib/i18n';
 import {
   Swords,
   Plus,
@@ -71,7 +72,7 @@ export const LobbyBrowser = memo(function LobbyBrowser({
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <p className="text-sm text-dark-600 dark:text-dark-400">
-          {lobbyEntries.length} játékos vár kihívóra
+          {t('game.waiting_for', { count: lobbyEntries.length })}
         </p>
         <Button
           leftIcon={<RefreshCw className={`w-4 h-4 ${isManualRefresh ? 'animate-spin' : ''}`} />}
@@ -80,7 +81,7 @@ export const LobbyBrowser = memo(function LobbyBrowser({
           onClick={onManualRefresh}
           disabled={isManualRefresh}
         >
-          {isManualRefresh ? 'Frissítés...' : 'Frissítés'}
+          {isManualRefresh ? t('lobby.refreshing') : t('lobby.refresh')}
         </Button>
       </div>
 
@@ -89,17 +90,17 @@ export const LobbyBrowser = memo(function LobbyBrowser({
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-semibold text-dark-900 dark:text-white mb-1">
-                Várakozz kihívóra
+                {t('lobby.waiting_for_challenger')}
               </h3>
               <p className="text-sm text-dark-600 dark:text-dark-400">
-                Állíts be egy játékot és várd meg, hogy mások kihívjanak
+                {t('lobby.configure_and_wait')}
               </p>
             </div>
             <Button
               leftIcon={<Plus className="w-4 h-4" />}
               onClick={onShowCreateLobby}
             >
-              Belépés az arénába
+              {t('lobby.enter_arena')}
             </Button>
           </div>
         </Card>
@@ -109,10 +110,10 @@ export const LobbyBrowser = memo(function LobbyBrowser({
         <Card className="text-center py-12">
           <Users className="w-12 h-12 text-dark-400 mx-auto mb-4" />
           <p className="text-dark-600 dark:text-dark-400">
-            Jelenleg nincs várakozó játékos
+            {t('lobby.no_players')}
           </p>
           <p className="text-sm text-dark-500 mt-2">
-            Lépj be te először az arénába!
+            {t('lobby.be_first')}
           </p>
         </Card>
       )}
@@ -145,7 +146,7 @@ export const LobbyBrowser = memo(function LobbyBrowser({
                         return (
                           <Badge variant="secondary" size="sm">
                             <Target className="w-3 h-3 mr-1" />
-                            {entry.player_stats.lifetime_average!.toFixed(1)} Össz
+                            {entry.player_stats.lifetime_average!.toFixed(1)} {t('stat.overall')}
                           </Badge>
                         );
                       }
@@ -191,7 +192,7 @@ export const LobbyBrowser = memo(function LobbyBrowser({
                 onClick={() => onChallengePlayer(entry.id)}
                 className="w-full sm:w-auto"
               >
-                Kihívás
+                {t('lobby.challenge')}
               </Button>
             </div>
           </Card>

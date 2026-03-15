@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { DartTarget } from '../../lib/dartsEngine';
+import { t } from '../../lib/i18n';
 
 interface NumberPadInputProps {
   onThrow?: (target: DartTarget) => void;
@@ -40,8 +41,8 @@ export function NumberPadInput({ onThrow, onScoreSelect, disabled }: NumberPadIn
   };
 
   const multiplierButtons: { value: Multiplier; label: string; activeBg: string; activeRing: string }[] = [
-    { value: 'D', label: 'DUPLA', activeBg: 'bg-green-700', activeRing: 'ring-green-400' },
-    { value: 'T', label: 'TRIPLA', activeBg: 'bg-red-700', activeRing: 'ring-red-400' },
+    { value: 'D', label: t('numberpad.double'), activeBg: 'bg-green-700', activeRing: 'ring-green-400' },
+    { value: 'T', label: t('numberpad.triple'), activeBg: 'bg-red-700', activeRing: 'ring-red-400' },
   ];
 
   const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 25, 0];
@@ -91,7 +92,7 @@ export function NumberPadInput({ onThrow, onScoreSelect, disabled }: NumberPadIn
                   : 'bg-red-800/80 hover:bg-red-700 text-white'
               }`}
             >
-              {isMiss ? 'MISS' : num}
+              {isMiss ? t('numberpad.miss') : num}
             </button>
           );
         })}

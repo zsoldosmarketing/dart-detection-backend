@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { t } from '../../lib/i18n';
 import {
   Camera,
   CameraOff,
@@ -135,7 +136,7 @@ export function CameraDetectionInput({
 
   const checkConnection = useCallback(async (showStatus = false) => {
     if (showStatus) {
-      setStatusMessage('Csatlakozas a szerverhez...');
+      setStatusMessage(t('camera.connecting'));
     }
     try {
       const health = await checkApiHealth(3);
@@ -143,7 +144,7 @@ export function CameraDetectionInput({
         apiConnectedRef.current = true;
         setApiConnected(true);
         if (showStatus) {
-          setStatusMessage('Szerver kapcsolat aktiv!');
+          setStatusMessage(t('camera.connected'));
           setTimeout(() => setStatusMessage(null), 2000);
         }
         return true;
@@ -154,7 +155,7 @@ export function CameraDetectionInput({
     apiConnectedRef.current = false;
     setApiConnected(false);
     if (showStatus) {
-      setStatusMessage('Szerver nem elerheto - varj 1-2 percet (Render free tier)');
+      setStatusMessage(t('camera.server_offline'));
       setTimeout(() => setStatusMessage(null), 6000);
     }
     return false;
@@ -252,7 +253,7 @@ export function CameraDetectionInput({
 
     setError(null);
     setIsConnecting(true);
-    setStatusMessage('Kamera inditasa...');
+    setStatusMessage(t('camera.starting'));
 
     const camera = new CameraManager();
     if (deviceId) {
@@ -262,7 +263,7 @@ export function CameraDetectionInput({
 
     const success = await camera.start(videoRef.current);
     if (!success) {
-      setError('Nem sikerult elinditani a kamerat.');
+      setError(t('camera.start_failed'));
       setIsConnecting(false);
       setStatusMessage(null);
       return;
@@ -384,13 +385,13 @@ export function CameraDetectionInput({
           setIsActive(false);
           setActiveRemoteCamera(null);
         } else if (status === 'reconnecting') {
-          setStatusMessage('Ujracsatlakozas...');
+          setStatusMessage(t('camera.reconnecting'));
         } else if (status === 'connected') {
           setStatusMessage(null);
         }
       },
       onError: (err) => {
-        setError(`Tavoli kamera hiba: ${err}`);
+        setError(t('camera.remote_error', { err: String(err) }));
         setConnectingRemoteId(null);
       },
     });
@@ -398,7 +399,7 @@ export function CameraDetectionInput({
     remoteViewerRef.current = viewer;
     const success = await viewer.connectToSession(session.id);
     if (!success) {
-      setError('Nem sikerult csatlakozni a tavoli kamerahoz');
+      setError(t('camera.remote_connect_failed'));
       setConnectingRemoteId(null);
     }
   }, [stopCamera, checkConnection, startBoardDetectLoop, cameraStore]);
@@ -661,15 +662,15 @@ export function CameraDetectionInput({
   const resetReference = useCallback(async () => {
     if (!videoRef.current) return;
 
-    setStatusMessage('Referencia frissitese...');
+    setStatusMessage(t('camera.ref_refresh'));
     try {
       const frameBlob = await captureVideoFrame(videoRef.current);
       await setReferenceImage(frameBlob);
       referenceFrameRef.current = frameBlob;
-      setStatusMessage('Referencia OK!');
+      setStatusMessage(t('camera.ref_ok'));
       setTimeout(() => setStatusMessage(null), 1500);
     } catch {
-      setError('Referencia frissites sikertelen');
+      setError(t('camera.ref_failed'));
     }
   }, []);
 
@@ -736,14 +737,14 @@ export function CameraDetectionInput({
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30">
                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                   <Wifi className="w-3.5 h-3.5 text-green-400" />
-                  <span className="text-green-400 text-xs font-medium">Szerver aktiv</span>
+                  <span className="text-green-400 text-xs font-medium">{t('camera.server_active')}</span>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-2">
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30">
                     <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" />
                     <WifiOff className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="text-amber-400 text-xs font-medium">Csatlakozas...</span>
+                    <span className="text-amber-400 text-xs font-medium">{t('camera.connecting_label')}</span>
                   </div>
                   <span className="text-dark-500 text-xs truncate max-w-[200px]">{getApiUrl()}</span>
                   <Button
@@ -753,7 +754,7 @@ export function CameraDetectionInput({
                     className="text-blue-400 hover:text-blue-300 h-7 text-xs"
                   >
                     <RefreshCw className="w-3 h-3 mr-1" />
-                    Ujraprobalkozas
+                    {t('camera.retry')}
                   </Button>
                 </div>
               )}
@@ -763,7 +764,7 @@ export function CameraDetectionInput({
               <div className="mb-3 w-full max-w-sm">
                 <div className="flex items-center gap-2 mb-2 justify-center">
                   <Smartphone className="w-3.5 h-3.5 text-green-400" />
-                  <span className="text-xs font-medium text-green-400">Tavoli Kamera Elerheto!</span>
+                  <span className="text-xs font-medium text-green-400">{t('camera.remote_available')}</span>
                 </div>
                 <div className="space-y-1.5">
                   {remoteCameras.map((session) => (
@@ -779,7 +780,7 @@ export function CameraDetectionInput({
                           <div>
                             <div className="font-medium text-white text-sm">{session.device_name}</div>
                             <div className="text-xs text-dark-400">
-                              {session.status === 'waiting' ? 'Varakozik kapcsolodasra...' : 'Kapcsolodva'}
+                              {session.status === 'waiting' ? t('camera.waiting') : t('camera.connected_label')}
                             </div>
                           </div>
                         </div>
@@ -787,7 +788,7 @@ export function CameraDetectionInput({
                           <Loader2 className="w-4 h-4 text-green-400 animate-spin flex-shrink-0" />
                         ) : (
                           <div className="px-2 py-1 rounded-full bg-green-500/20 text-green-400 text-xs font-medium flex-shrink-0">
-                            Csatlakozas
+                            {t('camera.connect')}
                           </div>
                         )}
                       </div>
@@ -796,7 +797,7 @@ export function CameraDetectionInput({
                 </div>
                 <div className="my-3 flex items-center gap-3">
                   <div className="flex-1 h-px bg-dark-600" />
-                  <span className="text-dark-500 text-xs">vagy</span>
+                  <span className="text-dark-500 text-xs">{t('common.or')}</span>
                   <div className="flex-1 h-px bg-dark-600" />
                 </div>
               </div>
@@ -809,7 +810,7 @@ export function CameraDetectionInput({
               </div>
             </div>
 
-            <h3 className="text-base font-semibold text-white mb-1">Kamera Felismeres</h3>
+            <h3 className="text-base font-semibold text-white mb-1">{t('camera.detection_title')}</h3>
 
             <Button
               onClick={() => startCamera()}
@@ -818,7 +819,7 @@ export function CameraDetectionInput({
               className="px-6 mt-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-500/25"
               leftIcon={isConnecting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
             >
-              {isConnecting ? 'Inditás...' : 'Helyi Kamera Inditas'}
+              {isConnecting ? t('camera.starting_label') : t('camera.start_local')}
             </Button>
           </div>
         ) : (
@@ -838,17 +839,17 @@ export function CameraDetectionInput({
                 {isCalibrated ? (
                   <>
                     <Target className="w-4 h-4 text-green-400" />
-                    <span className="text-green-400 text-xs font-medium">Tabla OK</span>
+                    <span className="text-green-400 text-xs font-medium">{t('camera.board_ok')}</span>
                   </>
                 ) : !apiConnected ? (
                   <>
                     <WifiOff className="w-4 h-4 text-red-400" />
-                    <span className="text-red-400 text-xs font-medium">Backend offline</span>
+                    <span className="text-red-400 text-xs font-medium">{t('camera.backend_offline')}</span>
                   </>
                 ) : (
                   <>
                     <RefreshCw className="w-4 h-4 text-amber-400 animate-spin" />
-                    <span className="text-amber-400 text-xs font-medium">Kereses...</span>
+                    <span className="text-amber-400 text-xs font-medium">{t('camera.searching_board')}</span>
                   </>
                 )}
               </div>
@@ -856,7 +857,7 @@ export function CameraDetectionInput({
               {isDetecting && (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/20 border border-blue-500/40 backdrop-blur-sm">
                   <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                  <span className="text-blue-400 text-xs font-medium">Feldolgozas</span>
+                  <span className="text-blue-400 text-xs font-medium">{t('camera.processing')}</span>
                 </div>
               )}
             </div>
@@ -867,7 +868,7 @@ export function CameraDetectionInput({
                   onClick={() => setShowCameraSettings(true)}
                   disabled={isConnecting}
                   className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Kamera beallitasok"
+                  title={t('camera.settings')}
                 >
                   <Settings className="w-4 h-4" />
                 </button>
@@ -878,7 +879,7 @@ export function CameraDetectionInput({
                   onClick={switchCamera}
                   disabled={isConnecting}
                   className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={`Kamera valtas (${currentCameraIndex + 1}/${availableCameras.length})`}
+                  title={t('camera.switch', { current: currentCameraIndex + 1, total: availableCameras.length })}
                 >
                   <SwitchCamera className="w-4 h-4" />
                 </button>
@@ -899,7 +900,7 @@ export function CameraDetectionInput({
               <button
                 onClick={toggleFullscreen}
                 className="p-2 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
-                title={isFullscreen ? 'Kicsinyites' : 'Teljes kepernyo'}
+                title={isFullscreen ? t('camera.minimize') : t('camera.fullscreen')}
               >
                 {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
@@ -910,7 +911,7 @@ export function CameraDetectionInput({
                 <button
                   onClick={resetReference}
                   className="p-2.5 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
-                  title="Referencia frissites"
+                  title={t('camera.refresh_ref')}
                 >
                   <RefreshCw className="w-5 h-5" />
                 </button>
@@ -924,7 +925,7 @@ export function CameraDetectionInput({
                     startBoardDetectLoop();
                   }}
                   className="p-2.5 rounded-lg bg-black/60 hover:bg-black/80 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-colors"
-                  title="Tabla ujrafelismerese"
+                  title={t('camera.reboard')}
                 >
                   <Crosshair className="w-5 h-5" />
                 </button>
@@ -936,17 +937,17 @@ export function CameraDetectionInput({
                     onClick={triggerThrowDetection}
                     disabled={isDetecting || disabled}
                     className="px-4 py-2.5 rounded-lg bg-green-500/80 hover:bg-green-500 backdrop-blur-sm border border-green-400/50 text-white font-medium transition-colors disabled:opacity-40 flex items-center gap-2"
-                    title="Dobas rogzitese"
+                    title={t('camera.capture')}
                   >
                     <Send className="w-5 h-5" />
-                    <span>Dobas</span>
+                    <span>{t('camera.capture_btn')}</span>
                   </button>
                 )}
 
                 <button
                   onClick={stopCamera}
                   className="p-2.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 backdrop-blur-sm border border-red-500/40 text-red-400 hover:text-red-300 transition-colors"
-                  title="Kamera leallitas"
+                  title={t('camera.stop')}
                 >
                   <CameraOff className="w-5 h-5" />
                 </button>
@@ -960,7 +961,7 @@ export function CameraDetectionInput({
         <div className="bg-dark-800 border border-dark-700 rounded-xl p-4 space-y-3">
           <h4 className="text-sm font-semibold text-white flex items-center gap-2">
             <Bug className="w-4 h-4" />
-            Debug Previewk
+            {t('camera.debug_previews')}
           </h4>
           <div className="grid grid-cols-3 gap-3">
             {debugImages.canonical && (

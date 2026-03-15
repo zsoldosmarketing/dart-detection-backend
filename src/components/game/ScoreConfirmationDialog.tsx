@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Check, X } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { t } from '../../lib/i18n';
 import type { ThrowScoreResult } from '../../lib/dartDetectionApi';
 
 interface ScoreConfirmationDialogProps {
@@ -22,7 +23,7 @@ export const ScoreConfirmationDialog = memo(function ScoreConfirmationDialog({
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="text-xl font-bold text-amber-300">{pendingScore.label}</p>
-            <p className="text-sm text-amber-200">{pendingScore.score} pont</p>
+            <p className="text-sm text-amber-200">{t('score.confirm_points', { score: pendingScore.score })}</p>
           </div>
           <span className="text-amber-400/70 text-sm">{(pendingScore.confidence * 100).toFixed(0)}%</span>
         </div>
@@ -42,7 +43,7 @@ export const ScoreConfirmationDialog = memo(function ScoreConfirmationDialog({
             className="flex-1"
             leftIcon={<X className="w-4 h-4" />}
           >
-            Nem
+            {t('score.no')}
           </Button>
         </div>
       </div>
@@ -54,7 +55,7 @@ export const ScoreConfirmationDialog = memo(function ScoreConfirmationDialog({
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-2xl font-bold text-amber-300">{pendingScore.label}</p>
-          <p className="text-lg text-amber-200">{pendingScore.score} pont</p>
+          <p className="text-lg text-amber-200">{t('score.confirm_points', { score: pendingScore.score })}</p>
           <div className="flex items-center gap-2 mt-1">
             <div className="h-1.5 w-24 bg-dark-700 rounded-full overflow-hidden">
               <div
@@ -74,7 +75,7 @@ export const ScoreConfirmationDialog = memo(function ScoreConfirmationDialog({
           className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 shadow-lg shadow-green-500/20"
           leftIcon={<Check className="w-4 h-4" />}
         >
-          Elfogadom
+          {t('score.accept')}
         </Button>
         <Button
           variant="outline"
@@ -82,7 +83,7 @@ export const ScoreConfirmationDialog = memo(function ScoreConfirmationDialog({
           className="flex-1 border-dark-600 hover:bg-dark-700"
           leftIcon={<X className="w-4 h-4" />}
         >
-          Elutasitom
+          {t('score.reject')}
         </Button>
       </div>
     </div>
