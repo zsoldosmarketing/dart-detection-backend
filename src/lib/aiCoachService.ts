@@ -7,14 +7,44 @@ export interface GameResultData {
   legs_lost: number;
   game_mode: string;
   highest_checkout?: number;
+  doubles_hit?: number;
+  doubles_thrown?: number;
+  triples_hit?: number;
+  triples_thrown?: number;
+  total_180s?: number;
+  total_100_plus?: number;
+  best_leg_average?: number;
+  worst_leg_average?: number;
+  first_nine_average?: number;
+  checkout_attempts?: number;
+  checkouts_hit?: number;
+  duration_seconds?: number;
+  leg_details?: LegDetail[];
+}
+
+export interface LegDetail {
+  leg_number: number;
+  won: boolean;
+  average: number;
+  darts: number;
+  checkout_score?: number;
+  highest_visit: number;
+  visits_180: number;
+  visits_100_plus: number;
+  doubles_hit: number;
+  doubles_thrown: number;
 }
 
 export interface TrainingResultData {
   drill_name: string;
+  drill_category?: string;
   score: number;
   hit_rate: number;
   total_darts: number;
   duration_seconds: number;
+  targets_hit?: number;
+  targets_total?: number;
+  best_streak?: number;
 }
 
 async function getValidToken(): Promise<string | null> {

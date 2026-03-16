@@ -21,6 +21,7 @@ import {
   generateBotThrow,
   isBust,
   isCheckout,
+  isRealCheckoutAttempt,
   formatDartDisplay,
   BOT_PRESETS,
   type DartTarget,
@@ -313,14 +314,60 @@ export function GamePlayPage() {
           if (room.status === 'completed' && user?.id) {
             const myPlayer = players.find(p => p.user_id === user.id);
             const otherPlayer = players.find(p => p.user_id !== user.id);
-            const myMatchStats = Object.values(playerMatchStats).find((_, i) => Object.keys(playerMatchStats)[i] === user.id) as { matchAverage?: number } | undefined;
-            aiCoachService.triggerPostGame({
-              won: isWinner,
-              match_average: (myMatchStats as any)?.matchAverage || 0,
-              legs_won: myPlayer?.legs_won || 0,
-              legs_lost: otherPlayer?.legs_won || 0,
-              game_mode: room.mode,
-            });
+            (async () => {
+              const [legStatsRes, checkoutRes] = await Promise.all([
+                supabase.from('leg_statistics').select('*').eq('room_id', room.id).eq('player_id', user.id),
+                supabase.from('checkout_attempts').select('*').eq('room_id', room.id).eq('player_id', user.id),
+              ]);
+              const myLegStats = legStatsRes.data || [];
+              const checkoutAttempts = checkoutRes.data || [];
+              const averages = myLegStats.map((ls: Record<string, unknown>) => (ls.three_dart_average as number) || 0).filter((a: number) => a > 0);
+              const matchAvg = averages.length > 0 ? averages.reduce((s: number, a: number) => s + a, 0) / averages.length : 0;
+              const legDetails = myLegStats.map((ls: Record<string, unknown>) => ({
+                leg_number: ls.leg_number as number,
+                won: ls.won as boolean,
+                average: (ls.three_dart_average as number) || 0,
+                darts: (ls.total_darts as number) || 0,
+                checkout_score: (ls.checkout_score as number) || undefined,
+                highest_visit: (ls.highest_visit as number) || 0,
+                visits_180: (ls.visits_180 as number) || 0,
+                visits_100_plus: (ls.visits_100_plus as number) || 0,
+                doubles_hit: (ls.doubles_hit as number) || 0,
+                doubles_thrown: (ls.doubles_thrown as number) || 0,
+              }));
+              const totalDoublesHit = myLegStats.reduce((s: number, ls: Record<string, unknown>) => s + ((ls.doubles_hit as number) || 0), 0);
+              const totalDoublesThrown = myLegStats.reduce((s: number, ls: Record<string, unknown>) => s + ((ls.doubles_thrown as number) || 0), 0);
+              const totalTriplesHit = myLegStats.reduce((s: number, ls: Record<string, unknown>) => s + ((ls.triples_hit as number) || 0), 0);
+              const totalTriplesThrown = myLegStats.reduce((s: number, ls: Record<string, unknown>) => s + ((ls.triples_thrown as number) || 0), 0);
+              const total180s = myLegStats.reduce((s: number, ls: Record<string, unknown>) => s + ((ls.visits_180 as number) || 0), 0);
+              const total100Plus = myLegStats.reduce((s: number, ls: Record<string, unknown>) => s + ((ls.visits_100_plus as number) || 0), 0);
+              const checkoutsHit = checkoutAttempts.filter((ca: Record<string, unknown>) => ca.was_successful).length;
+              const checkoutAttemptCount = checkoutAttempts.length;
+              const highestCheckout = checkoutAttempts.filter((ca: Record<string, unknown>) => ca.was_successful).reduce((mx: number, ca: Record<string, unknown>) => Math.max(mx, (ca.checkout_value as number) || 0), 0);
+              const first9Avgs = myLegStats.map((ls: Record<string, unknown>) => (ls.first_9_average as number) || 0).filter((a: number) => a > 0);
+              const first9Avg = first9Avgs.length > 0 ? first9Avgs.reduce((s: number, a: number) => s + a, 0) / first9Avgs.length : 0;
+              aiCoachService.triggerPostGame({
+                won: isWinner,
+                match_average: matchAvg,
+                legs_won: myPlayer?.legs_won || 0,
+                legs_lost: otherPlayer?.legs_won || 0,
+                game_mode: room.mode,
+                highest_checkout: highestCheckout,
+                doubles_hit: totalDoublesHit,
+                doubles_thrown: totalDoublesThrown,
+                triples_hit: totalTriplesHit,
+                triples_thrown: totalTriplesThrown,
+                total_180s: total180s,
+                total_100_plus: total100Plus,
+                best_leg_average: averages.length > 0 ? Math.max(...averages) : 0,
+                worst_leg_average: averages.length > 0 ? Math.min(...averages) : 0,
+                first_nine_average: first9Avg,
+                checkout_attempts: checkoutAttemptCount,
+                checkouts_hit: checkoutsHit,
+                duration_seconds: Math.floor((new Date().getTime() - matchStartTime.getTime()) / 1000),
+                leg_details: legDetails,
+              });
+            })();
           }
 
           setTimeout(() => {
@@ -609,7 +656,7 @@ export function GamePlayPage() {
       const dartNumber = newTurnDarts.length;
       const remainingBefore = currentPlayer.current_score - (newTurnScore - score);
       const remainingAfter = currentPlayer.current_score - newTurnScore;
-      const isCheckoutAttemptFlag = remainingBefore <= 170 && room.double_out;
+      const isCheckoutAttemptFlag = isRealCheckoutAttempt(remainingBefore, target, room.double_out);
       const isSuccessfulCheckoutFlag = isCheckout(currentPlayer.current_score, newTurnScore, target);
       const isBustFlag = isBust(currentPlayer.current_score, newTurnScore, target);
 

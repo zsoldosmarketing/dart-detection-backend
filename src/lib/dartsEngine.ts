@@ -399,6 +399,62 @@ function getSalvageHint(route: DartTarget[], remaining: number): string | undefi
   return undefined;
 }
 
+export function isRealCheckoutAttempt(
+  remainingBefore: number,
+  target: DartTarget,
+  doubleOut: boolean
+): boolean {
+  if (!doubleOut) return remainingBefore <= 170;
+
+  const score = getScore(target);
+
+  if (target === 'BULL') return remainingBefore === 50;
+  if (target === 'OB') return remainingBefore === 25;
+
+  if (typeof target === 'string' && target.startsWith('D')) {
+    const num = parseInt(target.slice(1));
+    return remainingBefore === num * 2;
+  }
+
+  if (remainingBefore <= 2) {
+    if (target === 'MISS') return false;
+    return score === remainingBefore;
+  }
+
+  if (remainingBefore <= 40 && remainingBefore % 2 === 0) {
+    const halfRemaining = remainingBefore / 2;
+    const doubleTarget = `D${halfRemaining}` as DartTarget;
+    return target === doubleTarget;
+  }
+
+  return false;
+}
+
+export function getCheckoutAttemptDetails(
+  remainingBefore: number,
+  dartTarget: DartTarget,
+  doubleOut: boolean
+): { isAttempt: boolean; targetDouble: string | null; isBust: boolean } {
+  const isAttempt = isRealCheckoutAttempt(remainingBefore, dartTarget, doubleOut);
+
+  let targetDouble: string | null = null;
+
+  if (dartTarget === 'BULL' && remainingBefore === 50) {
+    targetDouble = 'BULL';
+  } else if (typeof dartTarget === 'string' && dartTarget.startsWith('D')) {
+    const num = parseInt(dartTarget.slice(1));
+    if (remainingBefore === num * 2) {
+      targetDouble = dartTarget;
+    }
+  }
+
+  const score = getScore(dartTarget);
+  const remainingAfter = remainingBefore - score;
+  const bustResult = remainingAfter < 0 || remainingAfter === 1 || (doubleOut && remainingAfter > 0 && remainingAfter < 2 && dartTarget !== 'BULL' && !String(dartTarget).startsWith('D'));
+
+  return { isAttempt, targetDouble, isBust: bustResult };
+}
+
 export function getSetupSuggestions(
   remaining: number,
   dartsLeft: number = 3,
