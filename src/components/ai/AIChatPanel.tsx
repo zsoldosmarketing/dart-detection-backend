@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, Bot, User, Loader2, Zap, TrendingUp, Dumbbell, Target, Heart, RefreshCw } from 'lucide-react';
+import { Send, Sparkles, Bot, User, Loader2, Zap, TrendingUp, Dumbbell, Target, Heart, RefreshCw, ChevronRight, Play } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
@@ -10,6 +10,15 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   created_at: string;
+  contextualActions?: ContextualAction[];
+}
+
+interface ContextualAction {
+  label: string;
+  message?: string;
+  action?: string;
+  variant: 'primary' | 'default';
+  icon: typeof Play;
 }
 
 interface AIChatPanelProps {
@@ -31,6 +40,65 @@ const EXAMPLE_QUESTIONS = [
   'Milyen kiszállókat gyakoroljak?',
   'Csináljunk edzéstervet a hétre',
 ];
+
+function detectContextualActions(aiContent: string, userAction?: string): ContextualAction[] {
+  const lower = aiContent.toLowerCase();
+  const actions: ContextualAction[] = [];
+
+  const hasPlanContent = lower.includes('edzésterv') || lower.includes('napos') || lower.includes('nap:') || lower.includes('1. nap') || lower.includes('**1.');
+  const hasDrillSuggestions = lower.includes('drill') || lower.includes('gyakorlat') || lower.includes('t20') || lower.includes('d20') || lower.includes('bob') || lower.includes('checkout');
+  const hasGoalContent = lower.includes('cél') || lower.includes('célkitűzés') || lower.includes('elérni') || lower.includes('javítani');
+  const hasWeaknessAnalysis = lower.includes('gyenge') || lower.includes('fejleszteni') || lower.includes('fejlesztendő') || lower.includes('koncentrálj');
+
+  if (hasPlanContent && userAction !== 'generate_plan') {
+    actions.push({
+      label: 'Indítsuk el ezt az edzéstervet!',
+      action: 'generate_plan',
+      variant: 'primary',
+      icon: Play,
+    });
+  }
+
+  if (hasDrillSuggestions && !hasPlanContent) {
+    actions.push({
+      label: 'Készíts edzéstervet ezekből',
+      action: 'generate_plan',
+      variant: 'primary',
+      icon: Dumbbell,
+    });
+  }
+
+  if (hasGoalContent && !actions.some(a => a.action === 'generate_plan')) {
+    actions.push({
+      label: 'Állítsunk be egy célt',
+      message: 'Kérlek rögzítsd ezt célként és kövesd a fejlődésemet',
+      variant: 'default',
+      icon: Target,
+    });
+  }
+
+  if (hasWeaknessAnalysis) {
+    actions.push({
+      label: 'Hogyan javítsam ezt?',
+      message: 'Adj konkrét edzésprogramot a leggyengébb területemre',
+      variant: 'default',
+      icon: TrendingUp,
+    });
+  }
+
+  if (lower.includes('meccs') || lower.includes('statisztika') || lower.includes('átlag')) {
+    if (!actions.some(a => a.message?.includes('edzésprogramot'))) {
+      actions.push({
+        label: 'Részletes elemzés',
+        action: 'analyze',
+        variant: 'default',
+        icon: TrendingUp,
+      });
+    }
+  }
+
+  return actions.slice(0, 3);
+}
 
 export function AIChatPanel({ conversationId, onConversationCreated }: AIChatPanelProps) {
   const { user } = useAuthStore();
@@ -96,6 +164,7 @@ export function AIChatPanel({ conversationId, onConversationCreated }: AIChatPan
           role: 'assistant',
           content: data.message,
           created_at: new Date().toISOString(),
+          contextualActions: detectContextualActions(data.message),
         };
         setMessages([aiMsg]);
         if (data.conversation_id) onConversationCreated(data.conversation_id);
@@ -167,11 +236,13 @@ export function AIChatPanel({ conversationId, onConversationCreated }: AIChatPan
         if (data.conversation_id && !conversationId) {
           onConversationCreated(data.conversation_id);
         }
+        const contextualActions = detectContextualActions(data.message, action);
         setMessages(prev => [...prev, {
           id: crypto.randomUUID(),
           role: 'assistant',
           content: data.message,
           created_at: new Date().toISOString(),
+          contextualActions: contextualActions.length > 0 ? contextualActions : undefined,
         }]);
       }
     } catch {
@@ -275,37 +346,67 @@ export function AIChatPanel({ conversationId, onConversationCreated }: AIChatPan
           </div>
         ) : (
           <>
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={clsx('flex gap-3 max-w-[90%]', msg.role === 'user' ? 'ml-auto flex-row-reverse' : '')}
-              >
-                <div
-                  className={clsx(
-                    'w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5',
-                    msg.role === 'user'
-                      ? 'bg-primary-500'
-                      : 'bg-gradient-to-br from-primary-500 to-primary-700'
-                  )}
-                >
-                  {msg.role === 'user' ? (
-                    <User className="w-4 h-4 text-white" />
-                  ) : (
-                    <Bot className="w-4 h-4 text-white" />
+            {messages.map((msg, msgIdx) => {
+              const isLastAssistant = msg.role === 'assistant' && msgIdx === messages.length - 1 && !isLoading;
+              return (
+                <div key={msg.id}>
+                  <div
+                    className={clsx('flex gap-3 max-w-[90%]', msg.role === 'user' ? 'ml-auto flex-row-reverse' : '')}
+                  >
+                    <div
+                      className={clsx(
+                        'w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5',
+                        msg.role === 'user'
+                          ? 'bg-primary-500'
+                          : 'bg-gradient-to-br from-primary-500 to-primary-700'
+                      )}
+                    >
+                      {msg.role === 'user' ? (
+                        <User className="w-4 h-4 text-white" />
+                      ) : (
+                        <Bot className="w-4 h-4 text-white" />
+                      )}
+                    </div>
+                    <div
+                      className={clsx(
+                        'rounded-2xl px-4 py-3 text-sm leading-relaxed',
+                        msg.role === 'user'
+                          ? 'bg-primary-500 text-white rounded-tr-sm'
+                          : 'bg-white dark:bg-dark-800 border border-dark-200/60 dark:border-dark-700/60 text-dark-800 dark:text-dark-100 rounded-tl-sm shadow-sm'
+                      )}
+                    >
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                  </div>
+                  {isLastAssistant && msg.contextualActions && msg.contextualActions.length > 0 && (
+                    <div className="ml-11 mt-2 flex flex-col gap-2">
+                      {msg.contextualActions.map((ca, i) => {
+                        const Icon = ca.icon;
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => sendMessage(ca.message, ca.action)}
+                            disabled={isLoading}
+                            className={clsx(
+                              'flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all text-left group disabled:opacity-50',
+                              ca.variant === 'primary'
+                                ? 'bg-primary-500 hover:bg-primary-600 text-white shadow-sm shadow-primary-500/20'
+                                : 'bg-white dark:bg-dark-800 border border-dark-200 dark:border-dark-700 text-dark-700 dark:text-dark-300 hover:border-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:text-primary-700 dark:hover:text-primary-400'
+                            )}
+                          >
+                            <span className="flex items-center gap-2">
+                              <Icon className={clsx('w-4 h-4 shrink-0', ca.variant === 'primary' ? 'text-white/80' : 'text-primary-500')} />
+                              {ca.label}
+                            </span>
+                            <ChevronRight className={clsx('w-4 h-4 shrink-0', ca.variant === 'primary' ? 'text-white/60' : 'text-dark-400 group-hover:text-primary-500')} />
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
-                <div
-                  className={clsx(
-                    'rounded-2xl px-4 py-3 text-sm leading-relaxed',
-                    msg.role === 'user'
-                      ? 'bg-primary-500 text-white rounded-tr-sm'
-                      : 'bg-white dark:bg-dark-800 border border-dark-200/60 dark:border-dark-700/60 text-dark-800 dark:text-dark-100 rounded-tl-sm shadow-sm'
-                  )}
-                >
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {isLoading && (
               <div className="flex gap-3 max-w-[90%]">
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shrink-0">

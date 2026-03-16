@@ -62,10 +62,12 @@ const GOAL_TYPE_BG: Record<string, string> = {
   custom: 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800',
 };
 
+const LAST_CONV_KEY = 'ai_last_conversation_id';
+
 export function AITrainerPage() {
   const { user, profile } = useAuthStore();
   const [activeTab, setActiveTab] = useState<Tab>('chat');
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(() => localStorage.getItem(LAST_CONV_KEY));
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -78,8 +80,38 @@ export function AITrainerPage() {
       fetchConversations();
       fetchStats();
       fetchGoals();
+      restoreLastConversation();
     }
   }, [user]);
+
+  const restoreLastConversation = async () => {
+    if (!user) return;
+    const stored = localStorage.getItem(LAST_CONV_KEY);
+    if (stored) {
+      const { data } = await supabase
+        .from('ai_conversations')
+        .select('id')
+        .eq('id', stored)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (data) {
+        setConversationId(stored);
+        return;
+      }
+      localStorage.removeItem(LAST_CONV_KEY);
+    }
+    const { data: latest } = await supabase
+      .from('ai_conversations')
+      .select('id')
+      .eq('user_id', user.id)
+      .order('last_message_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latest) {
+      setConversationId(latest.id);
+      localStorage.setItem(LAST_CONV_KEY, latest.id);
+    }
+  };
 
   const fetchConversations = async () => {
     if (!user) return;
@@ -115,8 +147,21 @@ export function AITrainerPage() {
 
   const handleConversationCreated = (id: string) => {
     setConversationId(id);
+    localStorage.setItem(LAST_CONV_KEY, id);
     fetchConversations();
     setTimeout(fetchGoals, 3000);
+  };
+
+  const handleSelectConversation = (id: string) => {
+    setConversationId(id);
+    localStorage.setItem(LAST_CONV_KEY, id);
+    setActiveTab('chat');
+  };
+
+  const handleNewConversation = () => {
+    setConversationId(null);
+    localStorage.removeItem(LAST_CONV_KEY);
+    setActiveTab('chat');
   };
 
   const handleRequestAnalysis = async () => {
@@ -260,7 +305,7 @@ export function AITrainerPage() {
                     Előzmények
                   </h3>
                   <button
-                    onClick={() => { setConversationId(null); fetchConversations(); }}
+                    onClick={handleNewConversation}
                     className="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
                   >
                     <Plus className="w-3 h-3" />
@@ -274,7 +319,7 @@ export function AITrainerPage() {
                     {conversations.map((conv) => (
                       <button
                         key={conv.id}
-                        onClick={() => setConversationId(conv.id)}
+                        onClick={() => handleSelectConversation(conv.id)}
                         className={clsx(
                           'w-full text-left px-2 py-2 rounded-lg text-xs transition-colors',
                           conversationId === conv.id
