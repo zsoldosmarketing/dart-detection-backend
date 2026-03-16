@@ -241,7 +241,7 @@ const translations: Record<string, Record<string, string>> = {
 
     'camera.connecting': 'Connecting to server...',
     'camera.connected': 'Server connection active!',
-    'camera.server_offline': 'Server unavailable - wait 1-2 minutes (Render free tier)',
+    'camera.server_offline': 'Server unavailable - check connection',
     'camera.starting': 'Starting camera...',
     'camera.start_failed': 'Failed to start camera.',
     'camera.reconnecting': 'Reconnecting...',
@@ -511,7 +511,7 @@ const translations: Record<string, Record<string, string>> = {
 
     'camera.connecting': 'Csatlakozás a szerverhez...',
     'camera.connected': 'Szerver kapcsolat aktív!',
-    'camera.server_offline': 'Szerver nem elérhető - várj 1-2 percet (Render free tier)',
+    'camera.server_offline': 'Szerver nem elérhető - ellenőrizd a kapcsolatot',
     'camera.starting': 'Kamera indítása...',
     'camera.start_failed': 'Nem sikerült elindítani a kamerát.',
     'camera.reconnecting': 'Újracsatlakozás...',

@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Check, AlertCircle } from 'lucide-react';
+import { Check, AlertCircle, Loader2 } from 'lucide-react';
 
 interface CalibrationStatusBarProps {
   isCalibrated: boolean;
@@ -118,7 +118,7 @@ export const CalibrationStatusBar = memo(function CalibrationStatusBar({
         {statusMessage && !error && !isCalibrated && (
           <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-              <Check className="w-5 h-5 text-blue-400" />
+              <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
             </div>
             <p className="text-blue-300 font-medium">{statusMessage}</p>
           </div>

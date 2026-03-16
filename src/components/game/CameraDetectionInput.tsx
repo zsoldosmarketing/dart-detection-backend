@@ -167,6 +167,9 @@ export function CameraDetectionInput({
     return () => clearInterval(interval);
   }, [checkConnection]);
 
+  const boardDetectAttemptsRef = useRef(0);
+  const MAX_BOARD_DETECT_ATTEMPTS = 3;
+
   const runBoardDetection = useCallback(async () => {
     const video = videoRef.current;
     if (!video || !apiConnectedRef.current) return;
@@ -221,9 +224,90 @@ export function CameraDetectionInput({
           clearInterval(boardDetectIntervalRef.current);
           boardDetectIntervalRef.current = null;
         }
+      } else {
+        boardDetectAttemptsRef.current++;
+        if (boardDetectAttemptsRef.current >= MAX_BOARD_DETECT_ATTEMPTS) {
+          const vw = video.videoWidth;
+          const vh = video.videoHeight;
+          const cx = vw / 2;
+          const cy = vh / 2;
+          const r = Math.min(vw, vh) * 0.42;
+
+          const fallbackResult: BoardDetectResult = {
+            board_found: true,
+            confidence: 0.4,
+            ellipse: { cx, cy, a: r, b: r, angle: 0 },
+            homography: null,
+            overlay_points: [[cx, cy - r], [cx + r, cy], [cx, cy + r], [cx - r, cy]],
+            bull_center: [cx, cy],
+            canonical_preview: null,
+            debug_contour: null,
+            message: 'Board assumed at center (dart detection model)',
+            image_width: vw,
+            image_height: vh,
+          };
+
+          boardResultRef.current = fallbackResult;
+          homographyRef.current = null;
+          const cal = boardDetectToCalibration(fallbackResult);
+          calibrationRef.current = cal;
+          setBoardConfidence(0.4);
+
+          isCalibratedRef.current = true;
+          setIsCalibrated(true);
+          referenceFrameRef.current = frameBlob;
+          await setReferenceImage(frameBlob);
+
+          cameraStore.setCalibration(cal);
+          cameraStore.setBoardResult(fallbackResult);
+          cameraStore.setHomography(null);
+
+          if (boardDetectIntervalRef.current) {
+            clearInterval(boardDetectIntervalRef.current);
+            boardDetectIntervalRef.current = null;
+          }
+        }
       }
     } catch (err) {
       console.error('[Camera] Board detection error:', err);
+      boardDetectAttemptsRef.current++;
+      if (boardDetectAttemptsRef.current >= MAX_BOARD_DETECT_ATTEMPTS) {
+        const vw = video.videoWidth || 640;
+        const vh = video.videoHeight || 480;
+        const cx = vw / 2;
+        const cy = vh / 2;
+        const r = Math.min(vw, vh) * 0.42;
+
+        const fallbackResult: BoardDetectResult = {
+          board_found: true,
+          confidence: 0.3,
+          ellipse: { cx, cy, a: r, b: r, angle: 0 },
+          homography: null,
+          overlay_points: [[cx, cy - r], [cx + r, cy], [cx, cy + r], [cx - r, cy]],
+          bull_center: [cx, cy],
+          canonical_preview: null,
+          debug_contour: null,
+          message: 'Board assumed at center (fallback)',
+          image_width: vw,
+          image_height: vh,
+        };
+
+        boardResultRef.current = fallbackResult;
+        const cal = boardDetectToCalibration(fallbackResult);
+        calibrationRef.current = cal;
+        setBoardConfidence(0.3);
+
+        isCalibratedRef.current = true;
+        setIsCalibrated(true);
+        cameraStore.setCalibration(cal);
+        cameraStore.setBoardResult(fallbackResult);
+        cameraStore.setHomography(null);
+
+        if (boardDetectIntervalRef.current) {
+          clearInterval(boardDetectIntervalRef.current);
+          boardDetectIntervalRef.current = null;
+        }
+      }
     } finally {
       boardDetectingRef.current = false;
     }
@@ -236,6 +320,7 @@ export function CameraDetectionInput({
 
     isCalibratedRef.current = false;
     boardDetectingRef.current = false;
+    boardDetectAttemptsRef.current = 0;
     runBoardDetection();
 
     boardDetectIntervalRef.current = window.setInterval(() => {

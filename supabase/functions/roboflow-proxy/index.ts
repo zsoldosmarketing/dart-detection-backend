@@ -7,9 +7,9 @@ const corsHeaders = {
 };
 
 const ROBOFLOW_API_KEY = Deno.env.get("ROBOFLOW_API_KEY") ?? "";
-const SERVERLESS_URL = "https://serverless.roboflow.com";
-const WORKSPACE = "darts-jeuiy";
-const WORKFLOW_ID = "custom-workflow";
+const DETECT_URL = "https://detect.roboflow.com";
+const MODEL_ID = "darts-gffwp";
+const MODEL_VERSION = "1";
 
 const SECTOR_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
 
@@ -22,7 +22,7 @@ const RING_RATIOS = {
   doubleOuter: 1.0,
 };
 
-interface WorkflowPrediction {
+interface RoboflowPrediction {
   x: number;
   y: number;
   width: number;
@@ -33,29 +33,20 @@ interface WorkflowPrediction {
   detection_id?: string;
 }
 
-interface WorkflowResponse {
-  outputs?: Array<{
-    predictions?: {
-      predictions?: WorkflowPrediction[];
-      image?: { width: number; height: number };
-    };
-  }>;
-  predictions?: WorkflowPrediction[];
+interface RoboflowResponse {
+  predictions: RoboflowPrediction[];
   image?: { width: number; height: number };
 }
 
 function classifyDartPosition(
-  x: number,
-  y: number,
-  imageWidth: number,
-  imageHeight: number
+  dartX: number,
+  dartY: number,
+  boardCx: number,
+  boardCy: number,
+  boardRadius: number
 ): { label: string; score: number } {
-  const boardCenterX = imageWidth / 2;
-  const boardCenterY = imageHeight / 2;
-  const boardRadius = Math.min(imageWidth, imageHeight) * 0.45;
-
-  const dx = x - boardCenterX;
-  const dy = y - boardCenterY;
+  const dx = dartX - boardCx;
+  const dy = dartY - boardCy;
   const dist = Math.sqrt(dx * dx + dy * dy) / boardRadius;
 
   if (dist <= RING_RATIOS.doubleBull) {
@@ -84,55 +75,24 @@ function classifyDartPosition(
   return { label: `${sector}`, score: sector };
 }
 
-async function runWorkflow(imageBase64: string): Promise<WorkflowResponse | null> {
+async function detectObjects(imageBase64: string, confidence: number = 40, overlap: number = 30): Promise<RoboflowResponse | null> {
   if (!ROBOFLOW_API_KEY) return null;
 
-  const url = `${SERVERLESS_URL}/${WORKSPACE}/workflows/${WORKFLOW_ID}`;
-
-  const body = JSON.stringify({
-    api_key: ROBOFLOW_API_KEY,
-    inputs: {
-      image: {
-        type: "base64",
-        value: imageBase64,
-      },
-    },
-  });
+  const url = `${DETECT_URL}/${MODEL_ID}/${MODEL_VERSION}?api_key=${ROBOFLOW_API_KEY}&confidence=${confidence}&overlap=${overlap}`;
 
   const resp = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body,
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: imageBase64,
   });
 
   if (!resp.ok) {
     const errText = await resp.text();
-    console.error("Roboflow workflow error:", resp.status, errText);
+    console.error("Roboflow detect error:", resp.status, errText);
     return null;
   }
 
   return await resp.json();
-}
-
-function extractPredictions(data: WorkflowResponse): { predictions: WorkflowPrediction[]; width: number; height: number } {
-  if (data.outputs && data.outputs.length > 0) {
-    const output = data.outputs[0];
-    if (output.predictions?.predictions) {
-      return {
-        predictions: output.predictions.predictions,
-        width: output.predictions.image?.width ?? 640,
-        height: output.predictions.image?.height ?? 480,
-      };
-    }
-  }
-  if (data.predictions) {
-    return {
-      predictions: data.predictions,
-      width: data.image?.width ?? 640,
-      height: data.image?.height ?? 480,
-    };
-  }
-  return { predictions: [], width: 640, height: 480 };
 }
 
 Deno.serve(async (req: Request) => {
@@ -153,7 +113,11 @@ Deno.serve(async (req: Request) => {
 
     if (action === "health") {
       return new Response(
-        JSON.stringify({ status: "ok", roboflow_configured: true, workflow: `${WORKSPACE}/${WORKFLOW_ID}` }),
+        JSON.stringify({
+          status: "ok",
+          roboflow_configured: true,
+          model: `${MODEL_ID}/${MODEL_VERSION}`,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -167,7 +131,8 @@ Deno.serve(async (req: Request) => {
     }
     const imageBase64 = btoa(binary);
 
-    const data = await runWorkflow(imageBase64);
+    const confidenceParam = parseInt(url.searchParams.get("confidence") ?? "40", 10);
+    const data = await detectObjects(imageBase64, confidenceParam, 30);
 
     if (!data) {
       if (action === "detect_board") {
@@ -180,21 +145,70 @@ Deno.serve(async (req: Request) => {
             overlay_points: null,
             bull_center: null,
             canonical_preview: null,
-            message: "Workflow request failed",
+            message: "Detection request failed",
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       return new Response(
-        JSON.stringify({ error: "Workflow request failed" }),
+        JSON.stringify({ error: "Detection request failed" }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { predictions, width: imgW, height: imgH } = extractPredictions(data);
+    const predictions = data.predictions || [];
+    const imgW = data.image?.width ?? 640;
+    const imgH = data.image?.height ?? 480;
 
     if (action === "detect_board") {
-      if (predictions.length === 0) {
+      const boardPreds = predictions.filter(
+        (p) => p.class.toLowerCase().includes("board") || p.class.toLowerCase().includes("dart")
+      );
+
+      const largePreds = predictions.filter(
+        (p) => p.width > imgW * 0.15 && p.height > imgH * 0.15
+      );
+
+      const boardCandidates = boardPreds.length > 0 ? boardPreds : largePreds;
+
+      if (boardCandidates.length === 0 && predictions.length > 0) {
+        const allDarts = predictions;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const p of allDarts) {
+          const left = p.x - p.width / 2;
+          const top = p.y - p.height / 2;
+          const right = p.x + p.width / 2;
+          const bottom = p.y + p.height / 2;
+          if (left < minX) minX = left;
+          if (top < minY) minY = top;
+          if (right > maxX) maxX = right;
+          if (bottom > maxY) maxY = bottom;
+        }
+        const cx = (minX + maxX) / 2;
+        const cy = (minY + maxY) / 2;
+        const boardR = Math.max(maxX - minX, maxY - minY) * 1.5;
+        const a = boardR / 2;
+        const b = boardR / 2;
+
+        return new Response(
+          JSON.stringify({
+            board_found: true,
+            confidence: 0.5,
+            ellipse: { cx, cy, a, b, angle: 0 },
+            homography: null,
+            overlay_points: [[cx, cy - b], [cx + a, cy], [cx, cy + b], [cx - a, cy]],
+            bull_center: [cx, cy],
+            canonical_preview: null,
+            message: "Board estimated from dart positions",
+            image_width: imgW,
+            image_height: imgH,
+            raw_predictions: predictions.length,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (boardCandidates.length === 0) {
         return new Response(
           JSON.stringify({
             board_found: false,
@@ -204,24 +218,22 @@ Deno.serve(async (req: Request) => {
             overlay_points: null,
             bull_center: null,
             canonical_preview: null,
-            message: "No dartboard detected",
+            message: `No board detected (${predictions.length} objects found: ${predictions.map(p => p.class).join(', ')})`,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      const board = predictions.reduce((best, p) => p.confidence > best.confidence ? p : best);
+      const board = boardCandidates.reduce((best, p) => {
+        const area = p.width * p.height;
+        const bestArea = best.width * best.height;
+        return area > bestArea ? p : best;
+      });
+
       const cx = board.x;
       const cy = board.y;
       const a = board.width / 2;
       const b = board.height / 2;
-
-      const overlayPoints = [
-        [cx, cy - b],
-        [cx + a, cy],
-        [cx, cy + b],
-        [cx - a, cy],
-      ];
 
       return new Response(
         JSON.stringify({
@@ -229,12 +241,13 @@ Deno.serve(async (req: Request) => {
           confidence: board.confidence,
           ellipse: { cx, cy, a, b, angle: 0 },
           homography: null,
-          overlay_points: overlayPoints,
+          overlay_points: [[cx, cy - b], [cx + a, cy], [cx, cy + b], [cx - a, cy]],
           bull_center: [cx, cy],
           canonical_preview: null,
-          message: `Board detected with ${(board.confidence * 100).toFixed(0)}% confidence`,
+          message: `Board detected (${board.class}) with ${(board.confidence * 100).toFixed(0)}% confidence`,
           image_width: imgW,
           image_height: imgH,
+          raw_predictions: predictions.length,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -257,8 +270,61 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      const roboflowClass = predictions[0].class;
+      const classLabel = roboflowClass.toUpperCase();
+
+      let label = "";
+      let score = 0;
+      let useGeometry = false;
+
+      if (classLabel.startsWith("T") && !isNaN(parseInt(classLabel.slice(1)))) {
+        const num = parseInt(classLabel.slice(1));
+        if (num >= 1 && num <= 20) {
+          label = `T${num}`;
+          score = num * 3;
+        }
+      } else if (classLabel.startsWith("D") && classLabel !== "D-BULL" && !isNaN(parseInt(classLabel.slice(1)))) {
+        const num = parseInt(classLabel.slice(1));
+        if (num >= 1 && num <= 20) {
+          label = `D${num}`;
+          score = num * 2;
+        }
+      } else if (classLabel === "BULL" || classLabel === "D-BULL" || classLabel === "DBULL" || classLabel === "DB" || classLabel === "DOUBLE BULL") {
+        label = "D-BULL";
+        score = 50;
+      } else if (classLabel === "OB" || classLabel === "OUTER BULL" || classLabel === "SINGLE BULL" || classLabel === "SB") {
+        label = "BULL";
+        score = 25;
+      } else if (classLabel === "MISS" || classLabel === "OUT" || classLabel === "OUTSIDE") {
+        label = "MISS";
+        score = 0;
+      } else if (!isNaN(parseInt(classLabel))) {
+        const num = parseInt(classLabel);
+        if (num >= 1 && num <= 20) {
+          label = `${num}`;
+          score = num;
+        } else if (num === 25) {
+          label = "BULL";
+          score = 25;
+        } else if (num === 50) {
+          label = "D-BULL";
+          score = 50;
+        }
+      } else {
+        useGeometry = true;
+      }
+
+      if (useGeometry || !label) {
+        const best = predictions.reduce((b, p) => p.confidence > b.confidence ? p : b);
+        const boardCx = imgW / 2;
+        const boardCy = imgH / 2;
+        const boardRadius = Math.min(imgW, imgH) * 0.45;
+        const result = classifyDartPosition(best.x, best.y, boardCx, boardCy, boardRadius);
+        label = result.label;
+        score = result.score;
+      }
+
       const best = predictions.reduce((b, p) => p.confidence > b.confidence ? p : b);
-      const { label, score } = classifyDartPosition(best.x, best.y, imgW, imgH);
       const decision = best.confidence >= 0.70 ? "AUTO" : "ASSIST";
 
       return new Response(
@@ -270,13 +336,15 @@ Deno.serve(async (req: Request) => {
           tip_canonical: [best.x, best.y],
           tip_original: [best.x, best.y],
           debug: null,
-          message: `Dart at ${label} with ${(best.confidence * 100).toFixed(0)}% confidence`,
+          message: `${roboflowClass} -> ${label} (${score}) with ${(best.confidence * 100).toFixed(0)}% confidence`,
+          raw_class: roboflowClass,
+          all_predictions: predictions.map(p => ({ class: p.class, confidence: p.confidence, x: p.x, y: p.y })),
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    return new Response(JSON.stringify(data), {
+    return new Response(JSON.stringify({ predictions, image: data.image }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
