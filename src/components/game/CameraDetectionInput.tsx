@@ -167,151 +167,64 @@ export function CameraDetectionInput({
     return () => clearInterval(interval);
   }, [checkConnection]);
 
-  const boardDetectAttemptsRef = useRef(0);
-  const MAX_BOARD_DETECT_ATTEMPTS = 3;
+  const markCameraReady = useCallback(async (video: HTMLVideoElement) => {
+    if (isCalibratedRef.current) return;
 
-  const runBoardDetection = useCallback(async () => {
-    const video = videoRef.current;
-    if (!video || !apiConnectedRef.current) return;
-    if (!video.videoWidth || !video.videoHeight || video.readyState < 2) return;
-    if (boardDetectingRef.current || isCalibratedRef.current) return;
-    boardDetectingRef.current = true;
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 480;
+    const cx = vw / 2;
+    const cy = vh / 2;
+    const r = Math.min(vw, vh) * 0.42;
+
+    const readyResult: BoardDetectResult = {
+      board_found: true,
+      confidence: 0.8,
+      ellipse: { cx, cy, a: r, b: r, angle: 0 },
+      homography: null,
+      overlay_points: [[cx, cy - r], [cx + r, cy], [cx, cy + r], [cx - r, cy]],
+      bull_center: [cx, cy],
+      canonical_preview: null,
+      debug_contour: null,
+      message: 'Camera ready - Roboflow dart detection active',
+      image_width: vw,
+      image_height: vh,
+    };
+
+    boardResultRef.current = readyResult;
+    homographyRef.current = null;
+    const cal = boardDetectToCalibration(readyResult);
+    calibrationRef.current = cal;
+    setBoardConfidence(0.8);
+
+    isCalibratedRef.current = true;
+    setIsCalibrated(true);
 
     try {
       const frameBlob = await captureVideoFrame(video);
-      const result = await detectBoard(frameBlob);
+      referenceFrameRef.current = frameBlob;
+      await setReferenceImage(frameBlob);
+    } catch {
+      // ignore
+    }
 
-      if (result && result.board_found && result.ellipse) {
-        const imgW = result.image_width ?? video.videoWidth;
-        const imgH = result.image_height ?? video.videoHeight;
-        const scaleX = video.videoWidth / imgW;
-        const scaleY = video.videoHeight / imgH;
+    cameraStore.setCalibration(cal);
+    cameraStore.setBoardResult(readyResult);
+    cameraStore.setHomography(null);
 
-        const scaledResult = {
-          ...result,
-          ellipse: {
-            ...result.ellipse,
-            cx: result.ellipse.cx * scaleX,
-            cy: result.ellipse.cy * scaleY,
-            a: result.ellipse.a * scaleX,
-            b: result.ellipse.b * scaleY,
-          },
-          bull_center: result.bull_center
-            ? [result.bull_center[0] * scaleX, result.bull_center[1] * scaleY]
-            : null,
-          overlay_points: result.overlay_points
-            ? result.overlay_points.map(([x, y]) => [x * scaleX, y * scaleY])
-            : null,
-        };
-
-        boardResultRef.current = scaledResult;
-        homographyRef.current = null;
-
-        const cal = boardDetectToCalibration(scaledResult);
-        calibrationRef.current = cal;
-        setBoardConfidence(result.confidence);
-
-        isCalibratedRef.current = true;
-        setIsCalibrated(true);
-        referenceFrameRef.current = frameBlob;
-        await setReferenceImage(frameBlob);
-
-        cameraStore.setCalibration(cal);
-        cameraStore.setBoardResult(scaledResult);
-        cameraStore.setHomography(null);
-
-        if (boardDetectIntervalRef.current) {
-          clearInterval(boardDetectIntervalRef.current);
-          boardDetectIntervalRef.current = null;
-        }
-      } else {
-        boardDetectAttemptsRef.current++;
-        if (boardDetectAttemptsRef.current >= MAX_BOARD_DETECT_ATTEMPTS) {
-          const vw = video.videoWidth;
-          const vh = video.videoHeight;
-          const cx = vw / 2;
-          const cy = vh / 2;
-          const r = Math.min(vw, vh) * 0.42;
-
-          const fallbackResult: BoardDetectResult = {
-            board_found: true,
-            confidence: 0.4,
-            ellipse: { cx, cy, a: r, b: r, angle: 0 },
-            homography: null,
-            overlay_points: [[cx, cy - r], [cx + r, cy], [cx, cy + r], [cx - r, cy]],
-            bull_center: [cx, cy],
-            canonical_preview: null,
-            debug_contour: null,
-            message: 'Board assumed at center (dart detection model)',
-            image_width: vw,
-            image_height: vh,
-          };
-
-          boardResultRef.current = fallbackResult;
-          homographyRef.current = null;
-          const cal = boardDetectToCalibration(fallbackResult);
-          calibrationRef.current = cal;
-          setBoardConfidence(0.4);
-
-          isCalibratedRef.current = true;
-          setIsCalibrated(true);
-          referenceFrameRef.current = frameBlob;
-          await setReferenceImage(frameBlob);
-
-          cameraStore.setCalibration(cal);
-          cameraStore.setBoardResult(fallbackResult);
-          cameraStore.setHomography(null);
-
-          if (boardDetectIntervalRef.current) {
-            clearInterval(boardDetectIntervalRef.current);
-            boardDetectIntervalRef.current = null;
-          }
-        }
-      }
-    } catch (err) {
-      console.error('[Camera] Board detection error:', err);
-      boardDetectAttemptsRef.current++;
-      if (boardDetectAttemptsRef.current >= MAX_BOARD_DETECT_ATTEMPTS) {
-        const vw = video.videoWidth || 640;
-        const vh = video.videoHeight || 480;
-        const cx = vw / 2;
-        const cy = vh / 2;
-        const r = Math.min(vw, vh) * 0.42;
-
-        const fallbackResult: BoardDetectResult = {
-          board_found: true,
-          confidence: 0.3,
-          ellipse: { cx, cy, a: r, b: r, angle: 0 },
-          homography: null,
-          overlay_points: [[cx, cy - r], [cx + r, cy], [cx, cy + r], [cx - r, cy]],
-          bull_center: [cx, cy],
-          canonical_preview: null,
-          debug_contour: null,
-          message: 'Board assumed at center (fallback)',
-          image_width: vw,
-          image_height: vh,
-        };
-
-        boardResultRef.current = fallbackResult;
-        const cal = boardDetectToCalibration(fallbackResult);
-        calibrationRef.current = cal;
-        setBoardConfidence(0.3);
-
-        isCalibratedRef.current = true;
-        setIsCalibrated(true);
-        cameraStore.setCalibration(cal);
-        cameraStore.setBoardResult(fallbackResult);
-        cameraStore.setHomography(null);
-
-        if (boardDetectIntervalRef.current) {
-          clearInterval(boardDetectIntervalRef.current);
-          boardDetectIntervalRef.current = null;
-        }
-      }
-    } finally {
-      boardDetectingRef.current = false;
+    if (boardDetectIntervalRef.current) {
+      clearInterval(boardDetectIntervalRef.current);
+      boardDetectIntervalRef.current = null;
     }
   }, []);
+
+  const runBoardDetection = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (!video.videoWidth || !video.videoHeight || video.readyState < 2) return;
+    if (boardDetectingRef.current || isCalibratedRef.current) return;
+
+    await markCameraReady(video);
+  }, [markCameraReady]);
 
   const startBoardDetectLoop = useCallback(() => {
     if (boardDetectIntervalRef.current) {
@@ -320,7 +233,6 @@ export function CameraDetectionInput({
 
     isCalibratedRef.current = false;
     boardDetectingRef.current = false;
-    boardDetectAttemptsRef.current = 0;
     runBoardDetection();
 
     boardDetectIntervalRef.current = window.setInterval(() => {
