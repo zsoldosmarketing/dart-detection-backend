@@ -66,7 +66,7 @@ export interface AutoCalibrationResult {
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL as string) ?? '';
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL as string) || (import.meta.env.VITE_DART_DETECTION_API_URL as string) || '';
 
 function getBackendMode(): 'backend' | 'edge' {
   return BACKEND_URL ? 'backend' : 'edge';
@@ -82,7 +82,10 @@ function getEdgeUrl(action: string, extra: Record<string, string> = {}): string 
 }
 
 function edgeHeaders(): Record<string, string> {
-  return { Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+  return {
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    Apikey: SUPABASE_ANON_KEY,
+  };
 }
 
 export function isApiConfigured(): boolean {
@@ -103,7 +106,7 @@ export async function checkApiHealth(): Promise<{
   try {
     if (getBackendMode() === 'backend') {
       const resp = await fetch(`${BACKEND_URL}/health`, {
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(15000),
       });
       if (resp.ok) {
         const data = await resp.json();
@@ -145,7 +148,7 @@ export async function detectBoard(imageBlob: Blob): Promise<BoardDetectResult | 
       const resp = await fetch(`${BACKEND_URL}/board/detect`, {
         method: 'POST',
         body: form,
-        signal: AbortSignal.timeout(25000),
+        signal: AbortSignal.timeout(45000),
       });
       if (!resp.ok) {
         console.error('[API] Backend board detection failed:', resp.status);

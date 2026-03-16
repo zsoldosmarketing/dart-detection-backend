@@ -52,7 +52,7 @@ interface CameraDetectionInputProps {
   remainingDarts?: number;
 }
 
-const BOARD_DETECT_INTERVAL = 1000;
+const BOARD_DETECT_INTERVAL = 3000;
 const AUTO_SUBMIT_CONFIDENCE = 0.70;
 
 export function CameraDetectionInput({
@@ -94,6 +94,8 @@ export function CameraDetectionInput({
   const containerRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<CameraManager | null>(null);
   const boardDetectIntervalRef = useRef<number | null>(null);
+  const isCalibratedRef = useRef(false);
+  const boardDetectingRef = useRef(false);
   const referenceFrameRef = useRef<Blob | null>(null);
   const calibrationRef = useRef<AutoCalibrationResult | null>(null);
   const boardResultRef = useRef<BoardDetectResult | null>(null);
@@ -170,6 +172,8 @@ export function CameraDetectionInput({
     const video = videoRef.current;
     if (!video || !apiConnectedRef.current) return;
     if (!video.videoWidth || !video.videoHeight || video.readyState < 2) return;
+    if (boardDetectingRef.current || isCalibratedRef.current) return;
+    boardDetectingRef.current = true;
 
     try {
       const frameBlob = await captureVideoFrame(video);
@@ -205,6 +209,7 @@ export function CameraDetectionInput({
         calibrationRef.current = cal;
         setBoardConfidence(result.confidence);
 
+        isCalibratedRef.current = true;
         setIsCalibrated(true);
         referenceFrameRef.current = frameBlob;
         await setReferenceImage(frameBlob);
@@ -220,6 +225,8 @@ export function CameraDetectionInput({
       }
     } catch (err) {
       console.error('[Camera] Board detection error:', err);
+    } finally {
+      boardDetectingRef.current = false;
     }
   }, []);
 
@@ -228,14 +235,14 @@ export function CameraDetectionInput({
       clearInterval(boardDetectIntervalRef.current);
     }
 
+    isCalibratedRef.current = false;
+    boardDetectingRef.current = false;
     runBoardDetection();
 
     boardDetectIntervalRef.current = window.setInterval(() => {
-      if (!isCalibrated && !pendingScore) {
-        runBoardDetection();
-      }
+      runBoardDetection();
     }, BOARD_DETECT_INTERVAL);
-  }, [runBoardDetection, isCalibrated, pendingScore]);
+  }, [runBoardDetection]);
 
   const startCamera = useCallback(async (deviceId?: string) => {
     if (!videoRef.current) return;
@@ -245,8 +252,28 @@ export function CameraDetectionInput({
     setStatusMessage(t('camera.starting'));
 
     const camera = new CameraManager();
-    if (deviceId) {
-      camera.setDevice(deviceId);
+
+    const cameras = await camera.listDevices();
+    setAvailableCameras(cameras);
+
+    let selectedDeviceId = deviceId;
+    if (!selectedDeviceId && cameras.length > 0) {
+      const savedIdx = cameraStore.lastCameraIndex;
+      if (savedIdx >= 0 && savedIdx < cameras.length) {
+        selectedDeviceId = cameras[savedIdx].deviceId;
+      } else {
+        const physicalCamera = cameras.find(c =>
+          !c.label.toLowerCase().includes('virtual') &&
+          !c.label.toLowerCase().includes('obs') &&
+          !c.label.toLowerCase().includes('snap') &&
+          !c.label.toLowerCase().includes('manycam')
+        );
+        selectedDeviceId = physicalCamera?.deviceId || cameras[0].deviceId;
+      }
+    }
+
+    if (selectedDeviceId) {
+      camera.setDevice(selectedDeviceId);
     }
     cameraRef.current = camera;
 
@@ -262,15 +289,13 @@ export function CameraDetectionInput({
     setIsConnecting(false);
     cameraStore.setWasActive(true);
 
-    camera.listDevices().then(cameras => {
-      setAvailableCameras(cameras);
-      const currentDevice = cameras.find(c => c.deviceId === camera.getSettings().deviceId);
-      if (currentDevice) {
-        const idx = cameras.indexOf(currentDevice);
+    if (selectedDeviceId) {
+      const idx = cameras.findIndex(c => c.deviceId === selectedDeviceId);
+      if (idx >= 0) {
         setCurrentCameraIndex(idx);
         cameraStore.setLastCameraIndex(idx);
       }
-    });
+    }
 
     await checkConnection(false);
 
@@ -298,11 +323,13 @@ export function CameraDetectionInput({
     }
     setIsActive(false);
     setIsDetecting(false);
+    isCalibratedRef.current = false;
     setIsCalibrated(false);
     setPendingScore(null);
     setDebugImages({});
     setActiveRemoteCamera(null);
     setBoardConfidence(0);
+    boardDetectingRef.current = false;
     referenceFrameRef.current = null;
     pendingAfterFrameRef.current = null;
     calibrationRef.current = null;
@@ -794,7 +821,7 @@ export function CameraDetectionInput({
 
             <Button
               onClick={() => startCamera()}
-              disabled={isConnecting || !apiConnected}
+              disabled={isConnecting}
               size="sm"
               className="px-6 mt-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg shadow-blue-500/25"
               leftIcon={isConnecting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
@@ -898,6 +925,7 @@ export function CameraDetectionInput({
 
                 <button
                   onClick={() => {
+                    isCalibratedRef.current = false;
                     setIsCalibrated(false);
                     boardResultRef.current = null;
                     calibrationRef.current = null;

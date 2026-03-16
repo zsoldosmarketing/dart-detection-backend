@@ -48,13 +48,22 @@ export class CameraManager {
 
   async listDevices(): Promise<CameraDevice[]> {
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      return devices
-        .filter(d => d.kind === 'videoinput')
-        .map(d => ({
-          deviceId: d.deviceId,
-          label: d.label || `Kamera ${d.deviceId.slice(0, 8)}`,
-        }));
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      let videoDevices = devices.filter(d => d.kind === 'videoinput');
+
+      if (videoDevices.length > 0 && !videoDevices[0].label) {
+        try {
+          const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          tempStream.getTracks().forEach(t => t.stop());
+          devices = await navigator.mediaDevices.enumerateDevices();
+          videoDevices = devices.filter(d => d.kind === 'videoinput');
+        } catch {}
+      }
+
+      return videoDevices.map((d, i) => ({
+        deviceId: d.deviceId,
+        label: d.label || `Kamera ${i + 1}`,
+      }));
     } catch (err) {
       console.error('[CameraManager] Failed to list devices:', err);
       return [];
@@ -74,9 +83,9 @@ export class CameraManager {
       };
 
       if (hasSpecificDevice) {
-        videoConstraints.deviceId = { ideal: this.settings.deviceId };
+        videoConstraints.deviceId = { exact: this.settings.deviceId };
       } else {
-        videoConstraints.facingMode = this.settings.facingMode;
+        videoConstraints.facingMode = { ideal: this.settings.facingMode };
       }
 
       const constraints: MediaStreamConstraints = {

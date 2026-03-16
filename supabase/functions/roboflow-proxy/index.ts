@@ -159,7 +159,13 @@ Deno.serve(async (req: Request) => {
     }
 
     const bodyBuffer = await req.arrayBuffer();
-    const imageBase64 = btoa(String.fromCharCode(...new Uint8Array(bodyBuffer)));
+    const bytes = new Uint8Array(bodyBuffer);
+    let binary = "";
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    }
+    const imageBase64 = btoa(binary);
 
     const data = await runWorkflow(imageBase64);
 
