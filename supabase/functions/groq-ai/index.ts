@@ -45,10 +45,18 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const { message, conversation_id, action = "chat", context, game_result, training_result } = body;
 
+    const groqApiKey = Deno.env.get("GROQ_API_KEY") ?? "";
+    if (!groqApiKey) {
+      return new Response(
+        JSON.stringify({ error: "A Groq API kulcs nincs beállítva." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { data: configs } = await supabaseAdmin
       .from("app_config")
       .select("key, value_json")
-      .in("key", ["groq_api_key", "groq_model", "ai_system_prompt", "ai_enabled"]);
+      .in("key", ["groq_model", "ai_system_prompt", "ai_enabled"]);
 
     const configMap: Record<string, unknown> = {};
     (configs || []).forEach((c: { key: string; value_json: unknown }) => {
@@ -58,14 +66,6 @@ Deno.serve(async (req: Request) => {
         configMap[c.key] = c.value_json;
       }
     });
-
-    const groqApiKey = configMap["groq_api_key"] as string;
-    if (!groqApiKey || groqApiKey.trim() === "") {
-      return new Response(
-        JSON.stringify({ error: "A Groq API kulcs nincs beállítva. Kérj egy adminisztrátortól segítséget." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
     const model = (configMap["groq_model"] as string) || "llama-3.3-70b-versatile";
     const aiEnabled = configMap["ai_enabled"] !== false;

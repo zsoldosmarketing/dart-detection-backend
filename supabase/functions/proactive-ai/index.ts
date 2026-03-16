@@ -33,10 +33,17 @@ Deno.serve(async (req: Request) => {
       if (user) targetUserId = user.id;
     }
 
+    const groqApiKey = Deno.env.get("GROQ_API_KEY") ?? "";
+    if (!groqApiKey) {
+      return new Response(JSON.stringify({ error: "Groq API key not configured" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     const { data: configs } = await supabaseAdmin
       .from("app_config")
       .select("key, value_json")
-      .in("key", ["groq_api_key", "groq_model", "ai_enabled"]);
+      .in("key", ["groq_model", "ai_enabled"]);
 
     const configMap: Record<string, unknown> = {};
     (configs || []).forEach((c: { key: string; value_json: unknown }) => {
@@ -46,13 +53,6 @@ Deno.serve(async (req: Request) => {
         configMap[c.key] = c.value_json;
       }
     });
-
-    const groqApiKey = configMap["groq_api_key"] as string;
-    if (!groqApiKey || groqApiKey.trim() === "") {
-      return new Response(JSON.stringify({ error: "Groq API key not configured" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
 
     const aiEnabled = configMap["ai_enabled"] !== false;
     if (!aiEnabled) {
