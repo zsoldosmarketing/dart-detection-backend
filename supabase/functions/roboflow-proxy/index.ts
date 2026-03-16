@@ -7,9 +7,22 @@ const corsHeaders = {
 };
 
 const ROBOFLOW_API_KEY = Deno.env.get("ROBOFLOW_API_KEY") ?? "";
-const ROBOFLOW_INFER_URL = "https://detect.roboflow.com";
+const SERVERLESS_URL = "https://serverless.roboflow.com";
+const WORKSPACE = "darts-jeuiy";
+const WORKFLOW_ID = "custom-workflow";
 
-interface RoboflowPrediction {
+const SECTOR_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
+
+const RING_RATIOS = {
+  doubleBull: 0.032,
+  singleBull: 0.08,
+  tripleInner: 0.582,
+  tripleOuter: 0.629,
+  doubleInner: 0.953,
+  doubleOuter: 1.0,
+};
+
+interface WorkflowPrediction {
   x: number;
   y: number;
   width: number;
@@ -17,100 +30,109 @@ interface RoboflowPrediction {
   confidence: number;
   class: string;
   class_id?: number;
+  detection_id?: string;
 }
 
-interface RoboflowResponse {
-  predictions: RoboflowPrediction[];
+interface WorkflowResponse {
+  outputs?: Array<{
+    predictions?: {
+      predictions?: WorkflowPrediction[];
+      image?: { width: number; height: number };
+    };
+  }>;
+  predictions?: WorkflowPrediction[];
   image?: { width: number; height: number };
-  time?: number;
 }
 
-function classifyDartboardRegion(
-  pred: RoboflowPrediction,
+function classifyDartPosition(
+  x: number,
+  y: number,
   imageWidth: number,
   imageHeight: number
-): {
-  label: string;
-  score: number;
-  tipX: number;
-  tipY: number;
-} {
-  const cx = pred.x;
-  const cy = pred.y;
-
+): { label: string; score: number } {
   const boardCenterX = imageWidth / 2;
   const boardCenterY = imageHeight / 2;
   const boardRadius = Math.min(imageWidth, imageHeight) * 0.45;
 
-  const dx = cx - boardCenterX;
-  const dy = cy - boardCenterY;
+  const dx = x - boardCenterX;
+  const dy = y - boardCenterY;
   const dist = Math.sqrt(dx * dx + dy * dy) / boardRadius;
 
-  const SECTOR_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
-
-  const RING_RATIOS = {
-    doubleBull: 0.032,
-    singleBull: 0.08,
-    tripleInner: 0.582,
-    tripleOuter: 0.629,
-    doubleInner: 0.953,
-    doubleOuter: 1.0,
-  };
-
-  let label: string;
   if (dist <= RING_RATIOS.doubleBull) {
-    label = "D-BULL";
-  } else if (dist <= RING_RATIOS.singleBull) {
-    label = "BULL";
-  } else if (dist > RING_RATIOS.doubleOuter) {
-    label = "MISS";
-  } else {
-    let angle = Math.atan2(dy, dx) + Math.PI / 2;
-    if (angle < 0) angle += 2 * Math.PI;
-
-    const sectorWidth = (2 * Math.PI) / 20;
-    const sectorIndex = Math.floor((angle + sectorWidth / 2) / sectorWidth) % 20;
-    const sector = SECTOR_ORDER[sectorIndex];
-
-    if (dist >= RING_RATIOS.doubleInner) {
-      label = `D${sector}`;
-    } else if (dist >= RING_RATIOS.tripleInner && dist <= RING_RATIOS.tripleOuter) {
-      label = `T${sector}`;
-    } else {
-      label = `${sector}`;
-    }
+    return { label: "D-BULL", score: 50 };
+  }
+  if (dist <= RING_RATIOS.singleBull) {
+    return { label: "BULL", score: 25 };
+  }
+  if (dist > RING_RATIOS.doubleOuter) {
+    return { label: "MISS", score: 0 };
   }
 
-  return {
-    label,
-    score: Math.round(pred.confidence * label.startsWith("D") ? 2 : label.startsWith("T") ? 3 : 1),
-    tipX: cx,
-    tipY: cy,
-  };
+  let angle = Math.atan2(dy, dx) + Math.PI / 2;
+  if (angle < 0) angle += 2 * Math.PI;
+
+  const sectorWidth = (2 * Math.PI) / 20;
+  const sectorIndex = Math.floor((angle + sectorWidth / 2) / sectorWidth) % 20;
+  const sector = SECTOR_ORDER[sectorIndex];
+
+  if (dist >= RING_RATIOS.doubleInner) {
+    return { label: `D${sector}`, score: sector * 2 };
+  }
+  if (dist >= RING_RATIOS.tripleInner && dist <= RING_RATIOS.tripleOuter) {
+    return { label: `T${sector}`, score: sector * 3 };
+  }
+  return { label: `${sector}`, score: sector };
 }
 
-async function callRoboflow(
-  modelId: string,
-  imageData: ArrayBuffer,
-  confidence: string,
-  overlap: string
-): Promise<RoboflowResponse | null> {
+async function runWorkflow(imageBase64: string): Promise<WorkflowResponse | null> {
   if (!ROBOFLOW_API_KEY) return null;
 
-  const roboflowUrl = new URL(`${ROBOFLOW_INFER_URL}/${modelId}`);
-  roboflowUrl.searchParams.set("api_key", ROBOFLOW_API_KEY);
-  roboflowUrl.searchParams.set("confidence", confidence);
-  roboflowUrl.searchParams.set("overlap", overlap);
-  roboflowUrl.searchParams.set("format", "json");
+  const url = `${SERVERLESS_URL}/${WORKSPACE}/workflows/${WORKFLOW_ID}`;
 
-  const upstream = await fetch(roboflowUrl.toString(), {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: imageData,
+  const body = JSON.stringify({
+    api_key: ROBOFLOW_API_KEY,
+    inputs: {
+      image: {
+        type: "base64",
+        value: imageBase64,
+      },
+    },
   });
 
-  if (!upstream.ok) return null;
-  return await upstream.json();
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    console.error("Roboflow workflow error:", resp.status, errText);
+    return null;
+  }
+
+  return await resp.json();
+}
+
+function extractPredictions(data: WorkflowResponse): { predictions: WorkflowPrediction[]; width: number; height: number } {
+  if (data.outputs && data.outputs.length > 0) {
+    const output = data.outputs[0];
+    if (output.predictions?.predictions) {
+      return {
+        predictions: output.predictions.predictions,
+        width: output.predictions.image?.width ?? 640,
+        height: output.predictions.image?.height ?? 480,
+      };
+    }
+  }
+  if (data.predictions) {
+    return {
+      predictions: data.predictions,
+      width: data.image?.width ?? 640,
+      height: data.image?.height ?? 480,
+    };
+  }
+  return { predictions: [], width: 640, height: 480 };
 }
 
 Deno.serve(async (req: Request) => {
@@ -119,12 +141,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const url = new URL(req.url);
-    const action = url.searchParams.get("action") ?? "detect";
-    const modelId = url.searchParams.get("model");
-    const confidence = url.searchParams.get("confidence") ?? "35";
-    const overlap = url.searchParams.get("overlap") ?? "30";
-
     if (!ROBOFLOW_API_KEY) {
       return new Response(
         JSON.stringify({ error: "Roboflow API key not configured" }),
@@ -132,20 +148,47 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const url = new URL(req.url);
+    const action = url.searchParams.get("action") ?? "detect";
+
     if (action === "health") {
       return new Response(
-        JSON.stringify({ status: "ok", roboflow_configured: true }),
+        JSON.stringify({ status: "ok", roboflow_configured: true, workflow: `${WORKSPACE}/${WORKFLOW_ID}` }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    const bodyBuffer = await req.arrayBuffer();
+    const imageBase64 = btoa(String.fromCharCode(...new Uint8Array(bodyBuffer)));
+
+    const data = await runWorkflow(imageBase64);
+
+    if (!data) {
+      if (action === "detect_board") {
+        return new Response(
+          JSON.stringify({
+            board_found: false,
+            confidence: 0,
+            ellipse: null,
+            homography: null,
+            overlay_points: null,
+            bull_center: null,
+            canonical_preview: null,
+            message: "Workflow request failed",
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      return new Response(
+        JSON.stringify({ error: "Workflow request failed" }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { predictions, width: imgW, height: imgH } = extractPredictions(data);
+
     if (action === "detect_board") {
-      const body = await req.arrayBuffer();
-
-      const boardModelId = modelId ?? "dartboard-detection/1";
-      const data = await callRoboflow(boardModelId, body, "40", overlap);
-
-      if (!data || !data.predictions || data.predictions.length === 0) {
+      if (predictions.length === 0) {
         return new Response(
           JSON.stringify({
             board_found: false,
@@ -161,13 +204,7 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const board = data.predictions.reduce((best: RoboflowPrediction, p: RoboflowPrediction) =>
-        p.confidence > best.confidence ? p : best
-      );
-
-      const imgW = data.image?.width ?? 640;
-      const imgH = data.image?.height ?? 480;
-
+      const board = predictions.reduce((best, p) => p.confidence > best.confidence ? p : best);
       const cx = board.x;
       const cy = board.y;
       const a = board.width / 2;
@@ -198,12 +235,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "score_throw") {
-      const body = await req.arrayBuffer();
-
-      const dartModelId = modelId ?? "dart-tip-detection/1";
-      const data = await callRoboflow(dartModelId, body, confidence, overlap);
-
-      if (!data || !data.predictions || data.predictions.length === 0) {
+      if (predictions.length === 0) {
         return new Response(
           JSON.stringify({
             label: "MISS",
@@ -213,52 +245,28 @@ Deno.serve(async (req: Request) => {
             tip_canonical: null,
             tip_original: null,
             debug: null,
-            message: "No dart tip detected",
+            message: "No dart detected",
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      const imgW = data.image?.width ?? 640;
-      const imgH = data.image?.height ?? 480;
-
-      const best = data.predictions.reduce((b: RoboflowPrediction, p: RoboflowPrediction) =>
-        p.confidence > b.confidence ? p : b
-      );
-
-      const regionData = classifyDartboardRegion(best, imgW, imgH);
-
+      const best = predictions.reduce((b, p) => p.confidence > b.confidence ? p : b);
+      const { label, score } = classifyDartPosition(best.x, best.y, imgW, imgH);
       const decision = best.confidence >= 0.70 ? "AUTO" : "ASSIST";
 
       return new Response(
         JSON.stringify({
-          label: regionData.label,
-          score: regionData.score,
+          label,
+          score,
           confidence: best.confidence,
           decision,
-          tip_canonical: [regionData.tipX, regionData.tipY],
-          tip_original: [regionData.tipX, regionData.tipY],
+          tip_canonical: [best.x, best.y],
+          tip_original: [best.x, best.y],
           debug: null,
-          message: `Dart detected at ${regionData.label} with ${(best.confidence * 100).toFixed(0)}% confidence`,
+          message: `Dart at ${label} with ${(best.confidence * 100).toFixed(0)}% confidence`,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (!modelId) {
-      return new Response(
-        JSON.stringify({ error: "model parameter is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const body = await req.arrayBuffer();
-    const data = await callRoboflow(modelId, body, confidence, overlap);
-
-    if (!data) {
-      return new Response(
-        JSON.stringify({ error: "Roboflow upstream error" }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

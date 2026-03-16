@@ -73,7 +73,7 @@ function getBackendMode(): 'backend' | 'edge' {
 }
 
 function getEdgeUrl(action: string, extra: Record<string, string> = {}): string {
-  const url = new URL(`${SUPABASE_URL}/functions/v1/yolov8-proxy`);
+  const url = new URL(`${SUPABASE_URL}/functions/v1/roboflow-proxy`);
   url.searchParams.set('action', action);
   for (const [k, v] of Object.entries(extra)) {
     url.searchParams.set(k, v);
@@ -91,7 +91,7 @@ export function isApiConfigured(): boolean {
 
 export function getApiUrl(): string {
   if (BACKEND_URL) return BACKEND_URL;
-  return `${SUPABASE_URL}/functions/v1/yolov8-proxy`;
+  return `${SUPABASE_URL}/functions/v1/roboflow-proxy`;
 }
 
 export async function checkApiHealth(): Promise<{
