@@ -64,16 +64,28 @@ export function AIChatPanel({ conversationId, onConversationCreated }: AIChatPan
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const getValidToken = async (): Promise<string | null> => {
+    let { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null;
+    if (session.expires_at && session.expires_at * 1000 < Date.now() + 10000) {
+      const { data: refreshed } = await supabase.auth.refreshSession();
+      session = refreshed.session;
+    }
+    return session?.access_token ?? null;
+  };
+
   const sendGreeting = async () => {
     setIsGreeting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const token = await getValidToken();
+      if (!token) return;
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/groq-ai`;
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ action: 'greeting', context: 'ai_trainer' }),
       });
@@ -124,14 +136,16 @@ export function AIChatPanel({ conversationId, onConversationCreated }: AIChatPan
     setIsLoading(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const token = await getValidToken();
+      if (!token) throw new Error('No session');
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/groq-ai`;
 
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
           message: action ? undefined : text,

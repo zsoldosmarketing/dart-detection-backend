@@ -17,23 +17,29 @@ export interface TrainingResultData {
   duration_seconds: number;
 }
 
-async function getAuthHeader(): Promise<string | null> {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token ? `Bearer ${session.access_token}` : null;
+async function getValidToken(): Promise<string | null> {
+  let { data: { session } } = await supabase.auth.getSession();
+  if (!session) return null;
+  if (session.expires_at && session.expires_at * 1000 < Date.now() + 10000) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    session = refreshed.session;
+  }
+  return session?.access_token ?? null;
 }
 
 export const aiCoachService = {
   async callAI(payload: Record<string, unknown>): Promise<{ message: string; conversation_id?: string } | null> {
     try {
-      const authHeader = await getAuthHeader();
-      if (!authHeader) return null;
+      const token = await getValidToken();
+      if (!token) return null;
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/groq-ai`;
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': authHeader,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
         body: JSON.stringify(payload),
       });
