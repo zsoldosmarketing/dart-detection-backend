@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { message, conversation_id, action = "chat", context, game_result, training_result } = body;
+    const { message, conversation_id, action = "chat", context, game_result, training_result, locale = "hu" } = body;
 
     const groqApiKey = Deno.env.get("GROQ_API_KEY") ?? "";
     if (!groqApiKey) {
@@ -94,8 +94,8 @@ Deno.serve(async (req: Request) => {
     const recentInsights = insightsRes.data || [];
     const allDrills = allDrillsRes.data || [];
 
-    const basePrompt = (configMap["ai_system_prompt"] as string) || buildDefaultSystemPrompt();
-    const contextStr = buildPlayerContext(profile, stats, recentMatches, recentTrainings, goals, allDrills);
+    const basePrompt = buildDefaultSystemPrompt(locale);
+    const contextStr = buildPlayerContext(profile, stats, recentMatches, recentTrainings, goals, allDrills, locale);
     const systemPrompt = `${basePrompt}\n\n${contextStr}`;
 
     let convId = conversation_id;
@@ -414,8 +414,107 @@ function getStatValue(stats: Record<string, unknown> | null, goalType: string): 
   }
 }
 
-function buildDefaultSystemPrompt(): string {
-  return `Te egy profi darts edző és személyes AI trainer vagy a DartsTraining platformon. A neved DartsCoach AI.
+const DRILL_NAMES: Record<string, Record<string, string>> = {
+  hu: {
+    "drill.doubles.bobs27.name": "Bob's 27",
+    "drill.doubles.d16only.name": "D16 Fókusz",
+    "drill.doubles.d20only.name": "D20 Fókusz",
+    "drill.doubles.d10only.name": "D10 Fókusz",
+    "drill.doubles.d8only.name": "D8 Fókusz",
+    "drill.doubles.favorite3.name": "Kedvenc 3 Dupla",
+    "drill.doubles.twohit.name": "Két Találat Váltás",
+    "drill.doubles.random.name": "Véletlenszerű Duplák",
+    "drill.doubles.clock.name": "Dupla Óra",
+    "drill.doubles.ladder.name": "Dupla Létra",
+    "drill.checkout.40to100.random.name": "Kiszálló 40-100",
+    "drill.checkout.101to170.random.name": "Kiszálló 101-170",
+    "drill.checkout.fix40.name": "40-es kiszálló",
+    "drill.checkout.fix61.name": "61-es kiszálló",
+    "drill.checkout.fix81.name": "81-es kiszálló",
+    "drill.checkout.fix100.name": "100-as kiszálló",
+    "drill.checkout.fix121.name": "121-es kiszálló",
+    "drill.checkout.fix141.name": "141-es kiszálló",
+    "drill.checkout.fix161.name": "161-es kiszálló",
+    "drill.checkout.fix170.name": "170-es kiszálló",
+    "drill.triples.t20focus.name": "T20 Fókusz",
+    "drill.triples.t19focus.name": "T19 Fókusz",
+    "drill.triples.random.name": "Véletlenszerű Triplák",
+    "drill.triples.clock.name": "Tripla Óra",
+    "drill.triples.bed.name": "Szegmens Ágy",
+    "drill.sectors.1to10.name": "1-10 Szektor",
+    "drill.sectors.random.name": "Véletlenszerű Szektorok",
+    "drill.sectors.clock.name": "Szektor Óra",
+    "drill.bull.singles.name": "Bull Edzés",
+    "drill.bull.combo.name": "Bull Kombó",
+    "drill.setup.leave32.name": "32-es Hagyás",
+    "drill.setup.leave40.name": "40-es Hagyás",
+    "drill.setup.smartsetup.name": "Okos Beállítás",
+    "drill.general.warmup.name": "Bemelegítés",
+    "drill.general.cooldown.name": "Lehűtés",
+    "drill.general.pressure170.name": "170 Nyomás",
+    "drill.pressure.matchdart.name": "Meccs Nyíl",
+    "drill.pressure.countdown.name": "Visszaszámlálás",
+    "drill.scoring.maximum.name": "Maximum Pontszerzés",
+    "drill.scoring.consistent.name": "Következetes Dobás",
+    "drill.cricket.numbers.name": "Cricket Számok",
+    "drill.cricket.strategy.name": "Cricket Stratégia",
+  },
+  en: {
+    "drill.doubles.bobs27.name": "Bob's 27",
+    "drill.doubles.d16only.name": "D16 Focus",
+    "drill.doubles.d20only.name": "D20 Focus",
+    "drill.doubles.d10only.name": "D10 Focus",
+    "drill.doubles.d8only.name": "D8 Focus",
+    "drill.doubles.favorite3.name": "Favorite 3 Doubles",
+    "drill.doubles.twohit.name": "Two Hit Rotation",
+    "drill.doubles.random.name": "Random Doubles",
+    "drill.doubles.clock.name": "Doubles Clock",
+    "drill.doubles.ladder.name": "Doubles Ladder",
+    "drill.checkout.40to100.random.name": "Checkout 40-100",
+    "drill.checkout.101to170.random.name": "Checkout 101-170",
+    "drill.checkout.fix40.name": "40 Checkout",
+    "drill.checkout.fix61.name": "61 Checkout",
+    "drill.checkout.fix81.name": "81 Checkout",
+    "drill.checkout.fix100.name": "100 Checkout",
+    "drill.checkout.fix121.name": "121 Checkout",
+    "drill.checkout.fix141.name": "141 Checkout",
+    "drill.checkout.fix161.name": "161 Checkout",
+    "drill.checkout.fix170.name": "170 Checkout",
+    "drill.triples.t20focus.name": "T20 Focus",
+    "drill.triples.t19focus.name": "T19 Focus",
+    "drill.triples.random.name": "Random Triples",
+    "drill.triples.clock.name": "Triples Clock",
+    "drill.triples.bed.name": "Segment Bed",
+    "drill.sectors.1to10.name": "Sectors 1-10",
+    "drill.sectors.random.name": "Random Sectors",
+    "drill.sectors.clock.name": "Sector Clock",
+    "drill.bull.singles.name": "Bull Practice",
+    "drill.bull.combo.name": "Bull Combo",
+    "drill.setup.leave32.name": "Leave 32",
+    "drill.setup.leave40.name": "Leave 40",
+    "drill.setup.smartsetup.name": "Smart Setup",
+    "drill.general.warmup.name": "Warm-up",
+    "drill.general.cooldown.name": "Cool-down",
+    "drill.general.pressure170.name": "170 Pressure",
+    "drill.pressure.matchdart.name": "Match Dart",
+    "drill.pressure.countdown.name": "Countdown",
+    "drill.scoring.maximum.name": "Maximum Scoring",
+    "drill.scoring.consistent.name": "Consistent Throwing",
+    "drill.cricket.numbers.name": "Cricket Numbers",
+    "drill.cricket.strategy.name": "Cricket Strategy",
+  },
+};
+
+function resolveDrillName(nameKey: string, locale: string): string {
+  const lang = locale === "hu" ? "hu" : "en";
+  return DRILL_NAMES[lang]?.[nameKey] || DRILL_NAMES["hu"]?.[nameKey] || nameKey;
+}
+
+function buildDefaultSystemPrompt(locale = "hu"): string {
+  const isHu = locale === "hu";
+
+  if (isHu) {
+    return `Te egy profi darts edző és személyes AI trainer vagy a DartsTraining platformon. A neved DartsCoach AI.
 
 SZEREPED ÉS SZEMÉLYISÉGED:
 - Autonóm személyes edző vagy — proaktív, motiváló, adatvezérelt
@@ -425,27 +524,58 @@ SZEREPED ÉS SZEMÉLYISÉGED:
 - Generálj edzésterveket a statisztikák alapján a VALÓDI elérhető drillekből
 - Figyelj a trendekre: javulás, visszaesés, erősségek, gyengeségek
 
-KISZÁLLÓ ÉRTÉKELÉS - KRITIKUS SZABÁLYOK:
-- A kiszálló% CSAK akkor számít, ha a játékos TÉNYLEGESEN double-ra vagy bullra dobott amíg azon volt a kiszálló
-- Tehát: ha 170-ről T20-at dob, az NEM kiszálló kísérlet - az setup
-- Kiszálló kísérlet = a dobott szám értéke pontosan egyenlő a remaining-gel ÉS double vagy bull volt a célpont
-- Pl: 40 marad → D20-ra dob = kiszálló kísérlet. 170 marad → T20-ra dob = NEM kiszálló kísérlet
-- Ha a játékos 100% kiszállót mutat de 1-2 meccs volt csak, az alacsony mintaszám - jelezd ezt!
-- Mindig nézd meg hány meccsből/kísérletből jön a statisztika
+DOUBLE/KISZÁLLÓ ÉRTÉKELÉS - KRITIKUS SZABÁLYOK:
+- A befejezési% CSAK akkor számít, ha a játékos TÉNYLEGESEN double-ra vagy bullra dobott amíg azon volt a befejező zónában
+- Ha 170-ről T20-at dob, az NEM befejező kísérlet — az felállítás (setup)
+- Befejező kísérlet = a dobott szám értéke pontosan egyenlő a maradékkal ÉS double/bull volt a célpont
+- Ha a játékos 100% befejezést mutat de csak 1-2 meccs volt, az alacsony mintaszám — jelezd!
 
-CHECKOUT ELEMZÉS MÉLYSÉGE:
-- Azonosítsd a tipikus problémás leaveeket (pl. páratlan számok, 3-as maradékos számok)
-- Értékeld a preferred doubles hatékonyságát
-- Figyeld a double in/out konverziós arányt különböző nyomáshelyzetekben
+CHECKOUT/BEFEJEZŐ ELEMZÉS:
+- Azonosítsd a tipikus problémás maradékokat (páratlan számok, 3-as maradékos)
+- Értékeld a kedvenc double-ok hatékonyságát
+- Változatos szóhasználat: "befejező", "kiszálló", "double zóna", "befejező nyíl" — NE ismételd ugyanazt a szót egymás után
 
 FONTOS SZABÁLYOK:
-- Mindig magyarul válaszolj
+- MINDIG MAGYARUL válaszolj — ez kötelező, függetlenül minden mástól
 - Légy meleg, közvetlen és motiváló — mint egy valódi személyi edző
-- Konkrét adatokra hivatkozz ha van (átlag, kiszálló %, stb.)
+- Konkrét adatokra hivatkozz ha van (átlag, befejező %, stb.)
 - Válaszaid legyenek tömörek de informatívak (2-4 bekezdés)
+- Drill neveket MINDIG a lefordított nevükkel említsd, SOHA ne a technikai kulccsal (pl. "Kedvenc 3 Dupla", NEM "doubles.favorite3")
 - Javasold proaktívan ha valamit érdemes tenni
 - Ha célokat, terveket emleget a játékos, segíts formalizálni őket konkrét számokkal
 - Emlékezz az előző üzenetekre és hivatkozz rájuk`;
+  }
+
+  return `You are a professional darts coach and personal AI trainer on the DartsTraining platform. Your name is DartsCoach AI.
+
+YOUR ROLE AND PERSONALITY:
+- You are an autonomous personal coach — proactive, motivating, data-driven
+- You know the player's statistics precisely and give personalized advice based on them
+- Celebrate successes, encourage after defeats, adjust intensity to the player's level
+- When the player mentions goals, help define and track them with concrete numbers
+- Generate training plans from REAL available drills based on statistics
+- Monitor trends: improvement, decline, strengths, weaknesses
+
+CHECKOUT/FINISH EVALUATION - CRITICAL RULES:
+- The finish% ONLY counts when the player actually threw at a double or bull while in checkout range
+- Throwing T20 from 170 is NOT a checkout attempt — it's a setup throw
+- A checkout attempt = the thrown score equals the remaining AND a double/bull was the target
+- If a player shows 100% checkout but only 1-2 games, that's a low sample — mention it!
+
+CHECKOUT ANALYSIS:
+- Identify typical problematic leaves (odd numbers, numbers with remainder 3)
+- Evaluate the efficiency of preferred doubles
+- Vary your vocabulary: "finish", "checkout", "double zone", "match dart" — DON'T repeat the same word consecutively
+
+IMPORTANT RULES:
+- ALWAYS reply in ENGLISH — this is mandatory regardless of anything else
+- Be warm, direct and motivating — like a real personal coach
+- Reference concrete data when available (average, checkout %, etc.)
+- Keep answers concise but informative (2-4 paragraphs)
+- ALWAYS refer to drills by their translated names, NEVER by technical keys (e.g. "Favorite 3 Doubles", NOT "doubles.favorite3")
+- Proactively suggest when something is worth doing
+- Help formalize goals with concrete numbers when the player mentions them
+- Remember previous messages and reference them`;
 }
 
 function buildActionPrompt(
@@ -553,7 +683,8 @@ function buildPlayerContext(
   recentMatches: Record<string, unknown>[],
   recentTrainings: Record<string, unknown>[],
   goals: Record<string, unknown>[],
-  drills: Record<string, unknown>[]
+  drills: Record<string, unknown>[],
+  locale = "hu"
 ): string {
   if (!profile) return "";
 
@@ -616,7 +747,8 @@ function buildPlayerContext(
     lines.push(`\n## Legutóbbi edzések:`);
     recentTrainings.forEach((t) => {
       const drill = (t.drills as Record<string, unknown>);
-      const drillName = drill?.name_key || "Drill";
+      const rawKey = (drill?.name_key as string) || "Drill";
+      const drillName = resolveDrillName(rawKey, locale);
       const category = drill?.category || "";
       lines.push(`- ${drillName} (${category}): ${(t.score as number) || 0} pont`);
     });
@@ -639,7 +771,8 @@ function buildPlayerContext(
     drills.forEach((d) => {
       const cat = (d.category as string) || "other";
       if (!byCategory[cat]) byCategory[cat] = [];
-      byCategory[cat].push(`${d.slug} (neh.${d.difficulty}, ~${d.estimated_minutes}perc)`);
+      const displayName = resolveDrillName((d.name_key as string) || "", locale);
+      byCategory[cat].push(`${d.slug} — "${displayName}" (neh.${d.difficulty}, ~${d.estimated_minutes}perc)`);
     });
     Object.entries(byCategory).forEach(([cat, items]) => {
       lines.push(`- ${cat}: ${items.join(", ")}`);

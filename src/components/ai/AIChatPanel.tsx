@@ -155,7 +155,7 @@ export function AIChatPanel({ conversationId, onConversationCreated }: AIChatPan
           'Content-Type': 'application/json',
           'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ action: 'greeting', context: 'ai_trainer' }),
+        body: JSON.stringify({ action: 'greeting', context: 'ai_trainer', locale: localStorage.getItem('app-locale') || 'hu' }),
       });
       const data = await res.json();
       if (data.message) {
@@ -220,6 +220,7 @@ export function AIChatPanel({ conversationId, onConversationCreated }: AIChatPan
           message: action ? undefined : text,
           conversation_id: conversationId,
           action: action || 'chat',
+          locale: localStorage.getItem('app-locale') || 'hu',
         }),
       });
 
