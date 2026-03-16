@@ -68,8 +68,27 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL as string) || (import.meta.env.VITE_DART_DETECTION_API_URL as string) || '';
 
+let backendAvailable: boolean | null = null;
+let lastBackendCheck = 0;
+const BACKEND_CHECK_INTERVAL = 60000;
+
 function getBackendMode(): 'backend' | 'edge' {
-  return BACKEND_URL ? 'backend' : 'edge';
+  if (!BACKEND_URL) return 'edge';
+  if (backendAvailable === false && Date.now() - lastBackendCheck < BACKEND_CHECK_INTERVAL) {
+    return 'edge';
+  }
+  return 'backend';
+}
+
+function markBackendDown() {
+  backendAvailable = false;
+  lastBackendCheck = Date.now();
+  console.log('[API] Backend marked as down, falling back to edge function');
+}
+
+function markBackendUp() {
+  backendAvailable = true;
+  lastBackendCheck = Date.now();
 }
 
 function getEdgeUrl(action: string, extra: Record<string, string> = {}): string {
@@ -103,12 +122,13 @@ export async function checkApiHealth(): Promise<{
   has_homography: boolean;
   yolo_enabled?: boolean;
 } | null> {
-  try {
-    if (getBackendMode() === 'backend') {
+  if (BACKEND_URL && backendAvailable !== false) {
+    try {
       const resp = await fetch(`${BACKEND_URL}/health`, {
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(10000),
       });
       if (resp.ok) {
+        markBackendUp();
         const data = await resp.json();
         return {
           status: data.status ?? 'ok',
@@ -117,21 +137,26 @@ export async function checkApiHealth(): Promise<{
           yolo_enabled: data.yolo_enabled ?? false,
         };
       }
-    } else {
-      const resp = await fetch(getEdgeUrl('health'), {
-        method: 'GET',
-        headers: edgeHeaders(),
-        signal: AbortSignal.timeout(8000),
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        return {
-          status: data.status ?? 'ok',
-          board_found: false,
-          has_homography: false,
-          yolo_enabled: data.yolo_configured ?? data.hf_configured ?? false,
-        };
-      }
+      markBackendDown();
+    } catch {
+      markBackendDown();
+    }
+  }
+
+  try {
+    const resp = await fetch(getEdgeUrl('health'), {
+      method: 'GET',
+      headers: edgeHeaders(),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return {
+        status: data.status ?? 'ok',
+        board_found: false,
+        has_homography: false,
+        yolo_enabled: data.roboflow_configured ?? data.yolo_configured ?? false,
+      };
     }
   } catch (err) {
     console.log('[API] Health check failed:', err instanceof Error ? err.message : 'timeout');
@@ -139,40 +164,50 @@ export async function checkApiHealth(): Promise<{
   return null;
 }
 
+async function detectBoardViaBackend(imageBlob: Blob): Promise<BoardDetectResult | null> {
+  const form = new FormData();
+  form.append('image', imageBlob, 'frame.jpg');
+  const resp = await fetch(`${BACKEND_URL}/board/detect`, {
+    method: 'POST',
+    body: form,
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!resp.ok) return null;
+  return await resp.json() as BoardDetectResult;
+}
+
+async function detectBoardViaEdge(imageBlob: Blob): Promise<BoardDetectResult | null> {
+  const arrayBuffer = await imageBlob.arrayBuffer();
+  const resp = await fetch(getEdgeUrl('detect_board'), {
+    method: 'POST',
+    headers: edgeHeaders(),
+    body: arrayBuffer,
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!resp.ok) return null;
+  return await resp.json() as BoardDetectResult;
+}
+
 export async function detectBoard(imageBlob: Blob): Promise<BoardDetectResult | null> {
   try {
     if (getBackendMode() === 'backend') {
-      console.log('[API] Board detection via Python backend...');
-      const form = new FormData();
-      form.append('image', imageBlob, 'frame.jpg');
-      const resp = await fetch(`${BACKEND_URL}/board/detect`, {
-        method: 'POST',
-        body: form,
-        signal: AbortSignal.timeout(45000),
-      });
-      if (!resp.ok) {
-        console.error('[API] Backend board detection failed:', resp.status);
-        return null;
+      try {
+        const result = await detectBoardViaBackend(imageBlob);
+        if (result) {
+          markBackendUp();
+          console.log('[API] Backend board result:', result.board_found, result.confidence?.toFixed(2));
+          return result;
+        }
+      } catch (err) {
+        console.warn('[API] Backend board detection failed, falling back to edge:', err);
+        markBackendDown();
       }
-      const result = await resp.json();
-      console.log('[API] Backend board result:', result.board_found, result.confidence?.toFixed(2));
-      return result as BoardDetectResult;
-    } else {
-      console.log('[API] Board detection via edge function...');
-      const arrayBuffer = await imageBlob.arrayBuffer();
-      const resp = await fetch(getEdgeUrl('detect_board'), {
-        method: 'POST',
-        headers: edgeHeaders(),
-        body: arrayBuffer,
-        signal: AbortSignal.timeout(20000),
-      });
-      if (!resp.ok) {
-        console.error('[API] Edge board detection failed:', resp.status);
-        return null;
-      }
-      const result = await resp.json();
+    }
+
+    const result = await detectBoardViaEdge(imageBlob);
+    if (result) {
       console.log('[API] Edge board result:', result.board_found, result.confidence?.toFixed(2));
-      return result as BoardDetectResult;
+      return result;
     }
   } catch (err) {
     console.error('[API] Board detection error:', err instanceof Error ? err.message : 'timeout');
@@ -193,6 +228,34 @@ export async function detectBoardWithRetry(imageBlob: Blob, maxRetries = 3): Pro
   return null;
 }
 
+async function scoreThrowViaBackend(beforeBlob: Blob, afterBlob: Blob, homography?: number[][]): Promise<ThrowScoreResult | null> {
+  const form = new FormData();
+  form.append('before', beforeBlob, 'before.jpg');
+  form.append('after', afterBlob, 'after.jpg');
+  if (homography) {
+    form.append('homography', JSON.stringify(homography));
+  }
+  const resp = await fetch(`${BACKEND_URL}/throw/score`, {
+    method: 'POST',
+    body: form,
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!resp.ok) return null;
+  return await resp.json() as ThrowScoreResult;
+}
+
+async function scoreThrowViaEdge(afterBlob: Blob): Promise<ThrowScoreResult | null> {
+  const arrayBuffer = await afterBlob.arrayBuffer();
+  const resp = await fetch(getEdgeUrl('score_throw', { confidence: '35' }), {
+    method: 'POST',
+    headers: edgeHeaders(),
+    body: arrayBuffer,
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!resp.ok) return null;
+  return await resp.json() as ThrowScoreResult;
+}
+
 export async function scoreThrow(
   beforeBlob: Blob,
   afterBlob: Blob,
@@ -200,46 +263,24 @@ export async function scoreThrow(
 ): Promise<ThrowScoreResult | null> {
   try {
     if (getBackendMode() === 'backend') {
-      console.log('[API] Scoring throw via Python backend...');
-      const form = new FormData();
-      form.append('before', beforeBlob, 'before.jpg');
-      form.append('after', afterBlob, 'after.jpg');
-      if (homography) {
-        form.append('homography', JSON.stringify(homography));
+      try {
+        const result = await scoreThrowViaBackend(beforeBlob, afterBlob, homography);
+        if (result) {
+          markBackendUp();
+          return result;
+        }
+      } catch (err) {
+        console.warn('[API] Backend scoring failed, falling back to edge:', err);
+        markBackendDown();
       }
-      const resp = await fetch(`${BACKEND_URL}/throw/score`, {
-        method: 'POST',
-        body: form,
-        signal: AbortSignal.timeout(20000),
-      });
-      if (!resp.ok) {
-        console.error('[API] Backend throw scoring failed:', resp.status);
-        return null;
-      }
-      const result = await resp.json();
-      console.log('[API] Backend throw result:', result.label, result.confidence?.toFixed(2), result.decision);
-      return result as ThrowScoreResult;
-    } else {
-      console.log('[API] Scoring throw via edge function...');
-      const arrayBuffer = await afterBlob.arrayBuffer();
-      const resp = await fetch(getEdgeUrl('score_throw', { confidence: '35' }), {
-        method: 'POST',
-        headers: edgeHeaders(),
-        body: arrayBuffer,
-        signal: AbortSignal.timeout(20000),
-      });
-      if (!resp.ok) {
-        console.error('[API] Edge throw scoring failed:', resp.status);
-        return null;
-      }
-      const result = await resp.json();
-      console.log('[API] Edge throw result:', result.label, result.confidence?.toFixed(2), result.decision);
-      return result as ThrowScoreResult;
     }
+
+    const result = await scoreThrowViaEdge(afterBlob);
+    if (result) return result;
   } catch (err) {
     console.error('[API] Throw scoring error:', err instanceof Error ? err.message : 'timeout');
-    return null;
   }
+  return null;
 }
 
 export async function setReferenceImage(imageBlob: Blob): Promise<{ status: string; canonical_preview?: string } | null> {

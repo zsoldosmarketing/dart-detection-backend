@@ -93,7 +93,17 @@ export class CameraManager {
         audio: false,
       };
 
-      this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+      try {
+        this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (exactErr) {
+        if (hasSpecificDevice) {
+          console.warn('[CameraManager] Exact device failed, trying ideal:', exactErr);
+          videoConstraints.deviceId = { ideal: this.settings.deviceId };
+          this.stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: false });
+        } else {
+          throw exactErr;
+        }
+      }
       this.videoElement = videoElement;
       videoElement.srcObject = this.stream;
 

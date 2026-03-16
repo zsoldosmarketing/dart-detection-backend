@@ -305,54 +305,72 @@ export function drawScanningAnimation(
 export function drawFrame(params: DrawFrameParams): ZoomRegion | null {
   const { ctx, canvas, video, boardResult, autoZoomEnabled, showSectorOverlay, isDetecting, lastDartHit } = params;
 
-  if (video.readyState < 2) return null;
+  if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) return null;
 
   const vw = video.videoWidth;
   const vh = video.videoHeight;
+  const cw = canvas.width;
+  const ch = canvas.height;
+
+  if (cw === 0 || ch === 0) return null;
 
   const { srcX, srcY, srcW, srcH, zoomScale, zoomRegion } = computeZoomRegion(
     vw, vh, boardResult!, autoZoomEnabled
   );
 
-  canvas.width = vw;
-  canvas.height = vh;
+  ctx.clearRect(0, 0, cw, ch);
 
-  ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, vw, vh);
+  const videoAspect = srcW / srcH;
+  const canvasAspect = cw / ch;
+  let drawW: number, drawH: number, drawX: number, drawY: number;
 
-  if (boardResult && boardResult.board_found && boardResult.overlay_points) {
-    const offsetX = -srcX * zoomScale;
-    const offsetY = -srcY * zoomScale;
+  if (videoAspect > canvasAspect) {
+    drawW = cw;
+    drawH = cw / videoAspect;
+    drawX = 0;
+    drawY = (ch - drawH) / 2;
+  } else {
+    drawH = ch;
+    drawW = ch * videoAspect;
+    drawX = (cw - drawW) / 2;
+    drawY = 0;
+  }
 
+  ctx.drawImage(video, srcX, srcY, srcW, srcH, drawX, drawY, drawW, drawH);
+
+  const scaleToCanvas = drawW / srcW;
+
+  if (boardResult && boardResult.board_found && boardResult.ellipse) {
     ctx.save();
-    ctx.translate(offsetX, offsetY);
-    ctx.scale(zoomScale, zoomScale);
+    ctx.translate(drawX, drawY);
+    ctx.scale(scaleToCanvas, scaleToCanvas);
+    ctx.translate(-srcX, -srcY);
 
-    if (boardResult.ellipse) {
-      const { cx, cy, a, b, angle } = boardResult.ellipse;
+    const { cx, cy, a, b, angle } = boardResult.ellipse;
+    const effectiveZoom = zoomScale;
 
-      drawBoardEllipse(ctx, cx, cy, a, b, angle, zoomScale);
+    drawBoardEllipse(ctx, cx, cy, a, b, angle, effectiveZoom);
 
-      if (boardResult.bull_center) {
-        const [bx, by] = boardResult.bull_center;
-        drawBullCenter(ctx, bx, by, zoomScale);
-      }
+    if (boardResult.bull_center) {
+      const [bx, by] = boardResult.bull_center;
+      drawBullCenter(ctx, bx, by, effectiveZoom);
+    }
 
-      if (lastDartHit) {
-        drawDartMarker(ctx, lastDartHit, zoomScale);
-      }
+    if (lastDartHit) {
+      drawDartMarker(ctx, lastDartHit, effectiveZoom);
+    }
 
-      if (showSectorOverlay) {
-        drawSectorLabels(ctx, cx, cy, a, b, angle, zoomScale);
-      }
+    if (showSectorOverlay) {
+      drawSectorLabels(ctx, cx, cy, a, b, angle, effectiveZoom);
     }
 
     ctx.restore();
 
-    drawCornerBrackets(ctx, vw, vh);
+    drawCornerBrackets(ctx, cw, ch);
   }
 
   if (isDetecting) {
-    drawScanningAnimation(ctx, canvas.width, canvas.height);
+    drawScanningAnimation(ctx, cw, ch);
   }
 
   return zoomRegion;

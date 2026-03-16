@@ -145,8 +145,7 @@ export function CameraDetectionInput({
         apiConnectedRef.current = true;
         setApiConnected(true);
         if (showStatus) {
-          setStatusMessage(t('camera.connected'));
-          setTimeout(() => setStatusMessage(null), 2000);
+          setStatusMessage(null);
         }
         return true;
       }
@@ -157,7 +156,7 @@ export function CameraDetectionInput({
     setApiConnected(false);
     if (showStatus) {
       setStatusMessage(t('camera.server_offline'));
-      setTimeout(() => setStatusMessage(null), 6000);
+      setTimeout(() => setStatusMessage(null), 8000);
     }
     return false;
   }, []);
@@ -297,7 +296,10 @@ export function CameraDetectionInput({
       }
     }
 
-    await checkConnection(false);
+    const connected = await checkConnection(false);
+    if (connected) {
+      setStatusMessage(null);
+    }
 
     setTimeout(() => {
       startBoardDetectLoop();
@@ -696,6 +698,19 @@ export function CameraDetectionInput({
       let animationId: number;
 
       const draw = () => {
+        if (video.readyState >= 2 && video.videoWidth > 0) {
+          const parent = canvas.parentElement;
+          if (parent) {
+            const rect = parent.getBoundingClientRect();
+            const displayW = Math.round(rect.width);
+            const displayH = Math.round(rect.height);
+            if (canvas.width !== displayW || canvas.height !== displayH) {
+              canvas.width = displayW;
+              canvas.height = displayH;
+            }
+          }
+        }
+
         const zoomRegion = drawFrame({
           ctx,
           canvas,
