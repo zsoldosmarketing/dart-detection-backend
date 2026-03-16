@@ -333,6 +333,8 @@ export class RemoteCameraViewer {
   private onStream?: (stream: MediaStream) => void;
   private onStatusChange?: (status: string) => void;
   private onError?: (error: string) => void;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
 
   constructor(callbacks?: {
     onStream?: (stream: MediaStream) => void;
@@ -391,8 +393,15 @@ export class RemoteCameraViewer {
         const state = this.peerConnection?.connectionState;
         console.log('[RemoteCameraViewer] Connection state:', state);
         if (state === 'connected') {
+          this.reconnectAttempts = 0;
           this.onStatusChange?.('connected');
         } else if (state === 'disconnected' || state === 'failed') {
+          if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            this.onError?.('Connection failed after multiple attempts');
+            this.onStatusChange?.('disconnected');
+            return;
+          }
+          this.reconnectAttempts++;
           this.onStatusChange?.('reconnecting');
           setTimeout(() => {
             if (this.sessionId) {
@@ -515,8 +524,15 @@ export class RemoteCameraViewer {
       this.peerConnection.onconnectionstatechange = () => {
         const state = this.peerConnection?.connectionState;
         if (state === 'connected') {
+          this.reconnectAttempts = 0;
           this.onStatusChange?.('connected');
         } else if (state === 'disconnected' || state === 'failed') {
+          if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            this.onError?.('Connection failed after multiple attempts');
+            this.onStatusChange?.('disconnected');
+            return;
+          }
+          this.reconnectAttempts++;
           this.onStatusChange?.('reconnecting');
           setTimeout(() => {
             if (this.sessionId) {

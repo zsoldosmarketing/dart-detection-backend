@@ -296,7 +296,11 @@ export function CameraDetectionInput({
       }
     }
 
-    const connected = await checkConnection(false);
+    let connected = await checkConnection(false);
+    if (!connected) {
+      await new Promise(r => setTimeout(r, 2000));
+      connected = await checkConnection(true);
+    }
     if (connected) {
       setStatusMessage(null);
     }
@@ -402,15 +406,20 @@ export function CameraDetectionInput({
         if (status === 'disconnected') {
           setIsActive(false);
           setActiveRemoteCamera(null);
+          setStatusMessage(null);
+          setError('Tavoli kamera kapcsolat megszakadt');
+          setTimeout(() => setError(null), 5000);
         } else if (status === 'reconnecting') {
           setStatusMessage(t('camera.reconnecting'));
         } else if (status === 'connected') {
           setStatusMessage(null);
+          setError(null);
         }
       },
       onError: (err) => {
-        setError(t('camera.remote_error', { err: String(err) }));
+        setError(String(err));
         setConnectingRemoteId(null);
+        setStatusMessage(null);
       },
     });
 
@@ -751,7 +760,7 @@ export function CameraDetectionInput({
       />
 
       <div className={`relative bg-dark-900 rounded-xl overflow-hidden border border-dark-700 ${
-        isFullscreen ? 'flex-1' : 'flex-1 min-h-0'
+        isFullscreen ? 'flex-1' : 'flex-1 min-h-[280px]'
       }`}>
         {!isActive ? (
           <div className="flex flex-col items-center p-4 text-center overflow-y-auto h-full justify-center">
