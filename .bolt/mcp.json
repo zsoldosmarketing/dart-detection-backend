@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "context7": {
+      "enabled": true
+    },
+    "shaders": {
+      "enabled": true
+    },
+    "higghsfield": {
+      "enabled": false
+    },
+    "manus": {
+      "enabled": false
+    },
+    "sentry": {
+      "enabled": true
+    }
+  }
+}
