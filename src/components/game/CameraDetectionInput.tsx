@@ -271,6 +271,15 @@ export function CameraDetectionInput({
     setStatusMessage(null);
   }, []);
 
+  const undoManualCalibrationPoint = useCallback(() => {
+    setManualCalibrationPoints(points => {
+      const updated = points.slice(0, -1);
+      const nextTarget = MANUAL_CALIBRATION_TARGETS[updated.length];
+      setStatusMessage(nextTarget ? `Kézi kalibráció: ${nextTarget.instruction}` : null);
+      return updated;
+    });
+  }, []);
+
   const handleManualCalibrationClick = useCallback(async (event: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isManualCalibrationActive || !canvasRef.current || !videoRef.current) return;
     const target = MANUAL_CALIBRATION_TARGETS[manualCalibrationPoints.length];
@@ -956,6 +965,7 @@ export function CameraDetectionInput({
           showSectorOverlay,
           isDetecting,
           lastDartHit: lastDartHitRef.current,
+          manualCalibrationPoints,
         });
         zoomRegionRef.current = zoomRegion;
         animationId = requestAnimationFrame(draw);
@@ -964,7 +974,7 @@ export function CameraDetectionInput({
       draw();
       return () => cancelAnimationFrame(animationId);
     }
-  }, [isActive, isDetecting, showSectorOverlay, autoZoomEnabled]);
+  }, [isActive, isDetecting, showSectorOverlay, autoZoomEnabled, manualCalibrationPoints]);
 
   useEffect(() => {
     return () => {
@@ -1100,13 +1110,24 @@ export function CameraDetectionInput({
                   <p className="mt-1 text-sm font-medium text-white">
                     {MANUAL_CALIBRATION_TARGETS[manualCalibrationPoints.length]?.instruction}
                   </p>
-                  <button
-                    type="button"
-                    onClick={cancelManualCalibration}
-                    className="pointer-events-auto mt-2 text-xs font-medium text-amber-300 underline underline-offset-2 hover:text-amber-100"
-                  >
-                    Mégse
-                  </button>
+                  <div className="pointer-events-auto mt-2 flex items-center justify-center gap-3">
+                    {manualCalibrationPoints.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={undoManualCalibrationPoint}
+                        className="text-xs font-medium text-amber-200 underline underline-offset-2 hover:text-white"
+                      >
+                        Utolsó pont visszavonása
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={cancelManualCalibration}
+                      className="text-xs font-medium text-amber-300 underline underline-offset-2 hover:text-amber-100"
+                    >
+                      Mégse
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

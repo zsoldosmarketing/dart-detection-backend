@@ -12,6 +12,12 @@ interface DartHit {
   y: number;
 }
 
+interface CalibrationMarker {
+  target: string;
+  x: number;
+  y: number;
+}
+
 interface DrawFrameParams {
   ctx: CanvasRenderingContext2D;
   canvas: HTMLCanvasElement;
@@ -21,6 +27,7 @@ interface DrawFrameParams {
   showSectorOverlay: boolean;
   isDetecting: boolean;
   lastDartHit: DartHit | null;
+  manualCalibrationPoints?: CalibrationMarker[];
 }
 
 export function computeZoomRegion(
@@ -188,6 +195,36 @@ export function drawDartMarker(
   ctx.fill();
 }
 
+export function drawManualCalibrationMarkers(
+  ctx: CanvasRenderingContext2D,
+  markers: CalibrationMarker[],
+  zoomScale: number,
+) {
+  markers.forEach((marker, index) => {
+    ctx.save();
+    ctx.fillStyle = 'rgba(251, 191, 36, 0.98)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.lineWidth = 2 / zoomScale;
+    ctx.shadowColor = 'rgba(251, 191, 36, 0.95)';
+    ctx.shadowBlur = 14 / zoomScale;
+    ctx.beginPath();
+    ctx.arc(marker.x, marker.y, 10 / zoomScale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#111827';
+    ctx.font = `bold ${10 / zoomScale}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(index + 1), marker.x, marker.y);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.font = `bold ${13 / zoomScale}px sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillText(marker.target, marker.x + 14 / zoomScale, marker.y - 12 / zoomScale);
+    ctx.restore();
+  });
+}
+
 export function drawSectorLabels(
   ctx: CanvasRenderingContext2D,
   cx: number,
@@ -303,7 +340,17 @@ export function drawScanningAnimation(
 }
 
 export function drawFrame(params: DrawFrameParams): ZoomRegion | null {
-  const { ctx, canvas, video, boardResult, autoZoomEnabled, showSectorOverlay, isDetecting, lastDartHit } = params;
+  const {
+    ctx,
+    canvas,
+    video,
+    boardResult,
+    autoZoomEnabled,
+    showSectorOverlay,
+    isDetecting,
+    lastDartHit,
+    manualCalibrationPoints = [],
+  } = params;
 
   if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) return null;
 
@@ -364,9 +411,22 @@ export function drawFrame(params: DrawFrameParams): ZoomRegion | null {
       drawSectorLabels(ctx, cx, cy, a, b, angle, effectiveZoom);
     }
 
+    if (manualCalibrationPoints.length > 0) {
+      drawManualCalibrationMarkers(ctx, manualCalibrationPoints, effectiveZoom);
+    }
+
     ctx.restore();
 
     drawCornerBrackets(ctx, cw, ch);
+  }
+
+  if (!boardResult?.ellipse && manualCalibrationPoints.length > 0) {
+    ctx.save();
+    ctx.translate(drawX, drawY);
+    ctx.scale(scaleToCanvas, scaleToCanvas);
+    ctx.translate(-srcX, -srcY);
+    drawManualCalibrationMarkers(ctx, manualCalibrationPoints, zoomScale);
+    ctx.restore();
   }
 
   if (isDetecting) {
