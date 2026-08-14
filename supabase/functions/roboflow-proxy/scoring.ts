@@ -20,6 +20,21 @@ export interface GeometryScore {
   distanceRatio: number;
 }
 
+export interface FrameChangeRegion {
+  changedPixelRatio: number;
+  cx: number;
+  cy: number;
+  width: number;
+  height: number;
+  meanDelta: number;
+}
+
+export interface DetectionWithConfidence extends DetectionBounds {
+  confidence: number;
+}
+
+export type FrameChangeQuality = 'valid' | 'too_little_change' | 'too_much_change' | 'missing';
+
 const SECTOR_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
 
 const RING_RATIOS = {
@@ -48,6 +63,38 @@ export function isValidCalibration(calibration: BoardCalibration | null): calibr
   ].every(Number.isFinite)
     && calibration.radiusX > 0
     && calibration.radiusY > 0;
+}
+
+export function getFrameChangeQuality(region: FrameChangeRegion | null): FrameChangeQuality {
+  if (!region || !Number.isFinite(region.changedPixelRatio)) return 'missing';
+  if (region.changedPixelRatio < 0.0005) return 'too_little_change';
+  if (region.changedPixelRatio > 0.18) return 'too_much_change';
+  return 'valid';
+}
+
+export function selectDetectionForFrameChange<T extends DetectionWithConfidence>(
+  detections: T[],
+  region: FrameChangeRegion | null,
+): T | null {
+  if (detections.length === 0) return null;
+  if (getFrameChangeQuality(region) !== 'valid' || !region) {
+    return detections.reduce((best, detection) =>
+      detection.confidence > best.confidence ? detection : best,
+    );
+  }
+
+  return detections.reduce((best, detection) => {
+    const detectionScale = Math.max(detection.width, detection.height, 20);
+    const regionScale = Math.max(region.width, region.height, 20);
+    const scale = Math.max(detectionScale, regionScale);
+    const distance = Math.hypot(detection.x - region.cx, detection.y - region.cy);
+    const proximity = Math.max(0, 1 - distance / (scale * 2.5));
+    const candidateScore = detection.confidence * 0.65 + proximity * 0.35;
+    const bestDistance = Math.hypot(best.x - region.cx, best.y - region.cy);
+    const bestProximity = Math.max(0, 1 - bestDistance / (Math.max(best.width, best.height, regionScale, 20) * 2.5));
+    const bestScore = best.confidence * 0.65 + bestProximity * 0.35;
+    return candidateScore > bestScore ? detection : best;
+  });
 }
 
 export function estimateDartTip(

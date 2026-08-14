@@ -5,7 +5,13 @@ if (!moduleUrl) {
   throw new Error('CALIBRATED_SCORING_MODULE must point to the compiled scoring module.');
 }
 
-const { estimateDartTip, isValidCalibration, scoreDartPosition } = await import(moduleUrl);
+const {
+  estimateDartTip,
+  getFrameChangeQuality,
+  isValidCalibration,
+  scoreDartPosition,
+  selectDetectionForFrameChange,
+} = await import(moduleUrl);
 
 const calibration = {
   cx: 400,
@@ -49,5 +55,32 @@ const estimatedTip = estimateDartTip(
   calibration,
 );
 assert.equal(estimatedTip.y, 365, 'The estimated tip must be the dart-box point closest to the bull.');
+
+const changedRegion = {
+  changedPixelRatio: 0.02,
+  cx: 450,
+  cy: 340,
+  width: 30,
+  height: 80,
+  meanDelta: 54,
+};
+assert.equal(getFrameChangeQuality(changedRegion), 'valid');
+assert.equal(getFrameChangeQuality({ ...changedRegion, changedPixelRatio: 0.0001 }), 'too_little_change');
+assert.equal(getFrameChangeQuality({ ...changedRegion, changedPixelRatio: 0.2 }), 'too_much_change');
+
+const detections = [
+  { x: 450, y: 340, width: 20, height: 60, confidence: 0.7, id: 'new_dart' },
+  { x: 120, y: 120, width: 20, height: 60, confidence: 0.95, id: 'stale_object' },
+];
+assert.equal(
+  selectDetectionForFrameChange(detections, changedRegion)?.id,
+  'new_dart',
+  'A changed-region match must outrank an unrelated high-confidence detection.',
+);
+assert.equal(
+  selectDetectionForFrameChange(detections, { ...changedRegion, changedPixelRatio: 0.25 })?.id,
+  'stale_object',
+  'When global motion invalidates the diff, the selection must fall back to model confidence.',
+);
 
 console.log('Calibrated ellipse scoring regression tests passed.');

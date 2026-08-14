@@ -25,6 +25,15 @@ export interface BoardDetectResult {
   image_height?: number;
 }
 
+export interface FrameChangeData {
+  changedPixelRatio: number;
+  cx: number;
+  cy: number;
+  width: number;
+  height: number;
+  meanDelta: number;
+}
+
 export interface ThrowScoreResult {
   label: string;
   score: number;
@@ -154,6 +163,28 @@ export async function detectBoardWithRetry(imageBlob: Blob, maxRetries = 3): Pro
   return null;
 }
 
+function getFrameChangeParameters(frameChange?: FrameChangeData | null): Record<string, string> {
+  if (!frameChange || ![
+    frameChange.changedPixelRatio,
+    frameChange.cx,
+    frameChange.cy,
+    frameChange.width,
+    frameChange.height,
+    frameChange.meanDelta,
+  ].every(Number.isFinite)) {
+    return {};
+  }
+
+  return {
+    change_ratio: String(frameChange.changedPixelRatio),
+    change_cx: String(frameChange.cx),
+    change_cy: String(frameChange.cy),
+    change_width: String(frameChange.width),
+    change_height: String(frameChange.height),
+    change_mean_delta: String(frameChange.meanDelta),
+  };
+}
+
 function getCalibrationParameters(calibration?: AutoCalibrationResult | null): Record<string, string> {
   const center = calibration?.center;
   const ellipse = calibration?.ellipse;
@@ -190,13 +221,15 @@ export async function scoreThrow(
   _beforeBlob: Blob,
   afterBlob: Blob,
   _homography?: number[][],
-  calibration?: AutoCalibrationResult | null
+  calibration?: AutoCalibrationResult | null,
+  frameChange?: FrameChangeData | null,
 ): Promise<ThrowScoreResult | null> {
   try {
     const arrayBuffer = await afterBlob.arrayBuffer();
     const resp = await fetch(getEdgeUrl('score_throw', {
       confidence: '35',
       ...getCalibrationParameters(calibration),
+      ...getFrameChangeParameters(frameChange),
     }), {
       method: 'POST',
       headers: edgeHeaders(),
@@ -290,7 +323,10 @@ export function parseScoreToTarget(label: string): DartTarget {
   return 'MISS';
 }
 
-export function captureVideoFrame(video: HTMLVideoElement, quality: number = 0.82): Promise<Blob> {
+export function captureVideoFrameWithData(
+  video: HTMLVideoElement,
+  quality: number = 0.82,
+): Promise<{ blob: Blob; imageData: ImageData }> {
   return new Promise((resolve, reject) => {
     if (!video.videoWidth || !video.videoHeight || video.readyState < 2) {
       reject(new Error('Video not ready'));
@@ -299,21 +335,26 @@ export function captureVideoFrame(video: HTMLVideoElement, quality: number = 0.8
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) {
       reject(new Error('Failed to get canvas context'));
       return;
     }
     ctx.drawImage(video, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     canvas.toBlob(
       (blob) => {
-        if (blob) resolve(blob);
+        if (blob) resolve({ blob, imageData });
         else reject(new Error('Failed to create blob'));
       },
       'image/jpeg',
       quality
     );
   });
+}
+
+export async function captureVideoFrame(video: HTMLVideoElement, quality: number = 0.82): Promise<Blob> {
+  return (await captureVideoFrameWithData(video, quality)).blob;
 }
 
 export function captureHighQualityFrame(video: HTMLVideoElement): Promise<Blob> {

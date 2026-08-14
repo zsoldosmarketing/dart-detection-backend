@@ -1,9 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   estimateDartTip,
+  getFrameChangeQuality,
   isValidCalibration,
   scoreDartPosition,
+  selectDetectionForFrameChange,
   type BoardCalibration,
+  type FrameChangeRegion,
 } from "./scoring.ts";
 
 const corsHeaders = {
@@ -69,6 +72,25 @@ function parseCalibrationRequest(url: URL): CalibrationRequest {
 
 function isBoardPrediction(prediction: RoboflowPrediction): boolean {
   return prediction.class.toLowerCase().includes('board');
+}
+
+function parseFrameChange(url: URL): FrameChangeRegion | null {
+  const changedPixelRatio = parseNumber(url.searchParams.get('change_ratio'));
+  const cx = parseNumber(url.searchParams.get('change_cx'));
+  const cy = parseNumber(url.searchParams.get('change_cy'));
+  const width = parseNumber(url.searchParams.get('change_width'));
+  const height = parseNumber(url.searchParams.get('change_height'));
+  const meanDelta = parseNumber(url.searchParams.get('change_mean_delta'));
+
+  if (
+    changedPixelRatio === null || cx === null || cy === null ||
+    width === null || height === null || meanDelta === null ||
+    width <= 0 || height <= 0 || changedPixelRatio < 0
+  ) {
+    return null;
+  }
+
+  return { changedPixelRatio, cx, cy, width, height, meanDelta };
 }
 
 async function detectObjects(imageBase64: string, confidence: number = 40, overlap: number = 30): Promise<RoboflowResponse | null> {
@@ -227,9 +249,24 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const best = predictions.reduce((currentBest, prediction) =>
-        prediction.confidence > currentBest.confidence ? prediction : currentBest
-      );
+      const frameChange = parseFrameChange(url);
+      const frameChangeQuality = getFrameChangeQuality(frameChange);
+      const best = selectDetectionForFrameChange(predictions, frameChange);
+      if (!best) {
+        return new Response(
+          JSON.stringify({
+            label: "MISS",
+            score: 0,
+            confidence: 0,
+            decision: "RETRY",
+            tip_canonical: null,
+            tip_original: null,
+            debug: null,
+            message: "No usable dart detection",
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       const calibrationRequest = parseCalibrationRequest(url);
       const calibrationTrusted = Boolean(
         calibrationRequest.calibration && calibrationRequest.confidence >= 0.55
@@ -288,11 +325,11 @@ Deno.serve(async (req: Request) => {
         scoringMethod = "unclassified_without_calibration";
       }
 
-      const decision = calibrationTrusted && best.confidence >= 0.70
+      const decision = calibrationTrusted && frameChangeQuality === 'valid' && best.confidence >= 0.70
         ? "AUTO"
-        : best.confidence >= 0.35
-          ? "ASSIST"
-          : "RETRY";
+        : frameChangeQuality === 'too_little_change' || best.confidence < 0.35
+          ? "RETRY"
+          : "ASSIST";
 
       return new Response(
         JSON.stringify({
@@ -307,6 +344,7 @@ Deno.serve(async (req: Request) => {
           raw_class: roboflowClass,
           scoring_method: scoringMethod,
           calibration_trusted: calibrationTrusted,
+          frame_change_quality: frameChangeQuality,
           all_predictions: predictions.map(p => ({ class: p.class, confidence: p.confidence, x: p.x, y: p.y })),
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }

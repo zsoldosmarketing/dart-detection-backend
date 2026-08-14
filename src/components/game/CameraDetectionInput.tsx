@@ -34,7 +34,7 @@ import {
   scoreThrow,
   setReferenceImage,
   parseScoreToTarget,
-  captureVideoFrame,
+  captureVideoFrameWithData,
   captureHighQualityFrame,
   boardDetectToCalibration,
   type BoardDetectResult,
@@ -42,6 +42,7 @@ import {
   type AutoCalibrationResult,
 } from '../../lib/dartDetectionApi';
 import { drawFrame } from './CameraCanvasRenderer';
+import { analyzeFrameChange } from '../../lib/frameChangeDetection';
 import { detectBoardFromVideo } from '../../lib/localBoardDetection';
 import {
   buildCalibrationConsensus,
@@ -140,11 +141,13 @@ export function CameraDetectionInput({
   const isCalibratedRef = useRef(false);
   const boardDetectingRef = useRef(false);
   const referenceFrameRef = useRef<Blob | null>(null);
+  const referenceImageDataRef = useRef<ImageData | null>(null);
   const calibrationRef = useRef<AutoCalibrationResult | null>(null);
   const boardResultRef = useRef<BoardDetectResult | null>(null);
   const homographyRef = useRef<number[][] | null>(null);
   const remoteViewerRef = useRef<RemoteCameraViewer | null>(null);
   const pendingAfterFrameRef = useRef<Blob | null>(null);
+  const pendingAfterImageDataRef = useRef<ImageData | null>(null);
   const lastBrightnessRef = useRef<number | null>(null);
   const prevFrameDataRef = useRef<Uint8ClampedArray | null>(null);
   const brightnessStableCountRef = useRef<number>(0);
@@ -210,6 +213,14 @@ export function CameraDetectionInput({
     return () => clearInterval(interval);
   }, [checkConnection]);
 
+  const updateReferenceFrame = useCallback(async (video: HTMLVideoElement, quality = 0.82) => {
+    const frame = await captureVideoFrameWithData(video, quality);
+    referenceFrameRef.current = frame.blob;
+    referenceImageDataRef.current = frame.imageData;
+    await setReferenceImage(frame.blob);
+    return frame;
+  }, []);
+
   const applyBoardCalibration = useCallback(async (
     video: HTMLVideoElement,
     boardResult: BoardDetectResult,
@@ -224,9 +235,7 @@ export function CameraDetectionInput({
     setIsCalibrated(true);
 
     try {
-      const frameBlob = await captureVideoFrame(video);
-      referenceFrameRef.current = frameBlob;
-      await setReferenceImage(frameBlob);
+      await updateReferenceFrame(video);
     } catch {
       // A következő dobáskérésnél a felület továbbra is kérhet manuális megerősítést.
     }
@@ -239,7 +248,7 @@ export function CameraDetectionInput({
       clearInterval(boardDetectIntervalRef.current);
       boardDetectIntervalRef.current = null;
     }
-  }, [cameraStore]);
+  }, [cameraStore, updateReferenceFrame]);
 
   const markCameraReady = useCallback(async (video: HTMLVideoElement) => {
     if (isCalibratedRef.current) return;
@@ -426,7 +435,9 @@ export function CameraDetectionInput({
     setBoardConfidence(0);
     boardDetectingRef.current = false;
     referenceFrameRef.current = null;
+    referenceImageDataRef.current = null;
     pendingAfterFrameRef.current = null;
+    pendingAfterImageDataRef.current = null;
     calibrationRef.current = null;
     boardResultRef.current = null;
     homographyRef.current = null;
@@ -527,9 +538,7 @@ export function CameraDetectionInput({
       homographyRef.current = cameraStore.homography;
       boardResultRef.current = cameraStore.boardResult;
 
-      const frame = await captureVideoFrame(videoRef.current);
-      referenceFrameRef.current = frame;
-      await setReferenceImage(frame);
+      await updateReferenceFrame(videoRef.current);
 
       setIsCalibrated(true);
       setBoardConfidence(cameraStore.boardResult?.confidence || 0);
@@ -552,7 +561,7 @@ export function CameraDetectionInput({
         setBoardConfidence(cameraStore.boardResult?.confidence || 0);
       }
     };
-  }, [cameraStore.calibration, cameraStore.homography, cameraStore.boardResult]);
+  }, [cameraStore.calibration, cameraStore.homography, cameraStore.boardResult, updateReferenceFrame]);
 
 
   const measureMotion = useCallback((video: HTMLVideoElement): { brightness: number; changedPixelRatio: number; boardRegionChange: number } => {
@@ -638,13 +647,20 @@ export function CameraDetectionInput({
     setIsDetecting(true);
 
     try {
-      const afterFrame = await captureHighQualityFrame(videoRef.current);
+      const afterCapture = await captureVideoFrameWithData(videoRef.current, 0.90);
+      const afterFrame = afterCapture.blob;
+      const frameChange = referenceImageDataRef.current
+        ? analyzeFrameChange(referenceImageDataRef.current, afterCapture.imageData, {
+            boardEllipse: boardResultRef.current?.ellipse,
+          })
+        : null;
 
       const result = await scoreThrow(
         referenceFrameRef.current,
         afterFrame,
         homographyRef.current || undefined,
-        calibrationRef.current
+        calibrationRef.current,
+        frameChange,
       );
 
       if (result) {
@@ -662,6 +678,7 @@ export function CameraDetectionInput({
           const target = parseScoreToTarget(result.label);
           onThrow(target);
           referenceFrameRef.current = afterFrame;
+          referenceImageDataRef.current = afterCapture.imageData;
           await setReferenceImage(afterFrame);
           setTimeout(() => { lastDartHitRef.current = null; }, 3000);
         } else {
@@ -674,6 +691,7 @@ export function CameraDetectionInput({
               };
           setPendingScore(confirmationResult);
           pendingAfterFrameRef.current = afterFrame;
+          pendingAfterImageDataRef.current = afterCapture.imageData;
         }
       }
     } catch (err) {
@@ -759,42 +777,39 @@ export function CameraDetectionInput({
 
       if (pendingAfterFrameRef.current) {
         referenceFrameRef.current = pendingAfterFrameRef.current;
+        referenceImageDataRef.current = pendingAfterImageDataRef.current;
         await setReferenceImage(pendingAfterFrameRef.current);
         pendingAfterFrameRef.current = null;
+        pendingAfterImageDataRef.current = null;
       } else if (videoRef.current) {
-        const frame = await captureVideoFrame(videoRef.current);
-        referenceFrameRef.current = frame;
-        await setReferenceImage(frame);
+        await updateReferenceFrame(videoRef.current);
       }
     }
-  }, [pendingScore, onThrow]);
+  }, [pendingScore, onThrow, updateReferenceFrame]);
 
   const rejectPendingScore = useCallback(async () => {
     setPendingScore(null);
     lastDartHitRef.current = null;
 
     if (videoRef.current) {
-      const frame = await captureVideoFrame(videoRef.current);
-      referenceFrameRef.current = frame;
-      await setReferenceImage(frame);
+      await updateReferenceFrame(videoRef.current);
     }
     pendingAfterFrameRef.current = null;
-  }, []);
+    pendingAfterImageDataRef.current = null;
+  }, [updateReferenceFrame]);
 
   const resetReference = useCallback(async () => {
     if (!videoRef.current) return;
 
     setStatusMessage(t('camera.ref_refresh'));
     try {
-      const frameBlob = await captureVideoFrame(videoRef.current);
-      await setReferenceImage(frameBlob);
-      referenceFrameRef.current = frameBlob;
+      await updateReferenceFrame(videoRef.current);
       setStatusMessage(t('camera.ref_ok'));
       setTimeout(() => setStatusMessage(null), 1500);
     } catch {
       setError(t('camera.ref_failed'));
     }
-  }, []);
+  }, [updateReferenceFrame]);
 
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen(prev => !prev);
