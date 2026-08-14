@@ -132,21 +132,20 @@ export const LobbyBrowser = memo(function LobbyBrowser({
                       {entry.user_profile?.display_name || entry.user_profile?.username}
                     </h3>
                     {(() => {
-                      const hasPvpAvg = entry.player_stats?.pvp_average && entry.player_stats.pvp_average > 0;
-                      const hasLifetimeAvg = entry.player_stats?.lifetime_average && entry.player_stats.lifetime_average > 0;
-
-                      if (hasPvpAvg) {
+                      const stats = entry.player_stats;
+                      if (stats?.pvp_average && stats.pvp_average > 0) {
                         return (
                           <Badge variant="warning" size="sm">
                             <Target className="w-3 h-3 mr-1" />
-                            {entry.player_stats.pvp_average!.toFixed(1)} PVP
+                            {stats.pvp_average.toFixed(1)} PVP
                           </Badge>
                         );
-                      } else if (hasLifetimeAvg) {
+                      }
+                      if (stats?.lifetime_average && stats.lifetime_average > 0) {
                         return (
                           <Badge variant="secondary" size="sm">
                             <Target className="w-3 h-3 mr-1" />
-                            {entry.player_stats.lifetime_average!.toFixed(1)} {t('stat.overall')}
+                            {stats.lifetime_average.toFixed(1)} {t('stat.overall')}
                           </Badge>
                         );
                       }

@@ -125,21 +125,20 @@ export const LobbyWaiting = memo(function LobbyWaiting({
                 <span className="ml-1">{getSkillFilterLabel(myLobby.skill_filter)}</span>
               </Badge>
               {(() => {
-                const hasPvpAvg = myLobby.player_stats?.pvp_average && myLobby.player_stats.pvp_average > 0;
-                const hasLifetimeAvg = myLobby.player_stats?.lifetime_average && myLobby.player_stats.lifetime_average > 0;
-
-                if (hasPvpAvg) {
+                const stats = myLobby.player_stats;
+                if (stats?.pvp_average && stats.pvp_average > 0) {
                   return (
                     <Badge variant="warning" size="sm">
                       <Target className="w-3 h-3 mr-1" />
-                      {myLobby.player_stats.pvp_average!.toFixed(1)} PVP
+                      {stats.pvp_average.toFixed(1)} PVP
                     </Badge>
                   );
-                } else if (hasLifetimeAvg) {
+                }
+                if (stats?.lifetime_average && stats.lifetime_average > 0) {
                   return (
                     <Badge variant="secondary" size="sm">
                       <Target className="w-3 h-3 mr-1" />
-                      {myLobby.player_stats.lifetime_average!.toFixed(1)} {t('stat.overall')}
+                      {stats.lifetime_average.toFixed(1)} {t('stat.overall')}
                     </Badge>
                   );
                 }
@@ -175,21 +174,20 @@ export const LobbyWaiting = memo(function LobbyWaiting({
                               {challenge.challenger?.display_name || challenge.challenger?.username}
                             </p>
                             {(() => {
-                              const hasPvpAvg = challenge.challenger_stats?.pvp_average && challenge.challenger_stats.pvp_average > 0;
-                              const hasLifetimeAvg = challenge.challenger_stats?.lifetime_average && challenge.challenger_stats.lifetime_average > 0;
-
-                              if (hasPvpAvg) {
+                              const stats = challenge.challenger_stats;
+                              if (stats?.pvp_average && stats.pvp_average > 0) {
                                 return (
                                   <Badge variant="warning" size="sm">
                                     <Target className="w-3 h-3 mr-1" />
-                                    {challenge.challenger_stats.pvp_average!.toFixed(1)} PVP
+                                    {stats.pvp_average.toFixed(1)} PVP
                                   </Badge>
                                 );
-                              } else if (hasLifetimeAvg) {
+                              }
+                              if (stats?.lifetime_average && stats.lifetime_average > 0) {
                                 return (
                                   <Badge variant="secondary" size="sm">
                                     <Target className="w-3 h-3 mr-1" />
-                                    {challenge.challenger_stats.lifetime_average!.toFixed(1)} {t('stat.overall')}
+                                    {stats.lifetime_average.toFixed(1)} {t('stat.overall')}
                                   </Badge>
                                 );
                               }
