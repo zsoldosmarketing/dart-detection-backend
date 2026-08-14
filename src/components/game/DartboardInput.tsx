@@ -78,19 +78,6 @@ export function DartboardInput({ onThrow, disabled }: DartboardInputProps) {
     return isEvenSector(idx) ? '#c0392b' : '#1a7a3a';
   };
 
-  const getSegmentLabel = (seg: string | null): string => {
-    if (!seg) return '';
-    if (seg === 'BULL') return 'BULLSEYE (50)';
-    if (seg === 'OB') return 'OUTER BULL (25)';
-    if (seg === 'MISS') return 'MISS (0)';
-    const match = seg.match(/^([SDT])(\d+)/);
-    if (!match) return '';
-    const [, type, num] = match;
-    const prefix = type === 'D' ? 'DOUBLE' : type === 'T' ? 'TRIPLE' : '';
-    const score = type === 'D' ? parseInt(num) * 2 : type === 'T' ? parseInt(num) * 3 : parseInt(num);
-    return prefix ? `${prefix} ${num} (${score})` : `${num}`;
-  };
-
   const touchProps = (target: DartTarget, segmentId: string) => ({
     onPointerDown: (e: React.PointerEvent) => {
       e.preventDefault();
