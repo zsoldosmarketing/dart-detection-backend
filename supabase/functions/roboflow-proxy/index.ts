@@ -1,4 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import {
+  estimateDartTip,
+  isValidCalibration,
+  scoreDartPosition,
+  type BoardCalibration,
+} from "./scoring.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,17 +16,6 @@ const ROBOFLOW_API_KEY = Deno.env.get("ROBOFLOW_API_KEY") ?? "";
 const DETECT_URL = "https://detect.roboflow.com";
 const MODEL_ID = "darts-gffwp";
 const MODEL_VERSION = "1";
-
-const SECTOR_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
-
-const RING_RATIOS = {
-  doubleBull: 0.032,
-  singleBull: 0.08,
-  tripleInner: 0.582,
-  tripleOuter: 0.629,
-  doubleInner: 0.953,
-  doubleOuter: 1.0,
-};
 
 interface RoboflowPrediction {
   x: number;
@@ -38,41 +33,42 @@ interface RoboflowResponse {
   image?: { width: number; height: number };
 }
 
-function classifyDartPosition(
-  dartX: number,
-  dartY: number,
-  boardCx: number,
-  boardCy: number,
-  boardRadius: number
-): { label: string; score: number } {
-  const dx = dartX - boardCx;
-  const dy = dartY - boardCy;
-  const dist = Math.sqrt(dx * dx + dy * dy) / boardRadius;
+interface CalibrationRequest {
+  calibration: BoardCalibration | null;
+  confidence: number;
+}
 
-  if (dist <= RING_RATIOS.doubleBull) {
-    return { label: "D-BULL", score: 50 };
-  }
-  if (dist <= RING_RATIOS.singleBull) {
-    return { label: "BULL", score: 25 };
-  }
-  if (dist > RING_RATIOS.doubleOuter) {
-    return { label: "MISS", score: 0 };
+function parseNumber(value: string | null): number | null {
+  if (value === null || value.trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseCalibrationRequest(url: URL): CalibrationRequest {
+  if (url.searchParams.get('calibration_valid') !== 'true') {
+    return { calibration: null, confidence: 0 };
   }
 
-  let angle = Math.atan2(dy, dx) + Math.PI / 2;
-  if (angle < 0) angle += 2 * Math.PI;
+  const cx = parseNumber(url.searchParams.get('board_cx'));
+  const cy = parseNumber(url.searchParams.get('board_cy'));
+  const radiusX = parseNumber(url.searchParams.get('board_radius_x'));
+  const radiusY = parseNumber(url.searchParams.get('board_radius_y'));
+  const angle = parseNumber(url.searchParams.get('board_angle'));
+  const rotationOffset = parseNumber(url.searchParams.get('rotation_offset'));
+  const confidence = parseNumber(url.searchParams.get('calibration_confidence')) ?? 0;
 
-  const sectorWidth = (2 * Math.PI) / 20;
-  const sectorIndex = Math.floor((angle + sectorWidth / 2) / sectorWidth) % 20;
-  const sector = SECTOR_ORDER[sectorIndex];
+  const calibration: BoardCalibration | null = (
+    cx === null || cy === null || radiusX === null || radiusY === null ||
+    angle === null || rotationOffset === null
+  )
+    ? null
+    : { cx, cy, radiusX, radiusY, angle, rotationOffset };
 
-  if (dist >= RING_RATIOS.doubleInner) {
-    return { label: `D${sector}`, score: sector * 2 };
-  }
-  if (dist >= RING_RATIOS.tripleInner && dist <= RING_RATIOS.tripleOuter) {
-    return { label: `T${sector}`, score: sector * 3 };
-  }
-  return { label: `${sector}`, score: sector };
+  return { calibration: isValidCalibration(calibration) ? calibration : null, confidence };
+}
+
+function isBoardPrediction(prediction: RoboflowPrediction): boolean {
+  return prediction.class.toLowerCase().includes('board');
 }
 
 async function detectObjects(imageBase64: string, confidence: number = 40, overlap: number = 30): Promise<RoboflowResponse | null> {
@@ -161,52 +157,13 @@ Deno.serve(async (req: Request) => {
     const imgH = data.image?.height ?? 480;
 
     if (action === "detect_board") {
-      const boardPreds = predictions.filter(
-        (p) => p.class.toLowerCase().includes("board") || p.class.toLowerCase().includes("dart")
+      const explicitBoardPredictions = predictions.filter(isBoardPrediction);
+      const largePredictions = predictions.filter(
+        (prediction) => prediction.width > imgW * 0.35 && prediction.height > imgH * 0.35
       );
-
-      const largePreds = predictions.filter(
-        (p) => p.width > imgW * 0.15 && p.height > imgH * 0.15
-      );
-
-      const boardCandidates = boardPreds.length > 0 ? boardPreds : largePreds;
-
-      if (boardCandidates.length === 0 && predictions.length > 0) {
-        const allDarts = predictions;
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const p of allDarts) {
-          const left = p.x - p.width / 2;
-          const top = p.y - p.height / 2;
-          const right = p.x + p.width / 2;
-          const bottom = p.y + p.height / 2;
-          if (left < minX) minX = left;
-          if (top < minY) minY = top;
-          if (right > maxX) maxX = right;
-          if (bottom > maxY) maxY = bottom;
-        }
-        const cx = (minX + maxX) / 2;
-        const cy = (minY + maxY) / 2;
-        const boardR = Math.max(maxX - minX, maxY - minY) * 1.5;
-        const a = boardR / 2;
-        const b = boardR / 2;
-
-        return new Response(
-          JSON.stringify({
-            board_found: true,
-            confidence: 0.5,
-            ellipse: { cx, cy, a, b, angle: 0 },
-            homography: null,
-            overlay_points: [[cx, cy - b], [cx + a, cy], [cx, cy + b], [cx - a, cy]],
-            bull_center: [cx, cy],
-            canonical_preview: null,
-            message: "Board estimated from dart positions",
-            image_width: imgW,
-            image_height: imgH,
-            raw_predictions: predictions.length,
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+      const boardCandidates = explicitBoardPredictions.length > 0
+        ? explicitBoardPredictions
+        : largePredictions;
 
       if (boardCandidates.length === 0) {
         return new Response(
@@ -260,7 +217,7 @@ Deno.serve(async (req: Request) => {
             label: "MISS",
             score: 0,
             confidence: 0,
-            decision: "ASSIST",
+            decision: "RETRY",
             tip_canonical: null,
             tip_original: null,
             debug: null,
@@ -270,14 +227,27 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const roboflowClass = predictions[0].class;
+      const best = predictions.reduce((currentBest, prediction) =>
+        prediction.confidence > currentBest.confidence ? prediction : currentBest
+      );
+      const calibrationRequest = parseCalibrationRequest(url);
+      const calibrationTrusted = Boolean(
+        calibrationRequest.calibration && calibrationRequest.confidence >= 0.55
+      );
+      const tip = estimateDartTip(best, calibrationRequest.calibration);
+      const roboflowClass = best.class;
       const classLabel = roboflowClass.toUpperCase();
 
       let label = "";
       let score = 0;
-      let useGeometry = false;
+      let scoringMethod = "model_class";
 
-      if (classLabel.startsWith("T") && !isNaN(parseInt(classLabel.slice(1)))) {
+      if (calibrationTrusted && calibrationRequest.calibration) {
+        const geometry = scoreDartPosition(tip.x, tip.y, calibrationRequest.calibration);
+        label = geometry.label;
+        score = geometry.score;
+        scoringMethod = "calibrated_ellipse_geometry";
+      } else if (classLabel.startsWith("T") && !isNaN(parseInt(classLabel.slice(1)))) {
         const num = parseInt(classLabel.slice(1));
         if (num >= 1 && num <= 20) {
           label = `T${num}`;
@@ -310,22 +280,19 @@ Deno.serve(async (req: Request) => {
           label = "D-BULL";
           score = 50;
         }
-      } else {
-        useGeometry = true;
       }
 
-      if (useGeometry || !label) {
-        const best = predictions.reduce((b, p) => p.confidence > b.confidence ? p : b);
-        const boardCx = imgW / 2;
-        const boardCy = imgH / 2;
-        const boardRadius = Math.min(imgW, imgH) * 0.45;
-        const result = classifyDartPosition(best.x, best.y, boardCx, boardCy, boardRadius);
-        label = result.label;
-        score = result.score;
+      if (!label) {
+        label = "MISS";
+        score = 0;
+        scoringMethod = "unclassified_without_calibration";
       }
 
-      const best = predictions.reduce((b, p) => p.confidence > b.confidence ? p : b);
-      const decision = best.confidence >= 0.70 ? "AUTO" : "ASSIST";
+      const decision = calibrationTrusted && best.confidence >= 0.70
+        ? "AUTO"
+        : best.confidence >= 0.35
+          ? "ASSIST"
+          : "RETRY";
 
       return new Response(
         JSON.stringify({
@@ -333,11 +300,13 @@ Deno.serve(async (req: Request) => {
           score,
           confidence: best.confidence,
           decision,
-          tip_canonical: [best.x, best.y],
-          tip_original: [best.x, best.y],
+          tip_canonical: [tip.x, tip.y],
+          tip_original: [tip.x, tip.y],
           debug: null,
-          message: `${roboflowClass} -> ${label} (${score}) with ${(best.confidence * 100).toFixed(0)}% confidence`,
+          message: `${roboflowClass} -> ${label} (${score}) via ${scoringMethod} with ${(best.confidence * 100).toFixed(0)}% confidence`,
           raw_class: roboflowClass,
+          scoring_method: scoringMethod,
+          calibration_trusted: calibrationTrusted,
           all_predictions: predictions.map(p => ({ class: p.class, confidence: p.confidence, x: p.x, y: p.y })),
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
