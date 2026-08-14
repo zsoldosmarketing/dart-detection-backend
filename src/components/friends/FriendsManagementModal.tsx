@@ -56,6 +56,19 @@ interface BlockedUser {
   };
 }
 
+interface UserProfileSummary {
+  display_name: string;
+  username: string;
+  avatar_url: string | null;
+}
+
+type RelationProfile = UserProfileSummary | UserProfileSummary[] | null | undefined;
+
+function normalizeProfile(profile: RelationProfile): UserProfileSummary | undefined {
+  if (Array.isArray(profile)) return profile[0];
+  return profile ?? undefined;
+}
+
 interface UserSearchResult {
   id: string;
   display_name: string;
@@ -131,7 +144,9 @@ export function FriendsManagementModal({ onClose }: Props) {
       .eq('user_id', user.id);
 
     if (!error && data) {
-      setFriends(data);
+      const normalizedFriends = (data as unknown as Array<Omit<Friend, 'friend'> & { friend: RelationProfile }>)
+        .map(({ friend, ...row }) => ({ ...row, friend: normalizeProfile(friend) }));
+      setFriends(normalizedFriends);
     }
   };
 
@@ -164,8 +179,16 @@ export function FriendsManagementModal({ onClose }: Props) {
       .eq('from_user_id', user.id)
       .eq('status', 'pending');
 
-    if (!receivedError && received) setFriendRequests(received);
-    if (!sentError && sent) setSentRequests(sent);
+    if (!receivedError && received) {
+      const normalizedReceived = (received as unknown as Array<Omit<FriendRequest, 'from_user'> & { from_user: RelationProfile }>)
+        .map(({ from_user, ...row }) => ({ ...row, from_user: normalizeProfile(from_user) }));
+      setFriendRequests(normalizedReceived);
+    }
+    if (!sentError && sent) {
+      const normalizedSent = (sent as unknown as Array<Omit<FriendRequest, 'to_user'> & { to_user: RelationProfile }>)
+        .map(({ to_user, ...row }) => ({ ...row, to_user: normalizeProfile(to_user) }));
+      setSentRequests(normalizedSent);
+    }
   };
 
   const fetchBlockedUsers = async () => {
@@ -182,7 +205,9 @@ export function FriendsManagementModal({ onClose }: Props) {
       .eq('user_id', user.id);
 
     if (!error && data) {
-      setBlockedUsers(data);
+      const normalizedBlockedUsers = (data as unknown as Array<Omit<BlockedUser, 'blocked_user'> & { blocked_user: RelationProfile }>)
+        .map(({ blocked_user, ...row }) => ({ ...row, blocked_user: normalizeProfile(blocked_user) }));
+      setBlockedUsers(normalizedBlockedUsers);
     }
   };
 
