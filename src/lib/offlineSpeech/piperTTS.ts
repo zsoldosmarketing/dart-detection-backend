@@ -8,13 +8,18 @@ declare global {
 }
 
 const ONNX_RUNTIME_URL = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/ort.min.js';
-const PIPER_PHONEMIZE_URL = 'https://cdn.jsdelivr.net/npm/piper-phonemize@1.0.0/dist/piper-phonemize.min.js';
 
 interface PiperConfig {
   sample_rate: number;
   num_speakers: number;
   speaker_id_map?: Record<string, number>;
   phoneme_type?: string;
+}
+
+function isPiperConfig(value: unknown): value is PiperConfig {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<PiperConfig>;
+  return Number.isFinite(candidate.sample_rate) && Number.isFinite(candidate.num_speakers);
 }
 
 class PiperTTSService {
@@ -46,14 +51,12 @@ class PiperTTSService {
       }
 
       const config = await offlineModels.getModelConfig('piper-hu-config');
-      if (config) {
-        this.config = config;
-      } else {
-        this.config = {
-          sample_rate: 22050,
-          num_speakers: 1
-        };
-      }
+      this.config = isPiperConfig(config)
+        ? config
+        : {
+            sample_rate: 22050,
+            num_speakers: 1,
+          };
 
       console.log('[PiperTTS] Loading ONNX model...');
       this.session = await window.ort.InferenceSession.create(
@@ -240,7 +243,7 @@ class PiperTTSService {
 
     const sampleRate = this.config?.sample_rate || 22050;
     const buffer = this.audioContext.createBuffer(1, audioData.length, sampleRate);
-    buffer.copyToChannel(audioData, 0);
+    buffer.copyToChannel(new Float32Array(audioData), 0);
 
     const gainNode = this.audioContext.createGain();
     gainNode.gain.value = this.volume;
