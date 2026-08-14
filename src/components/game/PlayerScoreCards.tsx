@@ -56,17 +56,6 @@ function getFirst9Avg(stats: PlayerMatchStats | undefined): string {
   return ((sum / Math.min(stats.first9Darts.length, 9)) * 3).toFixed(1);
 }
 
-function StatRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-[11px] text-dark-400 dark:text-dark-500">{label}</span>
-      <span className="text-[11px] font-semibold text-dark-700 dark:text-dark-300" style={{ fontVariantNumeric: 'tabular-nums' }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
 export const PlayerScoreCards = memo(function PlayerScoreCards({
   players,
   gameState,
@@ -109,6 +98,11 @@ export const PlayerScoreCards = memo(function PlayerScoreCards({
                 <p className="text-3xl font-extrabold text-dark-900 dark:text-white tracking-tight" style={{ fontVariantNumeric: 'tabular-nums' }}>
                   {displayScore}
                 </p>
+                {isCurrent && (
+                  <p className="mt-0.5 text-[10px] font-medium text-primary-600 dark:text-primary-400">
+                    {isMyTurn ? 'Te következel' : 'Dobás folyamatban'} · {currentTurnDarts.length}/3 dobás
+                  </p>
+                )}
                 <div className="mt-1 pt-1 border-t border-dark-100 dark:border-dark-700/50 flex items-center justify-center gap-2 text-[10px] text-dark-400 flex-wrap">
                   <span>{t('game.avg_short')}: {getAverage(stats)}</span>
                   <span>{t('game.leg')} {player.legs_won}/{legsToWin}</span>
@@ -140,6 +134,9 @@ export const PlayerScoreCards = memo(function PlayerScoreCards({
               </p>
               <p className="text-4xl sm:text-5xl font-extrabold text-dark-900 dark:text-white tracking-tight" style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {displayScore}
+              </p>
+              <p className="mt-0.5 text-[10px] font-medium text-primary-600 dark:text-primary-400">
+                {isMyTurn ? 'Te következel' : 'Dobás folyamatban'} · {currentTurnDarts.length}/3 dobás
               </p>
               <div className="flex items-center justify-center gap-4 mt-2 text-xs text-dark-400">
                 <span>{t('game.avg_short')}: {getAverage(stats)}</span>
