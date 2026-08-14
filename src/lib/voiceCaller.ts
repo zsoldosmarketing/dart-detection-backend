@@ -10,6 +10,12 @@ export interface CallerSettings {
   language: string;
 }
 
+type VoiceDartTarget =
+  | string
+  | { type: 'miss' }
+  | { type: 'single-bull' | 'double-bull' }
+  | { type: 'single' | 'double' | 'triple'; sector: number };
+
 function getDefaultSettings(): CallerSettings {
   const locale = getLocale();
   return {
@@ -28,8 +34,6 @@ class VoiceCaller {
   private settings: CallerSettings = getDefaultSettings();
   private synth: SpeechSynthesis | null = null;
   private voices: SpeechSynthesisVoice[] = [];
-  private initialized = false;
-  private lastScore = 0;
   private consecutiveHighScores = 0;
   private speakingListeners: Array<(isSpeaking: boolean) => void> = [];
   private currentlySpeaking = false;
@@ -107,7 +111,6 @@ class VoiceCaller {
   private loadVoices() {
     if (this.synth) {
       this.voices = this.synth.getVoices();
-      this.initialized = true;
       console.log('[VoiceCaller] Összes betöltött hang:', this.voices.length);
 
       const locale = getLocale();
@@ -501,7 +504,6 @@ class VoiceCaller {
     }
 
     this.speak(this.numberToWords(score));
-    this.lastScore = score;
   }
 
   callCheckout(score: number) {
@@ -816,7 +818,7 @@ class VoiceCaller {
     }
   }
 
-  callDart(score: number, target: any) {
+  callDart(score: number, target: VoiceDartTarget) {
     if (typeof target === 'string') {
       this.speak(target);
       return;
