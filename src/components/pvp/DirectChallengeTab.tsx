@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { UserPlus, Users, Search, X, Check, Clock, Loader2, Target, Trophy, Minus, Plus } from 'lucide-react';
 import { Card, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
 import { Input } from '../ui/Input';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
@@ -17,6 +16,10 @@ interface Friend {
   avatar_url: string | null;
   pvp_average: number | null;
   pvp_games_played: number;
+}
+
+interface FriendRelationshipRow {
+  friend: Pick<Friend, 'id' | 'display_name' | 'username' | 'avatar_url'> | null;
 }
 
 interface DirectChallenge {
@@ -109,14 +112,17 @@ export function DirectChallengeTab() {
       .eq('user_id', user.id);
 
     if (data) {
-      const friendsList = data.map((f: any) => ({
-        id: f.friend.id,
-        display_name: f.friend.display_name,
-        username: f.friend.username,
-        avatar_url: f.friend.avatar_url,
-        pvp_average: null,
-        pvp_games_played: 0,
-      }));
+      const friendsList = (data as unknown as FriendRelationshipRow[]).flatMap(({ friend }) => {
+        if (!friend) return [];
+        return [{
+          id: friend.id,
+          display_name: friend.display_name,
+          username: friend.username,
+          avatar_url: friend.avatar_url,
+          pvp_average: null,
+          pvp_games_played: 0,
+        }];
+      });
       setFriends(friendsList);
     }
   };
@@ -227,21 +233,13 @@ export function DirectChallengeTab() {
         .single();
 
       if (challengeError) throw challengeError;
+      if (!challengeData) throw new Error('A kihívás létrehozása nem adott vissza adatot.');
 
-      const data = { success: true };
-      const error = null;
-
-      if (error) throw error;
-
-      if (data.success) {
-        setSelectedOpponent(null);
-        setShowSettings(false);
-        setWaitingForResponse(true);
-        setWaitTimeRemaining(300);
-        await fetchDirectChallenges();
-      } else {
-        alert(data.error || 'Failed to create challenge');
-      }
+      setSelectedOpponent(null);
+      setShowSettings(false);
+      setWaitingForResponse(true);
+      setWaitTimeRemaining(300);
+      await fetchDirectChallenges();
     } catch (err) {
       console.error('Failed to create challenge:', err);
       alert('Failed to create challenge');
