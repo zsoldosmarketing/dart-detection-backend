@@ -47,6 +47,11 @@ export const MessageOverlay = memo(function MessageOverlay({
             </div>
 
             <div className="space-y-6 text-left">
+              {!voiceRecognitionEnabled && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-200">
+                  A hangvezérlés jelenleg ki van kapcsolva. Kapcsold be a mikrofon ikonnal, majd próbáld újra.
+                </div>
+              )}
               <div>
                 <h3 className="text-lg font-semibold text-dark-900 dark:text-white mb-3 flex items-center gap-2">
                   <Target className="w-5 h-5 text-primary-500" />
