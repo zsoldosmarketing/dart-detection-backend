@@ -27,9 +27,10 @@ export function PushNotificationPrompt({ context, onDismiss }: PushNotificationP
   const checkSubscriptionStatus = async () => {
     const subscribed = await isSubscribed();
     const permission = getNotificationPermissionStatus();
+    const canRequest = canRequestPermission();
 
     setAlreadySubscribed(subscribed);
-    setShow(!subscribed && permission !== 'denied' && !!user);
+    setShow(!subscribed && canRequest && permission !== 'denied' && !!user);
   };
 
   const handleEnable = async () => {
