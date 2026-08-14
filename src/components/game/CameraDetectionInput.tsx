@@ -854,9 +854,9 @@ export function CameraDetectionInput({
     };
   }, [isActive, isCalibrated, autoDetectEnabled, checkForDartThrow]);
 
-  const confirmPendingScore = useCallback(async () => {
+  const confirmPendingScore = useCallback(async (correctedTarget?: DartTarget) => {
     if (pendingScore) {
-      const target = parseScoreToTarget(pendingScore.label);
+      const target = correctedTarget ?? parseScoreToTarget(pendingScore.label);
       onThrow(target);
       setPendingScore(null);
       setTimeout(() => { lastDartHitRef.current = null; }, 2000);
@@ -1288,6 +1288,7 @@ export function CameraDetectionInput({
               pendingScore={pendingScore}
               isFullscreen={false}
               onConfirm={confirmPendingScore}
+              onCorrect={confirmPendingScore}
               onReject={rejectPendingScore}
             />
           )}
