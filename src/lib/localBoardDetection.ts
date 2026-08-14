@@ -191,7 +191,7 @@ export function detectBoardFromCanvas(
 
   let radiusX = detectedRadius;
   let radiusY = detectedRadius;
-  let ellipseAngle = 0;
+  const ellipseAngle = 0;
 
   if (radiiByAngle.length >= 36) {
     const horizontalRadii = [
@@ -283,16 +283,16 @@ function createCenterFallback(width: number, height: number, reason: string): Lo
   const radius = Math.round(Math.min(width, height) / 3);
 
   return {
-    success: true,
+    success: false,
     center_x: centerX,
     center_y: centerY,
     radius,
     radius_x: radius,
     radius_y: radius,
     rotation_offset: -9,
-    confidence: 0.35,
+    confidence: 0.15,
     method: 'center_fallback',
-    message: `${reason} - kozepre igazitva`,
+    message: `${reason} - a középre igazított tartalék nem hiteles kalibráció`,
     ellipse: {
       center_x: centerX,
       center_y: centerY,

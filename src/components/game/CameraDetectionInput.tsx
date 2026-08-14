@@ -42,6 +42,13 @@ import {
   type AutoCalibrationResult,
 } from '../../lib/dartDetectionApi';
 import { drawFrame } from './CameraCanvasRenderer';
+import { detectBoardFromVideo } from '../../lib/localBoardDetection';
+import {
+  buildCalibrationConsensus,
+  isCalibrationTrusted,
+  toBoardEllipse,
+  type BoardCalibrationCandidate,
+} from '../../lib/calibrationConsensus';
 import { ScoreConfirmationDialog } from './ScoreConfirmationDialog';
 import { CameraSettingsModal } from './CameraSettingsModal';
 import { CalibrationStatusBar } from './CalibrationStatusBar';
@@ -54,6 +61,42 @@ interface CameraDetectionInputProps {
 
 const BOARD_DETECT_INTERVAL = 3000;
 const AUTO_SUBMIT_CONFIDENCE = 0.70;
+const MIN_SINGLE_SOURCE_CONFIDENCE = 0.55;
+
+function toLocalBoardResult(local: Awaited<ReturnType<typeof detectBoardFromVideo>>): BoardDetectResult | null {
+  if (!local.success || !local.ellipse) return null;
+
+  return {
+    board_found: true,
+    confidence: local.confidence,
+    ellipse: {
+      cx: local.center_x,
+      cy: local.center_y,
+      a: local.radius_x,
+      b: local.radius_y,
+      angle: local.ellipse.angle,
+    },
+    homography: null,
+    overlay_points: null,
+    bull_center: [local.center_x, local.center_y],
+    canonical_preview: null,
+    debug_contour: null,
+    message: local.message,
+    is_angled: local.is_angled,
+    rotation_offset: local.rotation_offset,
+    method: local.method,
+  };
+}
+
+function toCalibrationCandidate(source: string, result: BoardDetectResult | null): BoardCalibrationCandidate | null {
+  if (!result?.board_found || !result.ellipse) return null;
+
+  return {
+    source,
+    confidence: result.confidence,
+    ellipse: toBoardEllipse(result.ellipse),
+  };
+}
 
 export function CameraDetectionInput({
   onThrow,
@@ -233,13 +276,39 @@ export function CameraDetectionInput({
     boardDetectingRef.current = true;
     try {
       const frame = await captureHighQualityFrame(video);
-      const detectedBoard = await detectBoard(frame);
-      if (
-        detectedBoard?.board_found &&
-        detectedBoard.ellipse &&
-        detectedBoard.confidence >= 0.55
-      ) {
-        await applyBoardCalibration(video, detectedBoard);
+      const remoteResult = await detectBoard(frame);
+      const localResult = toLocalBoardResult(await detectBoardFromVideo(video));
+      const candidates = [
+        toCalibrationCandidate('remote_model', remoteResult),
+        toCalibrationCandidate('on_device_color', localResult),
+      ].filter((candidate): candidate is BoardCalibrationCandidate => candidate !== null);
+      const consensus = buildCalibrationConsensus(candidates);
+
+      if (consensus.accepted && consensus.ellipse) {
+        const baseResult = remoteResult?.board_found ? remoteResult : localResult!;
+        const consensusResult: BoardDetectResult = {
+          ...baseResult,
+          confidence: consensus.confidence,
+          ellipse: consensus.ellipse,
+          bull_center: [consensus.ellipse.cx, consensus.ellipse.cy],
+          message: `Kalibráció ellenőrizve: ${consensus.acceptedSources.join(' + ')}.`,
+          method: `consensus:${consensus.acceptedSources.join('+')}`,
+        };
+        await applyBoardCalibration(video, consensusResult);
+        return;
+      }
+
+      const bestSingleSource = [remoteResult, localResult]
+        .filter((result): result is BoardDetectResult => Boolean(result?.board_found && result.ellipse))
+        .sort((first, second) => second.confidence - first.confidence)[0];
+
+      if (bestSingleSource && bestSingleSource.confidence >= MIN_SINGLE_SOURCE_CONFIDENCE) {
+        await applyBoardCalibration(video, {
+          ...bestSingleSource,
+          confidence: Math.min(bestSingleSource.confidence, 0.54),
+          message: `${bestSingleSource.message} — Egyetlen forrás alapján: a pontot mindig erősítsd meg.`,
+          method: `unverified:${bestSingleSource.method ?? 'single_source'}`,
+        });
         return;
       }
 
@@ -584,7 +653,7 @@ export function CameraDetectionInput({
         }
 
         const calibrationConfidence = calibrationRef.current?.confidence ?? 0;
-        const hasVerifiedCalibration = calibrationConfidence >= 0.55;
+        const hasVerifiedCalibration = isCalibrationTrusted(calibrationConfidence);
         const canAutoSubmit = hasVerifiedCalibration &&
           result.decision === 'AUTO' &&
           result.confidence >= AUTO_SUBMIT_CONFIDENCE;
