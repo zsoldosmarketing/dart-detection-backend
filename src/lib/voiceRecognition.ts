@@ -1,5 +1,4 @@
 import { getLocale, onLocaleChange } from './i18n';
-import { audioProcessor } from './audioProcessor';
 import { voiceSettingsSync } from './voiceSettingsSync';
 
 export interface VoiceRecognitionResult {
