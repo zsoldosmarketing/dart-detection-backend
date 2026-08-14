@@ -208,18 +208,27 @@ export function VoiceInput({ onScoreInput, onUndo, onSubmit, disabled, paused, a
     return null;
   }
 
+  const recognitionFeedback = lastRecognized || interimText;
+
   return (
-    <button
-      onClick={toggleListening}
-      disabled={disabled}
-      className={`p-2 rounded-lg transition-all ${
-        isListening
-          ? 'bg-red-500 text-white'
-          : 'bg-dark-700 hover:bg-dark-600 text-white'
-      } disabled:opacity-30`}
-      title={isListening ? t('training.stop_listening') : t('training.start_listening')}
-    >
-      {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-    </button>
+    <div className="relative">
+      <button
+        onClick={toggleListening}
+        disabled={disabled}
+        className={`p-2 rounded-lg transition-all ${
+          isListening
+            ? 'bg-red-500 text-white'
+            : 'bg-dark-700 hover:bg-dark-600 text-white'
+        } disabled:opacity-30`}
+        title={isListening ? t('training.stop_listening') : t('training.start_listening')}
+      >
+        {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+      </button>
+      {isListening && recognitionFeedback && (
+        <span className="absolute bottom-full right-0 mb-2 max-w-44 truncate rounded bg-dark-900 px-2 py-1 text-[10px] text-white shadow-lg">
+          {recognitionFeedback}
+        </span>
+      )}
+    </div>
   );
 }
