@@ -154,14 +154,50 @@ export async function detectBoardWithRetry(imageBlob: Blob, maxRetries = 3): Pro
   return null;
 }
 
+function getCalibrationParameters(calibration?: AutoCalibrationResult | null): Record<string, string> {
+  const center = calibration?.center;
+  const ellipse = calibration?.ellipse;
+  const radiusX = calibration?.radius_x ?? calibration?.radiusX ?? ellipse?.a;
+  const radiusY = calibration?.radius_y ?? calibration?.radiusY ?? ellipse?.b;
+  const confidence = calibration?.confidence ?? 0;
+
+  if (
+    !calibration?.success ||
+    !center ||
+    !Number.isFinite(center.x) ||
+    !Number.isFinite(center.y) ||
+    !Number.isFinite(radiusX) ||
+    !Number.isFinite(radiusY) ||
+    !radiusX ||
+    !radiusY
+  ) {
+    return { calibration_valid: 'false' };
+  }
+
+  return {
+    calibration_valid: 'true',
+    board_cx: String(center.x),
+    board_cy: String(center.y),
+    board_radius_x: String(radiusX),
+    board_radius_y: String(radiusY),
+    board_angle: String(ellipse?.angle ?? 0),
+    rotation_offset: String(calibration.rotation_offset ?? 0),
+    calibration_confidence: String(confidence),
+  };
+}
+
 export async function scoreThrow(
   _beforeBlob: Blob,
   afterBlob: Blob,
-  _homography?: number[][]
+  _homography?: number[][],
+  calibration?: AutoCalibrationResult | null
 ): Promise<ThrowScoreResult | null> {
   try {
     const arrayBuffer = await afterBlob.arrayBuffer();
-    const resp = await fetch(getEdgeUrl('score_throw', { confidence: '35' }), {
+    const resp = await fetch(getEdgeUrl('score_throw', {
+      confidence: '35',
+      ...getCalibrationParameters(calibration),
+    }), {
       method: 'POST',
       headers: edgeHeaders(),
       body: arrayBuffer,
@@ -180,7 +216,8 @@ export async function scoreThrow(
   }
 }
 
-export async function setReferenceImage(_imageBlob: Blob): Promise<{ status: string } | null> {
+export async function setReferenceImage(imageBlob: Blob): Promise<{ status: string } | null> {
+  void imageBlob;
   return { status: 'ok' };
 }
 

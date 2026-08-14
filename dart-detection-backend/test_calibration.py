@@ -51,7 +51,7 @@ def test_calibration():
     print(f"   Method: {result2.method}")
     print(f"   Confidence: {result2.confidence:.2f}")
 
-    print("\n3. Testing with BLANK image (should fallback to center)...")
+    print("\n3. Testing with BLANK image (should report failed calibration)...")
     blank = np.ones((600, 800, 3), dtype=np.uint8) * 128
     result3 = calibrator.calibrate_multi_method(blank)
 
@@ -62,13 +62,19 @@ def test_calibration():
     print(f"   Confidence: {result3.confidence:.2f}")
 
     print("\n" + "=" * 60)
-    if result.success and result2.success and result3.success:
-        print("✓ ALL TESTS PASSED! Calibration works correctly.")
+    blank_handled_safely = (
+        not result3.success
+        and result3.method == "fallback"
+        and result3.confidence < 0.35
+    )
+
+    if result.success and result2.success and blank_handled_safely:
+        print("✓ ALL TESTS PASSED! Calibration accepts boards and safely rejects blank images.")
     else:
         print("✗ SOME TESTS FAILED!")
     print("=" * 60)
 
-    return result.success and result2.success and result3.success
+    return result.success and result2.success and blank_handled_safely
 
 if __name__ == "__main__":
     import sys

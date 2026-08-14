@@ -167,34 +167,15 @@ export function CameraDetectionInput({
     return () => clearInterval(interval);
   }, [checkConnection]);
 
-  const markCameraReady = useCallback(async (video: HTMLVideoElement) => {
-    if (isCalibratedRef.current) return;
-
-    const vw = video.videoWidth || 640;
-    const vh = video.videoHeight || 480;
-    const cx = vw / 2;
-    const cy = vh / 2;
-    const r = Math.min(vw, vh) * 0.42;
-
-    const readyResult: BoardDetectResult = {
-      board_found: true,
-      confidence: 0.8,
-      ellipse: { cx, cy, a: r, b: r, angle: 0 },
-      homography: null,
-      overlay_points: [[cx, cy - r], [cx + r, cy], [cx, cy + r], [cx - r, cy]],
-      bull_center: [cx, cy],
-      canonical_preview: null,
-      debug_contour: null,
-      message: 'Camera ready - Roboflow dart detection active',
-      image_width: vw,
-      image_height: vh,
-    };
-
-    boardResultRef.current = readyResult;
-    homographyRef.current = null;
-    const cal = boardDetectToCalibration(readyResult);
-    calibrationRef.current = cal;
-    setBoardConfidence(0.8);
+  const applyBoardCalibration = useCallback(async (
+    video: HTMLVideoElement,
+    boardResult: BoardDetectResult,
+  ) => {
+    boardResultRef.current = boardResult;
+    homographyRef.current = boardResult.homography;
+    const calibration = boardDetectToCalibration(boardResult);
+    calibrationRef.current = calibration;
+    setBoardConfidence(boardResult.confidence);
 
     isCalibratedRef.current = true;
     setIsCalibrated(true);
@@ -204,18 +185,44 @@ export function CameraDetectionInput({
       referenceFrameRef.current = frameBlob;
       await setReferenceImage(frameBlob);
     } catch {
-      // ignore
+      // A következő dobáskérésnél a felület továbbra is kérhet manuális megerősítést.
     }
 
-    cameraStore.setCalibration(cal);
-    cameraStore.setBoardResult(readyResult);
-    cameraStore.setHomography(null);
+    cameraStore.setCalibration(calibration);
+    cameraStore.setBoardResult(boardResult);
+    cameraStore.setHomography(boardResult.homography);
 
     if (boardDetectIntervalRef.current) {
       clearInterval(boardDetectIntervalRef.current);
       boardDetectIntervalRef.current = null;
     }
-  }, []);
+  }, [cameraStore]);
+
+  const markCameraReady = useCallback(async (video: HTMLVideoElement) => {
+    if (isCalibratedRef.current) return;
+
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 480;
+    const cx = vw / 2;
+    const cy = vh / 2;
+    const r = Math.min(vw, vh) * 0.42;
+
+    const unverifiedResult: BoardDetectResult = {
+      board_found: true,
+      confidence: 0.2,
+      ellipse: { cx, cy, a: r, b: r, angle: 0 },
+      homography: null,
+      overlay_points: [[cx, cy - r], [cx + r, cy], [cx, cy + r], [cx - r, cy]],
+      bull_center: [cx, cy],
+      canonical_preview: null,
+      debug_contour: null,
+      message: 'Board detection unavailable — score confirmation is required.',
+      image_width: vw,
+      image_height: vh,
+    };
+
+    await applyBoardCalibration(video, unverifiedResult);
+  }, [applyBoardCalibration]);
 
   const runBoardDetection = useCallback(async () => {
     const video = videoRef.current;
@@ -223,8 +230,24 @@ export function CameraDetectionInput({
     if (!video.videoWidth || !video.videoHeight || video.readyState < 2) return;
     if (boardDetectingRef.current || isCalibratedRef.current) return;
 
-    await markCameraReady(video);
-  }, [markCameraReady]);
+    boardDetectingRef.current = true;
+    try {
+      const frame = await captureHighQualityFrame(video);
+      const detectedBoard = await detectBoard(frame);
+      if (
+        detectedBoard?.board_found &&
+        detectedBoard.ellipse &&
+        detectedBoard.confidence >= 0.55
+      ) {
+        await applyBoardCalibration(video, detectedBoard);
+        return;
+      }
+
+      await markCameraReady(video);
+    } finally {
+      boardDetectingRef.current = false;
+    }
+  }, [applyBoardCalibration, markCameraReady]);
 
   const startBoardDetectLoop = useCallback(() => {
     if (boardDetectIntervalRef.current) {
@@ -551,7 +574,8 @@ export function CameraDetectionInput({
       const result = await scoreThrow(
         referenceFrameRef.current,
         afterFrame,
-        homographyRef.current || undefined
+        homographyRef.current || undefined,
+        calibrationRef.current
       );
 
       if (result) {
@@ -559,14 +583,27 @@ export function CameraDetectionInput({
           lastDartHitRef.current = { x: result.tip_original[0], y: result.tip_original[1] };
         }
 
-        if (result.decision === 'AUTO' && result.confidence >= AUTO_SUBMIT_CONFIDENCE) {
+        const calibrationConfidence = calibrationRef.current?.confidence ?? 0;
+        const hasVerifiedCalibration = calibrationConfidence >= 0.55;
+        const canAutoSubmit = hasVerifiedCalibration &&
+          result.decision === 'AUTO' &&
+          result.confidence >= AUTO_SUBMIT_CONFIDENCE;
+
+        if (canAutoSubmit) {
           const target = parseScoreToTarget(result.label);
           onThrow(target);
           referenceFrameRef.current = afterFrame;
           await setReferenceImage(afterFrame);
           setTimeout(() => { lastDartHitRef.current = null; }, 3000);
         } else {
-          setPendingScore(result);
+          const confirmationResult = hasVerifiedCalibration
+            ? result
+            : {
+                ...result,
+                decision: 'ASSIST' as const,
+                message: `${result.message} — Board calibration has not been verified. Please confirm the score.`,
+              };
+          setPendingScore(confirmationResult);
           pendingAfterFrameRef.current = afterFrame;
         }
       }
