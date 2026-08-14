@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, Calendar, Dumbbell, ChevronDown, ChevronUp, Trash2, Loader2, Plus } from 'lucide-react';
+import { Sparkles, Calendar, Dumbbell, ChevronDown, ChevronUp, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
-import clsx from 'clsx';
 
 interface PlanDay {
   day: number;

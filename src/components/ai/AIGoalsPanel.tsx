@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Target, Trophy, Flame, TrendingUp, CheckCircle, Trash2, Calendar, ChevronRight } from 'lucide-react';
+import { Plus, Target, Trophy, Flame, TrendingUp, CheckCircle, Trash2, Calendar } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
