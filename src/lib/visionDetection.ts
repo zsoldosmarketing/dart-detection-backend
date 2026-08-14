@@ -144,7 +144,7 @@ export class VisionDetectionEngine {
     if (this.debugCtx && this.debugCanvas) {
       this.debugCanvas.width = currentFrame.width;
       this.debugCanvas.height = currentFrame.height;
-      const debugData = new ImageData(diffPixels, currentFrame.width, currentFrame.height);
+      const debugData = new ImageData(new Uint8ClampedArray(diffPixels), currentFrame.width, currentFrame.height);
       this.debugCtx.putImageData(debugData, 0, 0);
     }
 
@@ -159,7 +159,7 @@ export class VisionDetectionEngine {
       return null;
     }
 
-    const tipPosition = this.estimateTipPosition(dartBlob, currentFrame);
+    const tipPosition = this.estimateTipPosition(dartBlob);
     const boardPosition = this.screenToBoard(tipPosition);
 
     if (!boardPosition) {
@@ -410,7 +410,7 @@ export class VisionDetectionEngine {
     return 0.5;
   }
 
-  private estimateTipPosition(blob: Blob, frame: ImageData): { x: number; y: number } {
+  private estimateTipPosition(blob: Blob): { x: number; y: number } {
     if (!this.calibration) {
       return blob.centroid;
     }
