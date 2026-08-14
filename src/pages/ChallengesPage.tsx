@@ -5,18 +5,14 @@ import {
   Trophy,
   Clock,
   CheckCircle,
-  Calendar,
   Gift,
-  ChevronRight,
   Zap
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { Button } from '../components/ui/Button';
-import { format, differenceInDays, differenceInHours } from 'date-fns';
-import { hu } from 'date-fns/locale';
+import { differenceInDays, differenceInHours } from 'date-fns';
 import clsx from 'clsx';
 import { t } from '../lib/i18n';
 
