@@ -60,6 +60,7 @@ import {
 import { ScoreConfirmationDialog } from './ScoreConfirmationDialog';
 import { CameraSettingsModal } from './CameraSettingsModal';
 import { CalibrationStatusBar } from './CalibrationStatusBar';
+import { DetectionQualitySummary } from './DetectionQualitySummary';
 
 interface CameraDetectionInputProps {
   onThrow: (target: DartTarget) => void;
@@ -1170,6 +1171,10 @@ export function CameraDetectionInput({
                   <span className="text-blue-400 text-xs font-medium">{t('camera.processing')}</span>
                 </div>
               )}
+            </div>
+
+            <div className="absolute bottom-3 left-3 max-w-sm">
+              <DetectionQualitySummary />
             </div>
 
             <div className="absolute top-3 right-3 flex gap-1.5">
