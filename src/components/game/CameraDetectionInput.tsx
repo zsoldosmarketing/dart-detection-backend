@@ -43,6 +43,7 @@ import {
 } from '../../lib/dartDetectionApi';
 import { drawFrame } from './CameraCanvasRenderer';
 import { analyzeFrameChange } from '../../lib/frameChangeDetection';
+import { analyzeCameraQuality, type CameraQualityResult } from '../../lib/cameraQuality';
 import { recordDetectionFeedback } from '../../lib/detectionFeedback';
 import { detectBoardFromVideo } from '../../lib/localBoardDetection';
 import {
@@ -138,6 +139,7 @@ export function CameraDetectionInput({
   const [autoDetectEnabled, setAutoDetectEnabled] = useState(cameraStore.autoDetectEnabled);
   const [showSectorOverlay, setShowSectorOverlay] = useState(false);
   const [autoZoomEnabled, setAutoZoomEnabled] = useState(cameraStore.autoZoomEnabled);
+  const [cameraQuality, setCameraQuality] = useState<CameraQualityResult | null>(null);
   const [manualCalibrationPoints, setManualCalibrationPoints] = useState<ManualCalibrationPoint[]>([]);
   const [isManualCalibrationActive, setIsManualCalibrationActive] = useState(false);
 
@@ -225,6 +227,7 @@ export function CameraDetectionInput({
     const frame = await captureVideoFrameWithData(video, quality);
     referenceFrameRef.current = frame.blob;
     referenceImageDataRef.current = frame.imageData;
+    setCameraQuality(analyzeCameraQuality(frame.imageData));
     await setReferenceImage(frame.blob);
     return frame;
   }, []);
@@ -767,6 +770,7 @@ export function CameraDetectionInput({
         const calibrationConfidence = calibrationRef.current?.confidence ?? 0;
         const hasVerifiedCalibration = isCalibrationTrusted(calibrationConfidence);
         const canAutoSubmit = hasVerifiedCalibration &&
+          cameraQuality?.usable === true &&
           result.decision === 'AUTO' &&
           result.confidence >= AUTO_SUBMIT_CONFIDENCE;
 
@@ -802,7 +806,7 @@ export function CameraDetectionInput({
     } finally {
       setIsDetecting(false);
     }
-  }, [activeRemoteCamera, isCalibrated, isDetecting, onThrow]);
+  }, [activeRemoteCamera, cameraQuality?.usable, isCalibrated, isDetecting, onThrow]);
 
   useEffect(() => {
     triggerThrowDetectionRef.current = triggerThrowDetection;
@@ -1155,6 +1159,12 @@ export function CameraDetectionInput({
                   </>
                 )}
               </div>
+
+              {cameraQuality && !cameraQuality.usable && (
+                <div className="max-w-xs rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs text-amber-100 backdrop-blur-sm">
+                  {cameraQuality.message}
+                </div>
+              )}
 
               {isDetecting && (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/20 border border-blue-500/40 backdrop-blur-sm">
