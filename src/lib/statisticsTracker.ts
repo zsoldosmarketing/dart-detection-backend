@@ -291,6 +291,12 @@ export function calculateLegStats(
   startingScore: number,
   won: boolean
 ): Partial<LegStats> {
+  // These inputs remain part of the public calculation contract for callers that
+  // supply leg context, even though this aggregate currently derives its metrics
+  // solely from recorded throws.
+  void startingScore;
+  void won;
+
   if (allThrows.length === 0) {
     return {
       totalDarts: 0,
@@ -384,19 +390,16 @@ export function calculateLegStats(
   const sectorHits: Record<string, number> = {};
 
   allThrows.forEach((dartThrow) => {
-    const target = dartThrow.target;
-    if (typeof target === 'string') return;
+    const target = getDartDetails(dartThrow.target);
+    sectorHits[target.sector] = (sectorHits[target.sector] || 0) + 1;
 
-    const sectorNum = target.type === 'single-bull' || target.type === 'double-bull' ? 25 : target.sector;
-    sectorHits[sectorNum] = (sectorHits[sectorNum] || 0) + 1;
-
-    if (target.type === 'double' || target.type === 'double-bull') {
+    if (target.type === 'D' || target.type === 'BULL') {
       doublesThrown++;
       dartsAtDouble++;
       if (dartThrow.score > 0) doublesHit++;
     }
 
-    if (target.type === 'triple') {
+    if (target.type === 'T') {
       triplesThrown++;
       if (dartThrow.score > 0) triplesHit++;
     }
@@ -441,32 +444,17 @@ export function calculateLegStats(
   };
 }
 
-function getDartDetails(target: DartTarget): { sector: number; type: string } {
-  if (typeof target === 'string') {
-    return { sector: 0, type: 'MISS' };
-  }
+function getDartDetails(target: DartTarget): { sector: number; type: 'S' | 'D' | 'T' | 'BULL' | 'OUTER_BULL' | 'MISS' } {
+  if (target === 'BULL') return { sector: 25, type: 'BULL' };
+  if (target === 'OB') return { sector: 25, type: 'OUTER_BULL' };
+  if (target === 'MISS') return { sector: 0, type: 'MISS' };
 
-  if (target.type === 'double-bull') {
-    return { sector: 25, type: 'BULL' };
-  }
-
-  if (target.type === 'single-bull') {
-    return { sector: 25, type: 'OUTER_BULL' };
-  }
-
-  if (target.type === 'miss') {
-    return { sector: 0, type: 'MISS' };
-  }
-
-  const typeMap: Record<string, string> = {
-    single: 'S',
-    double: 'D',
-    triple: 'T',
-  };
+  const match = target.match(/^([SDT])(\d{1,2})$/);
+  if (!match) return { sector: 0, type: 'MISS' };
 
   return {
-    sector: target.sector,
-    type: typeMap[target.type] || 'S',
+    sector: Number(match[2]),
+    type: match[1] as 'S' | 'D' | 'T',
   };
 }
 
