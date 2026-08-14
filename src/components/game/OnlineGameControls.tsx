@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Clock, Wifi, WifiOff, AlertCircle, RefreshCw, Flag } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Clock, Wifi, WifiOff, RefreshCw, Flag } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -29,6 +29,7 @@ export function OnlineGameControls({
   const [opponentConnected, setOpponentConnected] = useState(true);
   const [showDisconnectWarning, setShowDisconnectWarning] = useState(false);
   const [disconnectTimeRemaining, setDisconnectTimeRemaining] = useState<number>(180);
+  const timedOutTurnRef = useRef<string | null>(null);
 
   useEffect(() => {
     setIsMyTurn(currentUserId === currentPlayerUserId);
@@ -36,6 +37,10 @@ export function OnlineGameControls({
 
   useEffect(() => {
     if (gameMode !== 'pvp' || !turnStartedAt) return;
+
+    if (timedOutTurnRef.current !== turnStartedAt) {
+      timedOutTurnRef.current = null;
+    }
 
     const calculateTimeRemaining = () => {
       const elapsed = Math.floor((Date.now() - new Date(turnStartedAt).getTime()) / 1000);
@@ -48,9 +53,10 @@ export function OnlineGameControls({
       const remaining = calculateTimeRemaining();
       setTurnTimeRemaining(remaining);
 
-      if (remaining === 0 && isMyTurn) {
-        // Auto-skip turn after 1 minute
-        handleTurnTimeout();
+      if (remaining === 0 && isMyTurn && timedOutTurnRef.current !== turnStartedAt) {
+        // Auto-skip each timed-out turn exactly once.
+        timedOutTurnRef.current = turnStartedAt;
+        void handleTurnTimeout();
       }
     }, 1000);
 
