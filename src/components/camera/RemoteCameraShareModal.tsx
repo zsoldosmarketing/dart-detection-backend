@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Camera,
   X,
   Smartphone,
   Monitor,
