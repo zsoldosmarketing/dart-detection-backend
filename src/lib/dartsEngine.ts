@@ -25,6 +25,7 @@ export interface SetupSuggestion {
   projection: { hit: string; leave: number }[];
   priority: 'high' | 'medium' | 'low';
   preferredPriority?: number;
+  canFinishThisVisit?: boolean;
 }
 
 export interface BotParams {
@@ -458,8 +459,7 @@ export function getSetupSuggestions(
   dartsLeft: number = 3,
   preferredDoubles: number[] = [20, 16, 8, 10, 12, 18, 14, 6, 4, 2]
 ): SetupSuggestion[] {
-  void dartsLeft;
-  if (remaining > 170 || remaining < 2) return [];
+  if (remaining > 170 || remaining < 2 || dartsLeft < 1) return [];
 
   const suggestions: SetupSuggestion[] = [];
   const targets: DartTarget[] = ['T20', 'T19', 'T18', 'T17', 'BULL'];
@@ -473,7 +473,9 @@ export function getSetupSuggestions(
     if (BOGEY_NUMBERS.includes(leave)) continue;
 
     const isMaxCheckout = maxCheckouts.includes(leave);
-    const hasCheckout = leave <= 170 && CHECKOUT_TABLE[leave];
+    const checkoutRoutes = leave <= 170 ? getCheckoutRoutes(leave, preferredDoubles) : [];
+    const hasCheckout = checkoutRoutes.length > 0;
+    const canFinishThisVisit = checkoutRoutes.some(route => route.darts.length <= dartsLeft - 1);
 
     let preferredPriority = -1;
     for (let i = 0; i < Math.min(3, preferredDoubles.length); i++) {
@@ -502,10 +504,12 @@ export function getSetupSuggestions(
     }
 
     let priority: 'high' | 'medium' | 'low';
-    if (isMaxCheckout || preferredPriority === 0) {
+    if (canFinishThisVisit) {
       priority = 'high';
-    } else if (preferredPriority === 1 || (hasCheckout && preferredPriority >= 0)) {
+    } else if (dartsLeft === 1 && preferredPriority === 0) {
       priority = 'high';
+    } else if (hasCheckout && (isMaxCheckout || preferredPriority <= 1)) {
+      priority = 'medium';
     } else if (preferredPriority === 2 || hasCheckout) {
       priority = 'medium';
     } else {
@@ -518,6 +522,7 @@ export function getSetupSuggestions(
       projection,
       priority,
       preferredPriority,
+      canFinishThisVisit,
     });
   }
 
@@ -532,6 +537,10 @@ export function getSetupSuggestions(
       const bPreferred = b.preferredPriority ?? 999;
       if (aPreferred !== bPreferred) {
         return aPreferred - bPreferred;
+      }
+
+      if (a.canFinishThisVisit !== b.canFinishThisVisit) {
+        return a.canFinishThisVisit ? -1 : 1;
       }
 
       const aIsTriple = a.target.startsWith('T') ? 1 : 0;
