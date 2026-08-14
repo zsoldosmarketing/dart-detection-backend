@@ -48,6 +48,8 @@ export interface ThrowScoreResult {
     canonical_after?: string;
   } | null;
   message: string;
+  scoring_method?: string;
+  frame_change_quality?: 'valid' | 'too_little_change' | 'too_much_change' | 'missing';
 }
 
 export interface AutoCalibrationResult {

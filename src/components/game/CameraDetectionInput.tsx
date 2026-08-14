@@ -43,6 +43,7 @@ import {
 } from '../../lib/dartDetectionApi';
 import { drawFrame } from './CameraCanvasRenderer';
 import { analyzeFrameChange } from '../../lib/frameChangeDetection';
+import { recordDetectionFeedback } from '../../lib/detectionFeedback';
 import { detectBoardFromVideo } from '../../lib/localBoardDetection';
 import {
   calibrateFromManualPoints,
@@ -763,6 +764,13 @@ export function CameraDetectionInput({
         if (canAutoSubmit) {
           const target = parseScoreToTarget(result.label);
           onThrow(target);
+          void recordDetectionFeedback({
+            feedbackType: 'accepted',
+            result,
+            calibration: calibrationRef.current,
+            resolvedTarget: target,
+            deviceKind: activeRemoteCamera ? 'remote' : 'local',
+          });
           referenceFrameRef.current = afterFrame;
           referenceImageDataRef.current = afterCapture.imageData;
           await setReferenceImage(afterFrame);
@@ -785,7 +793,7 @@ export function CameraDetectionInput({
     } finally {
       setIsDetecting(false);
     }
-  }, [isCalibrated, isDetecting, onThrow]);
+  }, [activeRemoteCamera, isCalibrated, isDetecting, onThrow]);
 
   useEffect(() => {
     triggerThrowDetectionRef.current = triggerThrowDetection;
@@ -858,6 +866,13 @@ export function CameraDetectionInput({
     if (pendingScore) {
       const target = correctedTarget ?? parseScoreToTarget(pendingScore.label);
       onThrow(target);
+      void recordDetectionFeedback({
+        feedbackType: correctedTarget ? 'corrected' : 'accepted',
+        result: pendingScore,
+        calibration: calibrationRef.current,
+        resolvedTarget: target,
+        deviceKind: activeRemoteCamera ? 'remote' : 'local',
+      });
       setPendingScore(null);
       setTimeout(() => { lastDartHitRef.current = null; }, 2000);
 
@@ -871,9 +886,17 @@ export function CameraDetectionInput({
         await updateReferenceFrame(videoRef.current);
       }
     }
-  }, [pendingScore, onThrow, updateReferenceFrame]);
+  }, [activeRemoteCamera, pendingScore, onThrow, updateReferenceFrame]);
 
   const rejectPendingScore = useCallback(async () => {
+    if (pendingScore) {
+      void recordDetectionFeedback({
+        feedbackType: pendingScore.decision === 'RETRY' ? 'retry' : 'rejected',
+        result: pendingScore,
+        calibration: calibrationRef.current,
+        deviceKind: activeRemoteCamera ? 'remote' : 'local',
+      });
+    }
     setPendingScore(null);
     lastDartHitRef.current = null;
 
@@ -882,7 +905,7 @@ export function CameraDetectionInput({
     }
     pendingAfterFrameRef.current = null;
     pendingAfterImageDataRef.current = null;
-  }, [updateReferenceFrame]);
+  }, [activeRemoteCamera, pendingScore, updateReferenceFrame]);
 
   const resetReference = useCallback(async () => {
     if (!videoRef.current) return;
