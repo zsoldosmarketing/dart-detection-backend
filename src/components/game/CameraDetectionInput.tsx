@@ -652,9 +652,7 @@ export function CameraDetectionInput({
         homographyRef.current = cameraStore.homography;
         boardResultRef.current = cameraStore.boardResult;
 
-        const frame = await captureVideoFrame(videoRef.current);
-        referenceFrameRef.current = frame;
-        await setReferenceImage(frame);
+        await updateReferenceFrame(videoRef.current);
 
         setIsCalibrated(true);
         setBoardConfidence(cameraStore.boardResult?.confidence || 0);
@@ -1354,6 +1352,7 @@ export function CameraDetectionInput({
           pendingScore={pendingScore}
           isFullscreen={true}
           onConfirm={confirmPendingScore}
+          onCorrect={confirmPendingScore}
           onReject={rejectPendingScore}
         />
       )}

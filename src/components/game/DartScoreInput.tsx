@@ -58,7 +58,6 @@ export function DartScoreInput({
   canSubmit,
   showSuggestions = false,
   onToggleSuggestions,
-  suggestions = [],
   disabled = false,
   autoStart = true,
   voiceEnabled = false,
@@ -97,13 +96,14 @@ export function DartScoreInput({
   const totalScore = thrownScore + queuedScore;
 
   const handleVoiceInput = (score: number, multiplier: number, sector: number | null) => {
+    void score;
     if (totalDarts >= 3) return;
 
     const target: DartTarget = sector === null
-      ? { type: 'miss', sector: 0 }
+      ? 'MISS'
       : sector === 25
-      ? { type: multiplier === 2 ? 'double-bull' : 'single-bull', sector: 25 }
-      : { type: multiplier === 2 ? 'double' : multiplier === 3 ? 'triple' : 'single', sector: sector };
+        ? multiplier === 2 ? 'BULL' : 'OB'
+        : `${multiplier === 2 ? 'D' : multiplier === 3 ? 'T' : 'S'}${sector}` as DartTarget;
 
     onThrow(target);
   };
@@ -407,7 +407,6 @@ export function DartScoreInput({
             onThrow={onThrow}
             disabled={isProcessing || disabled}
             remainingDarts={3 - totalDarts}
-            voiceEnabled={voiceEnabled}
           />
         )}
       </div>
