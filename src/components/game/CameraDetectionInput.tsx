@@ -45,6 +45,11 @@ import { drawFrame } from './CameraCanvasRenderer';
 import { analyzeFrameChange } from '../../lib/frameChangeDetection';
 import { detectBoardFromVideo } from '../../lib/localBoardDetection';
 import {
+  calibrateFromManualPoints,
+  MANUAL_CALIBRATION_TARGETS,
+  type ManualCalibrationPoint,
+} from '../../lib/manualBoardCalibration';
+import {
   buildCalibrationConsensus,
   isCalibrationTrusted,
   toBoardEllipse,
@@ -132,6 +137,8 @@ export function CameraDetectionInput({
   const [autoDetectEnabled, setAutoDetectEnabled] = useState(cameraStore.autoDetectEnabled);
   const [showSectorOverlay, setShowSectorOverlay] = useState(false);
   const [autoZoomEnabled, setAutoZoomEnabled] = useState(cameraStore.autoZoomEnabled);
+  const [manualCalibrationPoints, setManualCalibrationPoints] = useState<ManualCalibrationPoint[]>([]);
+  const [isManualCalibrationActive, setIsManualCalibrationActive] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -249,6 +256,85 @@ export function CameraDetectionInput({
       boardDetectIntervalRef.current = null;
     }
   }, [cameraStore, updateReferenceFrame]);
+
+  const startManualCalibration = useCallback(() => {
+    if (!videoRef.current || !isActive) return;
+    setManualCalibrationPoints([]);
+    setIsManualCalibrationActive(true);
+    setStatusMessage('Kézi kalibráció: kattints a bull közepére.');
+  }, [isActive]);
+
+  const cancelManualCalibration = useCallback(() => {
+    setManualCalibrationPoints([]);
+    setIsManualCalibrationActive(false);
+    setStatusMessage(null);
+  }, []);
+
+  const handleManualCalibrationClick = useCallback(async (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isManualCalibrationActive || !canvasRef.current || !videoRef.current) return;
+    const target = MANUAL_CALIBRATION_TARGETS[manualCalibrationPoints.length];
+    if (!target) return;
+
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const canvasX = (event.clientX - rect.left) * canvas.width / rect.width;
+    const canvasY = (event.clientY - rect.top) * canvas.height / rect.height;
+    const source = zoomRegionRef.current ?? {
+      x: 0,
+      y: 0,
+      w: video.videoWidth,
+      h: video.videoHeight,
+    };
+    const sourceAspect = source.w / source.h;
+    const canvasAspect = canvas.width / canvas.height;
+    const drawW = sourceAspect > canvasAspect ? canvas.width : canvas.height * sourceAspect;
+    const drawH = sourceAspect > canvasAspect ? canvas.width / sourceAspect : canvas.height;
+    const drawX = (canvas.width - drawW) / 2;
+    const drawY = (canvas.height - drawH) / 2;
+
+    if (canvasX < drawX || canvasX > drawX + drawW || canvasY < drawY || canvasY > drawY + drawH) return;
+
+    const point: ManualCalibrationPoint = {
+      target: target.target,
+      x: source.x + (canvasX - drawX) / drawW * source.w,
+      y: source.y + (canvasY - drawY) / drawH * source.h,
+    };
+    const points = [...manualCalibrationPoints, point];
+    setManualCalibrationPoints(points);
+
+    if (points.length < MANUAL_CALIBRATION_TARGETS.length) {
+      setStatusMessage(`Kézi kalibráció: ${MANUAL_CALIBRATION_TARGETS[points.length].instruction}`);
+      return;
+    }
+
+    const manualCalibration = calibrateFromManualPoints(points);
+    if (!manualCalibration.success || !manualCalibration.ellipse) {
+      setError(manualCalibration.message);
+      cancelManualCalibration();
+      return;
+    }
+
+    const manualResult: BoardDetectResult = {
+      board_found: true,
+      confidence: manualCalibration.confidence,
+      ellipse: manualCalibration.ellipse,
+      homography: null,
+      overlay_points: null,
+      bull_center: [manualCalibration.ellipse.cx, manualCalibration.ellipse.cy],
+      canonical_preview: null,
+      debug_contour: null,
+      message: manualCalibration.message,
+      rotation_offset: manualCalibration.rotationOffset,
+      method: 'manual_five_point',
+      image_width: video.videoWidth,
+      image_height: video.videoHeight,
+    };
+    await applyBoardCalibration(video, manualResult);
+    setIsManualCalibrationActive(false);
+    setStatusMessage('Kézi kalibráció ellenőrizve.');
+    setManualCalibrationPoints([]);
+  }, [applyBoardCalibration, cancelManualCalibration, isManualCalibrationActive, manualCalibrationPoints]);
 
   const markCameraReady = useCallback(async (video: HTMLVideoElement) => {
     if (isCalibratedRef.current) return;
@@ -706,7 +792,7 @@ export function CameraDetectionInput({
   }, [triggerThrowDetection]);
 
   const checkForDartThrow = useCallback(() => {
-    if (!videoRef.current || !isCalibrated || !autoDetectEnabled || isDetecting || pendingScore || throwCooldownRef.current || remainingDarts <= 0) {
+    if (!videoRef.current || !isCalibrated || !autoDetectEnabled || isManualCalibrationActive || isDetecting || pendingScore || throwCooldownRef.current || remainingDarts <= 0) {
       return;
     }
 
@@ -753,7 +839,7 @@ export function CameraDetectionInput({
     }
 
     lastBrightnessRef.current = motion.brightness;
-  }, [isCalibrated, autoDetectEnabled, isDetecting, pendingScore, measureMotion, remainingDarts]);
+  }, [isCalibrated, autoDetectEnabled, isManualCalibrationActive, isDetecting, pendingScore, measureMotion, remainingDarts]);
 
   useEffect(() => {
     if (isActive && isCalibrated && autoDetectEnabled) {
@@ -975,9 +1061,32 @@ export function CameraDetectionInput({
           <div className={`relative ${isFullscreen ? 'h-full flex items-center justify-center bg-black' : 'h-full'}`}>
             <canvas
               ref={canvasRef}
-              className={`${isFullscreen ? 'max-h-full max-w-full object-contain' : 'w-full h-full object-contain absolute inset-0'}`}
+              onClick={isManualCalibrationActive ? handleManualCalibrationClick : undefined}
+              className={`${isFullscreen ? 'max-h-full max-w-full object-contain' : 'w-full h-full object-contain absolute inset-0'} ${
+                isManualCalibrationActive ? 'cursor-crosshair' : ''
+              }`}
               style={!isFullscreen ? undefined : undefined}
             />
+
+            {isManualCalibrationActive && (
+              <div className="absolute inset-x-4 top-16 z-10 flex justify-center pointer-events-none">
+                <div className="max-w-sm rounded-xl border border-amber-400/50 bg-black/80 px-4 py-3 text-center shadow-xl backdrop-blur-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">
+                    Kézi kalibráció · {manualCalibrationPoints.length + 1} / {MANUAL_CALIBRATION_TARGETS.length}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-white">
+                    {MANUAL_CALIBRATION_TARGETS[manualCalibrationPoints.length]?.instruction}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={cancelManualCalibration}
+                    className="pointer-events-auto mt-2 text-xs font-medium text-amber-300 underline underline-offset-2 hover:text-amber-100"
+                  >
+                    Mégse
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="absolute top-3 left-3 flex items-center gap-2 min-h-[32px]">
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full backdrop-blur-sm transition-all ${
@@ -1066,7 +1175,20 @@ export function CameraDetectionInput({
                 </button>
 
                 <button
+                  onClick={isManualCalibrationActive ? cancelManualCalibration : startManualCalibration}
+                  className={`p-2.5 rounded-lg backdrop-blur-sm border transition-colors ${
+                    isManualCalibrationActive
+                      ? 'bg-amber-500/30 border-amber-400/50 text-amber-200'
+                      : 'bg-black/60 hover:bg-black/80 border-white/10 text-white/70 hover:text-white'
+                  }`}
+                  title={isManualCalibrationActive ? 'Kézi kalibráció megszakítása' : 'Kézi kalibráció'}
+                >
+                  <Target className="w-5 h-5" />
+                </button>
+
+                <button
                   onClick={() => {
+                    cancelManualCalibration();
                     isCalibratedRef.current = false;
                     setIsCalibrated(false);
                     boardResultRef.current = null;
